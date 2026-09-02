@@ -30,12 +30,12 @@ describe("ToggleSwitch", () => {
       <ToggleSwitch checked={false} onChange={vi.fn()} label="Mode" tone="amber" />);
     const off = screen.getByRole("switch");
     expect(off.className).toContain("opacity-60");
-    expect(screen.getByText("Mode").className).toContain("text-zinc-400");
+    expect(screen.getByText("Mode").className).toContain("text-text-muted");
 
     rerender(<ToggleSwitch checked onChange={vi.fn()} label="Mode" tone="amber" />);
     const on = screen.getByRole("switch");
     expect(on.className).toContain("opacity-100");
-    expect(screen.getByText("Mode").className).toContain("text-amber-200");
+    expect(screen.getByText("Mode").className).toContain("text-warn-strong");
   });
 
   it("shows a hint and can be disabled", () => {

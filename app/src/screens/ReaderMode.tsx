@@ -409,7 +409,7 @@ export function ReaderMode({ projectPath, onClose }: ReaderModeProps) {
         <TopBarBtn icon={<ChevronLeft  size={16} />} label="Previous chapter" isDark={isDark} disabled={currentChapterIdx === 0}                onClick={() => goToChapter(currentChapterIdx - 1)} />
         <span className="min-w-0 max-w-52 truncate px-1 text-xs" style={{ color: mutedFg }}>
           {chapters[currentChapterIdx]?.title ?? ""}
-          <span className="ml-1 opacity-50">({currentChapterIdx + 1} / {chapters.length})</span>
+          <span className="ml-1">({currentChapterIdx + 1} / {chapters.length})</span>
         </span>
         <TopBarBtn icon={<ChevronRight size={16} />} label="Next chapter"     isDark={isDark} disabled={currentChapterIdx === chapters.length - 1} onClick={() => goToChapter(currentChapterIdx + 1)} />
 

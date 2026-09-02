@@ -30,7 +30,17 @@ import { useEffect, useState } from "react";
 const API_BASE = "http://localhost:8000";
 
 
-export type UiScale = "default" | "larger" | "larger_plus" | "largest";
+export type UiScale =
+  | "default" | "larger" | "larger_plus" | "largest"
+  // Added 2026-09-01. The four above topped out at 19px -- a 19% increase --
+  // which a writer on a 3840x2160 display reported as "the maximum font size
+  // is way too small". They were right: at 100% Windows scaling, 19px on a 4K
+  // panel is small.
+  //
+  // The four original ids are NOT renamed. They are sitting in every writer's
+  // settings.json, and "largest" being a superlative that is no longer the
+  // largest is a cosmetic problem; losing somebody's saved choice is not.
+  | "huge" | "huge_plus" | "maximum";
 
 
 // Pixel values applied at each scale. Two parallel maps:
@@ -49,6 +59,12 @@ export const UI_SCALE_PX: Record<UiScale, number> = {
   larger:       17,
   larger_plus:  18,
   largest:      19,
+  // The 4K steps. Bigger jumps than the +1px ladder above, because +1px at
+  // this end is imperceptible and the writer asking for these is not making a
+  // fine adjustment -- they are trying to read the screen at all.
+  huge:         20,
+  huge_plus:    22,
+  maximum:      24,   // +50%. text-xs lands at 18px, text-mini at 16.5px.
 };
 
 export const TEXT_ENTRY_PX: Record<UiScale, number> = {
@@ -56,6 +72,16 @@ export const TEXT_ENTRY_PX: Record<UiScale, number> = {
   larger:       17,
   larger_plus:  19,
   largest:      22,
+  // This map used to stop at 22, described as "the practical ceiling before
+  // textarea wrapping starts to cramp". That was measured, and it is extended
+  // rather than ignored: the panels holding these surfaces are sized in rem,
+  // so they grow WITH the root, and the cramping was text-entry outrunning a
+  // container that had not grown as far. There are only five .text-entry call
+  // sites and manual-smoke scenario 27 sends a human to look at each of them
+  // at Maximum -- if any of them cramps, hold all three of these at 24.
+  huge:         24,
+  huge_plus:    26,
+  maximum:      28,
 };
 
 
@@ -65,6 +91,32 @@ export const TEXT_ENTRY_PX: Record<UiScale, number> = {
 
 let currentScale: UiScale = "default";
 const subscribers = new Set<(s: UiScale) => void>();
+
+
+/**
+ * Turn whatever came off the wire into a scale, falling back to "default".
+ *
+ * THIS EXISTS BECAUSE THE OLD VERSION COULD BE HALF-UPDATED. It was a ternary
+ * chain naming each id in turn and ending in "default", which meant adding a
+ * step to `UiScale` and forgetting this function produced no error anywhere:
+ * the new value would save, come back from the backend on the next launch,
+ * miss every branch, and read as Default. The writer picks Maximum, sees it
+ * apply, restarts, and it is gone -- with nothing to diagnose.
+ *
+ * Driving it off UI_SCALE_PX removes the chance. That map is a
+ * Record<UiScale, number>, so TypeScript refuses to compile a missing entry,
+ * and the parser learns every new step automatically from the map it is forced
+ * to fill in.
+ *
+ * The backend has the same list a second time (_UI_SCALES in
+ * app/routers/settings.py, where an unknown value is dropped just as
+ * silently); backend/tests/test_appearance_bounds.py holds the two together.
+ */
+export function parseUiScale(raw: unknown): UiScale {
+  return typeof raw === "string" && raw in UI_SCALE_PX
+    ? (raw as UiScale)
+    : "default";
+}
 
 
 /**
@@ -96,12 +148,7 @@ export async function initUiScale(): Promise<void> {
     const res = await fetch(`${API_BASE}/api/settings`);
     if (!res.ok) return;
     const data = await res.json();
-    const raw = data.ui_scale;
-    const s: UiScale =
-      raw === "larger"        ? "larger"       :
-      raw === "larger_plus"   ? "larger_plus"  :
-      raw === "largest"       ? "largest"      :
-                                "default";
+    const s = parseUiScale(data.ui_scale);
     if (s !== currentScale) {
       currentScale = s;
       applyToDom(s);

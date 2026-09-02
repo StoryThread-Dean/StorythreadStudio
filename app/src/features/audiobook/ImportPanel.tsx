@@ -112,97 +112,97 @@ export function ImportPanel({ onBack, onImported }: ImportPanelProps) {
     <div className="mx-auto w-full max-w-2xl px-8 py-10">
       <button
         onClick={onBack}
-        className="mb-6 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-emerald-300"
+        className="mb-6 inline-flex items-center gap-1 text-xs text-faint hover:text-accent"
       >
         <ArrowLeft size={12} /> Back to dashboard
       </button>
 
-      <h1 className="mb-1 flex items-center gap-2 text-lg font-semibold text-zinc-100">
-        <Sparkles size={17} className="text-emerald-400" /> Let's Get Started
+      <h1 className="mb-1 flex items-center gap-2 text-lg font-semibold text-text-primary">
+        <Sparkles size={17} className="text-accent-muted" /> Let's Get Started
       </h1>
-      <p className="mb-6 text-xs leading-relaxed text-zinc-500">
+      <p className="mb-6 text-xs leading-relaxed text-faint">
         Point at the book you want narrated. Storythread copies it into a
         workspace of its own, so your original file is never modified and
         later edits to it will not disturb this audiobook.
       </p>
 
       {/* Step 1: the source */}
-      <h2 className="mb-2 text-sm font-semibold text-blue-300">1. Your book</h2>
+      <h2 className="mb-2 text-sm font-semibold text-secondary">1. Your book</h2>
       <div className="mb-2 flex flex-wrap gap-3">
         <button
           onClick={() => void pickManuscriptFile()}
-          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-200 transition-colors hover:border-emerald-600 hover:text-emerald-300"
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-panel px-4 py-2.5 text-sm text-text-primary transition-colors hover:border-accent-fill hover:text-accent"
         >
           <FileText size={15} /> Choose Manuscript File
         </button>
         <button
           onClick={() => void pickStorythreadProject()}
-          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-200 transition-colors hover:border-emerald-600 hover:text-emerald-300"
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-panel px-4 py-2.5 text-sm text-text-primary transition-colors hover:border-accent-fill hover:text-accent"
         >
           <BookOpen size={15} /> Import from a Storythread Project
         </button>
       </div>
-      <p className="mb-1 text-mini text-zinc-600">
+      <p className="mb-1 text-mini text-faint">
         DOCX, EPUB, Markdown, TXT, or PDF. A PDF has to contain real text
         rather than page images -- a scanned book will say so and stop.
       </p>
       {sourcePath && (
-        <p className="mb-4 truncate rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-emerald-300" title={sourcePath}>
+        <p className="mb-4 truncate rounded border border-border bg-bg-panel/60 px-3 py-2 text-xs text-accent" title={sourcePath}>
           {sourceKind === "project" ? "Project: " : "File: "}{sourcePath}
         </p>
       )}
 
       {/* Step 2: the workspace -- chosen FOR the writer (spec 5.1.2). */}
-      <h2 className="mb-2 mt-6 text-sm font-semibold text-blue-300">
+      <h2 className="mb-2 mt-6 text-sm font-semibold text-secondary">
         2. Where it will live
       </h2>
       {!sourcePath ? (
-        <p className="rounded-lg border border-dashed border-zinc-800 px-3 py-3 text-xs text-zinc-600">
+        <p className="rounded-lg border border-dashed border-border px-3 py-3 text-xs text-faint">
           Choose your book above and a home is picked automatically.
         </p>
       ) : (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-3">
-          <p className="mb-1 flex items-start gap-2 text-xs text-emerald-300">
+        <div className="rounded-lg border border-border bg-bg-panel/60 px-3 py-3">
+          <p className="mb-1 flex items-start gap-2 text-xs text-accent">
             <Check size={13} className="mt-0.5 shrink-0" />
             <span className="break-all" title={workspacePath}>{workspacePath}</span>
           </p>
           {suggestion && !chosenByWriter && (
-            <p className="pl-5 text-mini leading-relaxed text-zinc-500">
+            <p className="pl-5 text-mini leading-relaxed text-faint">
               {suggestion.reason}
               {suggestion.collision
                 && " That name was taken, so the next free folder is suggested."}
             </p>
           )}
           {chosenByWriter && (
-            <p className="pl-5 text-mini text-zinc-500">Your chosen folder.</p>
+            <p className="pl-5 text-mini text-faint">Your chosen folder.</p>
           )}
           <button
             onClick={() => void pickWorkspaceFolder()}
-            className="mt-2 inline-flex items-center gap-1.5 pl-5 text-mini text-blue-400 hover:text-blue-300 hover:underline"
+            className="mt-2 inline-flex items-center gap-1.5 pl-5 text-mini text-secondary-muted hover:text-secondary hover:underline"
           >
             <FolderOpen size={11} /> Choose a different folder
           </button>
         </div>
       )}
-      <p className="mt-1 text-mini text-zinc-600">
+      <p className="mt-1 text-mini text-faint">
         Everything for this audiobook lives here: the copied source, the
         narration text, generated audio, and final exports.
       </p>
 
       {/* Step 3: optional title */}
-      <h2 className="mb-2 mt-6 text-sm font-semibold text-blue-300">
-        3. Title <span className="font-normal text-zinc-600">(optional -- detected from the manuscript when blank)</span>
+      <h2 className="mb-2 mt-6 text-sm font-semibold text-secondary">
+        3. Title <span className="font-normal text-faint">(optional -- detected from the manuscript when blank)</span>
       </h2>
       <input
         type="text"
         value={title}
         onChange={e => setTitle(e.target.value)}
         placeholder="e.g. The Hollow Road"
-        className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 outline-none focus:border-emerald-500"
+        className="w-full rounded border border-border bg-bg-panel px-3 py-2 text-sm text-text-primary placeholder-faint outline-none focus:border-accent-fill"
       />
 
       {error && (
-        <p className="mt-4 rounded border border-rose-800 bg-rose-950/60 px-3 py-2 text-xs text-rose-300">
+        <p className="mt-4 rounded border border-danger-fill bg-danger-soft px-3 py-2 text-xs text-danger">
           {error}
         </p>
       )}
@@ -210,7 +210,7 @@ export function ImportPanel({ onBack, onImported }: ImportPanelProps) {
       <button
         onClick={() => void handleImport()}
         disabled={!sourcePath || !workspacePath || importing}
-        className="mt-6 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+        className="mt-6 inline-flex items-center gap-2 rounded-lg bg-accent-fill px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-fill disabled:cursor-not-allowed disabled:opacity-40"
       >
         {importing && <Loader2 size={15} className="animate-spin" />}
         {importing ? "Setting up your workspace..." : "Create My Audiobook Workspace"}

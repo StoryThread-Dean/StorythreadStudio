@@ -10,6 +10,8 @@
 #   PUT  /api/settings        -- update one or more settings fields
 #   POST /api/settings/test-connection  -- verify the OpenRouter API key works
 
+import re
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -20,6 +22,65 @@ from app.ai.providers import PROVIDERS, active_provider, list_base_url_for
 from app.ai.roles import ROLE_INFO, ROLES
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+
+# The Interface size steps this endpoint will store, and the ONLY place the
+# backend knows them.
+#
+# THIS IS A CROSS-LANGUAGE CONTRACT, and it fails silently in the worst way if
+# it drifts. The PUT below ignores an unknown value rather than returning 400
+# (deliberately, so an older client is not broken by a newer one's value) --
+# which means a step the frontend offers and this tuple omits will appear to
+# save, return 200, and simply never persist. The writer picks "Largest", the
+# app looks right until the next launch, and nothing anywhere errors.
+#
+# app/src/hooks/useUiScale.ts carries the matching UiScale union, and
+# backend/tests/test_appearance_bounds.py reads that file and fails the build if
+# these two lists ever stop agreeing.
+_UI_SCALES = (
+    "default", "larger", "larger_plus", "largest",
+    # The 4K steps, added 2026-09-01 alongside the frontend's.
+    "huge", "huge_plus", "maximum",
+)
+
+# Editor prose size bounds, in typography points. The same two numbers live in
+# app/src/hooks/useEditorFontSize.ts as EDITOR_PT_MIN / EDITOR_PT_MAX and are
+# pinned to these by the same test.
+# What a custom-theme colour is allowed to look like: #RGB, #RRGGBB, #RRGGBBAA
+# or rgb(R G B / A). Validated on the way IN and on the way OUT, because this
+# value is written straight into a style attribute -- an unvalidated string
+# there is a CSS injection into the app's own chrome.
+_COLOR_RE = re.compile(
+    r"^(?:#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})"
+    r"|rgba?\(\s*\d{1,3}\s*[, ]\s*\d{1,3}\s*[, ]\s*\d{1,3}"
+    r"\s*(?:[,/]\s*(?:\d*\.?\d+%?)\s*)?\))$"
+)
+_TOKEN_RE = re.compile(r"^--st-[a-z0-9-]{1,40}$")
+
+
+def _clean_custom_theme(raw: dict) -> dict[str, str]:
+    """Keep only well-formed token/colour pairs.
+
+    Dropped per-entry rather than rejecting the whole request: this arrives
+    from a screen with fifty-six inputs, and one typo must not cost the writer
+    the other fifty-five. Anything dropped simply falls back to the shipped
+    value, which is a visible outcome rather than a silent one.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            continue
+        v = value.strip()
+        if _TOKEN_RE.match(key) and _COLOR_RE.match(v):
+            out[key] = v
+    return out
+
+
+_EDITOR_PT_MIN = 9.0
+_EDITOR_PT_MAX = 24.0
+_EDITOR_PT_DEFAULT = 12.0
 
 
 # ── Pydantic Models ───────────────────────────────────────────────────────────
@@ -48,15 +109,41 @@ class SettingsResponse(BaseModel):
     # ~/Documents/Storythread Studio. Returned to the frontend so the Settings screen
     # can show the current path (and change it).
     vault_root:             str
-    # UI theme: "dark" or "light". Drives the runtime color palette.
+    # UI theme: "dark", "light" or "custom". Drives the runtime palette.
     theme:                  str
+    # The writer's own palette, for theme == "custom": one entry per --st-*
+    # role token. Stored HERE rather than in app.db on purpose -- app.db is
+    # per-project, is documented as safe to delete, and must hold nothing that
+    # cannot be rebuilt from Markdown. A theme is global, is not derivable from
+    # anything, and losing it to a cache clear would be a real loss.
+    custom_theme:           dict[str, str]
+    # The Audiobook Converter's own theme, independent of the writing app's.
+    # "dark" (charcoal, the default), "light" (warm paper) or "custom".
+    # Independent on the writer's ruling: one switch restyling a feature they
+    # are not looking at is worse than two switches.
+    audiobook_theme:        str
+    audiobook_custom_theme: dict[str, str]
     # UI font scale for chrome (menus, chat, settings, About, profile labels).
-    # One of "default" | "larger" | "larger_plus" | "largest". Drives the
-    # root <html> font-size at runtime so every Tailwind text-* rem-based
-    # utility scales proportionally. The editor uses its own pixel-sized
-    # font so it is unaffected by this setting (writers control editor
-    # font via the existing font picker in the editor toolbar).
+    # Drives the root <html> font-size at runtime so every Tailwind text-*
+    # rem-based utility scales proportionally. The accepted values are the
+    # UiScale union in app/src/hooks/useUiScale.ts; the two lists are pinned
+    # together by backend/tests/test_appearance_bounds.py, because a value the
+    # frontend offers and this file does not accept is dropped SILENTLY -- the
+    # PUT succeeds and the choice never persists.
+    #
+    # This deliberately does NOT size the manuscript editor. That is
+    # editor_font_pt below. The comment here used to claim the editor font was
+    # handled "by the font picker in the editor toolbar", which was wrong in
+    # both halves: that picker chooses a font FAMILY, and it does not persist.
     ui_scale:               str
+    # Size of the writer's own prose in the Markdown editors, in typography
+    # points. 12pt is exactly 16px at CSS's 96dpi, which is what the editor
+    # hardcoded before this setting existed -- so the default changes nothing
+    # for anyone who never opens it. Separate from ui_scale for the reason the
+    # writer gave: chrome is "more difficult to freely change without
+    # triggering other window/tile/card issues", while prose in a wrapping
+    # editor has no layout to break.
+    editor_font_pt:         float
     # How far apart lines sit in the Markdown editors, named the way a word
     # processor names it: "single" | "one_half" | "double" | "multiple".
     # Separate from ui_scale on purpose -- that one sizes the CHROME, this
@@ -112,11 +199,26 @@ class UpdateSettingsRequest(BaseModel):
     # use; we don't validate it exists at save time so writers can set a
     # not-yet-created folder if they want.
     vault_root:          str | None                   = None
-    # "dark" or "light". Anything else is ignored.
+    # "dark", "light" or "custom". Anything else is ignored.
     theme:               str | None                   = None
-    # One of "default" | "larger" | "larger_plus" | "largest". Anything else
-    # is ignored. Forward-compatible if more steps are added later.
+    # Token name to CSS colour. Keys must look like --st-* and values must be
+    # #RRGGBB or rgb(R G B / A); anything else is dropped per-entry rather than
+    # rejecting the whole palette, so one bad row cannot cost the writer the
+    # other fifty-five.
+    custom_theme:        dict[str, str] | None        = None
+    # "dark" | "light" | "custom". Unknown values ignored, same
+    # forward-compatible pattern as theme.
+    audiobook_theme:     str | None                   = None
+    audiobook_custom_theme: dict[str, str] | None     = None
+    # One of the UiScale values listed in _UI_SCALES below. Anything else is
+    # ignored. Forward-compatible if more steps are added later -- but adding
+    # one means adding it THERE too, which test_appearance_bounds.py enforces.
     ui_scale:            str | None                   = None
+    # Editor prose size in points. Clamped to 9-24 at write time; the same
+    # bounds live in app/src/hooks/useEditorFontSize.ts and the two are pinned
+    # together, because a frontend that offers 24pt against a backend that
+    # clamps at 20 stores something the writer did not choose and says nothing.
+    editor_font_pt:      float | None                 = None
     # One of "single" | "one_half" | "double" | "multiple". Anything else
     # is ignored, same forward-compatible pattern as theme and ui_scale.
     line_spacing:        str | None                   = None
@@ -194,14 +296,33 @@ async def update_settings(request: UpdateSettingsRequest):
         # Empty string is a sentinel for "reset to default" -- store as ""
         # and let get_vault_root() substitute the default at read time.
         settings["vault_root"] = request.vault_root.strip()
-    if request.theme is not None and request.theme in ("dark", "light"):
+    if request.custom_theme is not None:
+        settings["custom_theme"] = _clean_custom_theme(request.custom_theme)
+    if request.audiobook_custom_theme is not None:
+        settings["audiobook_custom_theme"] = _clean_custom_theme(
+            request.audiobook_custom_theme,
+        )
+    if request.audiobook_theme is not None and request.audiobook_theme in (
+        "dark", "light", "custom",
+    ):
+        settings["audiobook_theme"] = request.audiobook_theme
+    if request.theme is not None and request.theme in ("dark", "light", "custom"):
         # Silently ignore unknown values rather than 400 -- forward-compatible
         # in case future themes are added in newer clients.
         settings["theme"] = request.theme
-    if request.ui_scale is not None and request.ui_scale in ("default", "larger", "larger_plus", "largest"):
+    if request.ui_scale is not None and request.ui_scale in _UI_SCALES:
         # Same silent-ignore pattern as theme. Lets us add more steps later
-        # without older clients breaking on the new values.
+        # without older clients breaking on the new values -- see _UI_SCALES
+        # for why that tolerance needs a test holding it to the frontend.
         settings["ui_scale"] = request.ui_scale
+    if request.editor_font_pt is not None:
+        # Clamp rather than reject, for the same reason as
+        # line_spacing_multiple below: this arrives from a numeric input the
+        # writer is still typing in, and a 400 on the way to a valid number is
+        # an error message for a mistake nobody made.
+        settings["editor_font_pt"] = max(
+            _EDITOR_PT_MIN, min(_EDITOR_PT_MAX, float(request.editor_font_pt)),
+        )
     if request.line_spacing is not None and request.line_spacing in (
         "single", "one_half", "double", "multiple",
     ):
@@ -462,7 +583,15 @@ def _settings_response(settings: dict) -> SettingsResponse:
         # directory exists -- frontend always sees a real path.
         vault_root             = get_vault_root(),
         theme                  = settings.get("theme", "dark"),
+        custom_theme           = _clean_custom_theme(settings.get("custom_theme") or {}),
+        audiobook_theme        = settings.get("audiobook_theme", "dark"),
+        audiobook_custom_theme = _clean_custom_theme(settings.get("audiobook_custom_theme") or {}),
         ui_scale               = settings.get("ui_scale", "default"),
+        # `or _EDITOR_PT_DEFAULT` catches a stored 0 as well as a stored None.
+        # A 0 cannot get here through the PUT (it clamps to 9), so this only
+        # ever fires on a hand-edited settings.json -- where falling back to
+        # the default is the right answer anyway.
+        editor_font_pt         = float(settings.get("editor_font_pt", _EDITOR_PT_DEFAULT) or _EDITOR_PT_DEFAULT),
         line_spacing           = settings.get("line_spacing", "one_half"),
         line_spacing_multiple  = float(settings.get("line_spacing_multiple", 1.15) or 1.15),
         paragraph_space_before = float(settings.get("paragraph_space_before", 0.0) or 0.0),

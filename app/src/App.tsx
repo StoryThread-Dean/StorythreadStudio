@@ -94,8 +94,13 @@ import { DonationPrompt } from "./components/about/DonationPrompt";
 import { useBackendHealth } from "./hooks/useBackendHealth";
 import { useProjectUiState } from "./hooks/useProjectUiState";
 import { initTheme } from "./hooks/useTheme";
+import { CustomThemeEditor } from "./features/theme/CustomThemeEditor";
+import { initAudiobookTheme } from "./features/theme/useAudiobookTheme";
 import { initUiScale } from "./hooks/useUiScale";
 import { initLineSpacing } from "./hooks/useEditorSpacing";
+import {
+  initEditorFontSize, setEditorFontSize, currentEditorPt, EDITOR_PT_DEFAULT,
+} from "./hooks/useEditorFontSize";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { Bot, Send, ChevronDown, CornerDownRight, PenLine, Sparkles, HelpCircle, Brain } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
@@ -209,6 +214,11 @@ function App() {
 
   // Settings modal visibility
   const [showSettings, setShowSettings] = useState(false);
+  // The custom colour editor. A sibling of Settings rather than a child,
+  // because choosing Custom CLOSES Settings and opens this: the editor
+  // repaints the whole app live, and that cannot be judged through the dialog
+  // that launched it.
+  const [showCustomTheme, setShowCustomTheme] = useState(false);
 
   // Auto-update + donation + about-panel UI state. Bundled here so the
   // entire end-of-render-tree set of banners and modals can be wired up
@@ -1884,6 +1894,8 @@ function App() {
     void initTheme();
     void initUiScale();
     void initLineSpacing();
+    void initEditorFontSize();
+    void initAudiobookTheme();
   }, []);
 
 
@@ -1898,6 +1910,28 @@ function App() {
       if (e.ctrlKey && e.shiftKey && e.key === "F") {
         e.preventDefault();
         if (currentProject) setShowGlobalSearch(true);
+      }
+      // Ctrl+= / Ctrl+- / Ctrl+0: size the writer's prose, the way every
+      // editor and browser has trained them to expect.
+      //
+      // These call the SAME setter the Settings control uses, so the two can
+      // never disagree and a nudge here is saved like any other choice. Steps
+      // of one point: this is a fine adjustment made while reading, not the
+      // coarse pick the Settings buttons offer.
+      //
+      // `e.key` for "+" arrives as "=" on most layouts unshifted and "+"
+      // shifted, so both are accepted. Shift is deliberately not required.
+      if (e.ctrlKey && !e.altKey && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        void setEditorFontSize(currentEditorPt() + 1);
+      }
+      if (e.ctrlKey && !e.altKey && (e.key === "-" || e.key === "_")) {
+        e.preventDefault();
+        void setEditorFontSize(currentEditorPt() - 1);
+      }
+      if (e.ctrlKey && !e.altKey && e.key === "0") {
+        e.preventDefault();
+        void setEditorFontSize(EDITOR_PT_DEFAULT);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -2916,11 +2950,20 @@ function App() {
                 return (
                   <span
                     key={i}
-                    className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs transition-opacity ${chipTypeColor(chip.type)} ${isEstablished ? "opacity-40" : ""} ${isHuge ? "ring-1 ring-danger-fill" : isLarge ? "ring-1 ring-warn-fill" : ""}`}
+                    /* "Established" is drawn as a DASHED BORDER, not as
+                       opacity. It used to be opacity-40, which fades the chip's
+                       text as well as its edge -- and this chip is still
+                       interactive (it has an x), so that was a STATE rendered
+                       as unreadability. A dashed edge says "already sent"
+                       without costing a single point of contrast. */
+                    className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs ${chipTypeColor(chip.type)} ${isEstablished ? "border-dashed" : ""} ${isHuge ? "ring-1 ring-danger-fill" : isLarge ? "ring-1 ring-warn-fill" : ""}`}
                     title={tooltip}
                   >
                     {chip.name}
-                    <span className="text-micro opacity-60">({sizeLabel})</span>
+                    {/* No opacity here. At 10px inside an already-tinted chip,
+                        opacity-60 made this the least readable text in the app.
+                        The chip's own colour carries it. */}
+                    <span className="text-micro">({sizeLabel})</span>
                     <button
                       onClick={() => setContextChips(prev => prev.filter((_, j) => j !== i))}
                       className="text-faint hover:text-danger-muted"
@@ -3415,7 +3458,27 @@ function App() {
       )}
 
       {/* Settings modal -- rendered as an overlay on top of everything */}
-      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <Settings
+          onClose={() => setShowSettings(false)}
+          onOpenCustomTheme={() => {
+            // Close Settings, open the editor. The theme is NOT switched to
+            // "custom" here, and that took one wrong attempt to see: doing it
+            // first repaints the app from an empty palette, which is dark, so
+            // a writer in LIGHT mode would find the editor seeded from dark --
+            // the opposite of "start from the theme you are using now".
+            //
+            // The switch happens on Save inside the editor, which also means
+            // cancelling leaves the writer exactly where they were rather than
+            // on a custom theme they never finished.
+            setShowSettings(false);
+            setShowCustomTheme(true);
+          }}
+        />
+      )}
+      {showCustomTheme && (
+        <CustomThemeEditor onClose={() => setShowCustomTheme(false)} />
+      )}
 
       {/* Project settings modal */}
       {showProjectSettings && currentProject && (
@@ -4221,7 +4284,7 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                 {adding === n.filename
                   ? "Adding..."
                   : alreadyAdded
-                  ? <><span className="opacity-50">{n.name}</span><span className="ml-auto text-success-fill">✓</span></>
+                  ? <><span>{n.name}</span><span className="ml-auto text-success-fill">✓</span></>
                   : n.name}
               </button>
             );
@@ -4256,7 +4319,7 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                   {adding === addingKey
                     ? "Adding..."
                     : alreadyAdded
-                    ? <><span className="opacity-50">{cs.chapter_title}</span><span className="ml-auto text-success-fill">✓</span></>
+                    ? <><span>{cs.chapter_title}</span><span className="ml-auto text-success-fill">✓</span></>
                     : cs.chapter_title}
                 </button>
               );
@@ -4307,7 +4370,7 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                             {adding === addingKey
                               ? "Adding..."
                               : alreadyAdded
-                              ? <><span className="opacity-50">{sceneLabel}</span><span className="ml-auto text-success-fill">✓</span></>
+                              ? <><span>{sceneLabel}</span><span className="ml-auto text-success-fill">✓</span></>
                               : sceneLabel}
                           </button>
                         );
@@ -4347,7 +4410,7 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                   {adding === p.filename
                     ? "Adding..."
                     : alreadyAdded
-                    ? <><span className="opacity-50">{p.name}</span><span className="ml-auto text-success-fill">✓</span></>
+                    ? <><span>{p.name}</span><span className="ml-auto text-success-fill">✓</span></>
                     : p.name}
                 </button>
               );

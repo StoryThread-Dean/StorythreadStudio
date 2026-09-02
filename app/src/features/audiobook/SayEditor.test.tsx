@@ -110,10 +110,15 @@ describe("SayEditor", () => {
     const firstFive = titles.filter(t =>
       /Spell out the sounds|Sounding out the Vowels|inFlection|Space vs Hyphen|multiple Pronunciations/.test(t));
     expect(firstFive.length).toBe(5);
+    // Matched as a WHOLE class rather than a substring: the role rename
+    // introduced `hover:text-secondary-strong`, which contains
+    // "text-secondary" and made the negative assertion below fire on a
+    // collision rather than on the thing it is checking.
+    const highlighted = /(?:^|\s)text-secondary(?:\s|$)/;
     expect(screen.getByText(/Case changes the inFlection/).className)
-      .toContain("text-blue-300");
+      .toMatch(highlighted);
     expect(screen.getByText(/Characters to AVOID/).className)
-      .not.toContain("text-blue-300");
+      .not.toMatch(highlighted);
     expect(screen.queryByText(/silent h after a vowel/)).toBeNull();
 
     // Open the vowel section -- its body appears.

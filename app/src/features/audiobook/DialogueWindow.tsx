@@ -45,7 +45,7 @@ function plain(text: string, keyPrefix: string) {
     const isMarker = OTHER_MARKER.test(piece);
     OTHER_MARKER.lastIndex = 0;
     return isMarker
-      ? <span key={`${keyPrefix}-m${i}`} className="text-zinc-600">{piece}</span>
+      ? <span key={`${keyPrefix}-m${i}`} className="text-faint">{piece}</span>
       : <span key={`${keyPrefix}-p${i}`}>{piece}</span>;
   });
 }
@@ -95,7 +95,7 @@ export function DialogueWindow({
 
   if (!stop) {
     return (
-      <div className="h-32 overflow-y-auto rounded border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-xs leading-relaxed text-zinc-500">
+      <div className="h-32 overflow-y-auto rounded border border-border bg-bg-primary/60 px-3 py-2 text-xs leading-relaxed text-faint">
         Every line of dialogue in this chapter has been decided. Move to
         another chapter, or close and press Save in the editor to keep the
         markers.
@@ -126,7 +126,7 @@ export function DialogueWindow({
     <div
       ref={scrollRef}
       aria-label="Dialogue"
-      className="h-32 overflow-y-auto rounded border border-zinc-700 bg-zinc-950/60 px-3 py-2 font-serif text-xs leading-relaxed text-zinc-500"
+      className="h-32 overflow-y-auto rounded border border-border bg-bg-primary/60 px-3 py-2 font-serif text-xs leading-relaxed text-faint"
     >
       <span className="whitespace-pre-wrap">{before}</span>
       <span

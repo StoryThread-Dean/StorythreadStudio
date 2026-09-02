@@ -138,6 +138,87 @@ function putBodies(fetchMock: ReturnType<typeof mockFetch>, fragment: string) {
     .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
 }
 
+describe("the text size controls are reachable without leaving the Converter", () => {
+  // THE REPORT: "I asked for the Font size and text editor size settings to be
+  // mirrored over on the Audiobook Settings. Or for there to be the same
+  // Settings text link on the bottom left above Audiobook settings."
+  //
+  // The Converter is a full-screen world with its own sidebar and its own
+  // settings dialog, and no route back to app Settings. So a writer working on
+  // narration who wanted the text bigger had to leave the Converter entirely,
+  // change it, and come back to see whether it helped.
+  //
+  // A source-read elsewhere pins that this file renders <TextSizeControls />.
+  // These prove it actually reaches the screen -- an import that renders
+  // nothing is exactly the failure mode this repo keeps finding.
+
+  it("shows both size controls inside the dialog", async () => {
+    await open(mockFetch());
+    expect(screen.getByText("Look and feel")).toBeTruthy();
+    // The Converter's own theme joined the size controls under this heading
+    // when it gained a Dark/Light/Custom switch of its own.
+    expect(screen.getByText("Audiobook theme")).toBeTruthy();
+    // Matched on the LABEL element specifically: each control's help text
+    // names the other one ("your manuscript is sized by Editor text size just
+    // below"), which is deliberate cross-referencing and would otherwise make
+    // a bare text match ambiguous.
+    const groupLabel = (text: string) =>
+      screen.getAllByText(text).filter(el => el.tagName === "LABEL");
+    expect(groupLabel("Interface size")).toHaveLength(1);
+    expect(groupLabel("Editor text size")).toHaveLength(1);
+    expect(groupLabel("Line spacing")).toHaveLength(1);
+  });
+
+  it("says where paragraph spacing lives, instead of showing a dead knob", () => {
+    // Paragraph spacing pads per-paragraph elements; the narration editor is
+    // one plain textarea with none to pad, so the control would save a value
+    // and change nothing visible here. The dialog says so rather than either
+    // showing it or staying silent.
+    return open(mockFetch()).then(() => {
+      expect(screen.getByText(/Paragraph spacing/)).toBeTruthy();
+      expect(screen.getByText(/no separate paragraphs to pad/)).toBeTruthy();
+      // And it genuinely is not offered.
+      expect(screen.queryByText("Space before")).toBeNull();
+      expect(screen.queryByText("Space after")).toBeNull();
+    });
+  });
+
+  it("offers the real line spacing buttons", async () => {
+    await open(mockFetch());
+    expect(screen.getByRole("button", { name: /1\.5 lines/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Double/ })).toBeTruthy();
+  });
+
+  it("offers the real size buttons, not a link somewhere else", async () => {
+    await open(mockFetch());
+    // The one the writer came for, and the one that proves the seven-step
+    // Interface ladder arrived too.
+    expect(screen.getByRole("button", { name: /12 pt/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Maximum/ })).toBeTruthy();
+  });
+
+  it("says these two are app-wide, unlike everything else in the dialog", async () => {
+    // Every other setting here belongs to this one audiobook. A control that
+    // silently means something wider is how a writer changes more than they
+    // meant to.
+    await open(mockFetch());
+    expect(screen.getByText(/app-wide/)).toBeTruthy();
+  });
+
+  it("does not fold them into the dialog's Save flow", async () => {
+    // These persist the moment they are clicked, through the same stores as
+    // the writing app. If they joined this dialog's dirty/Save cycle, a writer
+    // could resize their text, hit Cancel, and be surprised twice.
+    const fetchMock = mockFetch();
+    await open(fetchMock);
+    fireEvent.click(screen.getByRole("button", { name: /16 pt/ }));
+    await waitFor(() =>
+      expect(putBodies(fetchMock, "/api/settings").length).toBeGreaterThan(0));
+    const wrote = putBodies(fetchMock, "/api/settings");
+    expect(wrote.some(b => b.editor_font_pt === 16)).toBe(true);
+  });
+});
+
 describe("AudiobookSettingsDialog", () => {
   it("shows all three sections", async () => {
     await open(mockFetch());

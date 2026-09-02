@@ -13,6 +13,7 @@ import { AudiobookDashboard } from "./AudiobookDashboard";
 import { ImportPanel } from "./ImportPanel";
 import { WorkspaceView } from "./WorkspaceView";
 import type { AudiobookProjectPayload } from "./types";
+import { useAudiobookTheme } from "../theme/useAudiobookTheme";
 
 interface AudiobookConverterProps {
   /** Leave the converter, back to the Storythread Project Home. */
@@ -35,16 +36,28 @@ export function AudiobookConverter({ onExit }: AudiobookConverterProps) {
     setScreen("dashboard");
   }, []);
 
+  // The Converter's own Dark / Light / Custom. Independent of the writing
+  // app's theme on purpose -- see useAudiobookTheme.ts.
+  const { attr: abTheme, style: abStyle } = useAudiobookTheme();
+
   return (
-    // The scoped theme root: dark charcoal base, jewel accents inside.
-    // The writing app's palette is untouched -- this class is the boundary.
-    <div className="audiobook-theme flex h-screen flex-col overflow-hidden bg-zinc-950 text-zinc-100">
+    // The scoped theme root, and the boundary the writing app's palette stops
+    // at. `data-ab-theme` selects the paper half in App.css; the inline style
+    // carries a custom palette, which has to be applied HERE rather than on
+    // <html> because this element declares its own --st-* and an element's own
+    // declaration beats an inherited one. That is the same mechanism that
+    // keeps the Converter charcoal while the writing app goes light.
+    <div
+      className="audiobook-theme flex h-screen flex-col overflow-hidden bg-bg-primary text-text-primary"
+      data-ab-theme={abTheme}
+      style={abStyle}
+    >
       {/* Slim top strip: the way home is always visible on the dashboard. */}
       {screen === "dashboard" && (
-        <div className="flex shrink-0 items-center border-b border-zinc-800 px-4 py-2">
+        <div className="flex shrink-0 items-center border-b border-border px-4 py-2">
           <button
             onClick={onExit}
-            className="inline-flex items-center gap-1 text-xs text-zinc-500 transition-colors hover:text-emerald-300"
+            className="inline-flex items-center gap-1 text-xs text-faint transition-colors hover:text-accent"
           >
             <ArrowLeft size={12} /> Storythread Studio
           </button>

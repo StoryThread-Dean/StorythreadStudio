@@ -34,6 +34,13 @@ import { AudiobookSettingsDialog } from "./AudiobookSettingsDialog";
 import { PronunciationDialog } from "./PronunciationDialog";
 import { SayEditor } from "./SayEditor";
 import type { AudiobookChapter, AudiobookProjectPayload } from "./types";
+// The narration editor is a WRITING surface holding the writer's own prose,
+// so it follows the same two settings every other editor in the app does.
+// It is not a MarkdownEditor -- it is a plain textarea, because the marker
+// grammar needs raw text and character offsets -- so it reads the stores
+// directly rather than inheriting the wiring.
+import { useEditorFontSize } from "../../hooks/useEditorFontSize";
+import { useEditorSpacing } from "../../hooks/useEditorSpacing";
 
 interface WorkspaceViewProps {
   payload: AudiobookProjectPayload;
@@ -61,6 +68,13 @@ const PAUSE_ACTIONS: { label: string; snippet: string; title: string; inline: bo
 export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   const workspacePath = payload.manifest.workspace_path;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Size and line spacing for the narration text. Same stores as the
+  // manuscript editor, so a writer who sets 16pt once sees 16pt in both
+  // places -- this screen showed a fixed 14px until 2026-09-01, which is
+  // what "I have the font size one way but it appears visibly different in
+  // the Audiobook generator" was reporting.
+  const { px: narrationFontPx } = useEditorFontSize();
+  const { lineHeight: narrationLineHeight } = useEditorSpacing();
   // The last passage the writer actually highlighted, kept as TEXT rather
   // than offsets so later edits cannot make it slice the wrong words.
   const lastSelectionRef = useRef("");
@@ -469,20 +483,20 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Header bar */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-zinc-800 px-4 py-2">
+      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
         <button
           onClick={handleBack}
-          className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-emerald-300"
+          className="inline-flex items-center gap-1 text-xs text-faint hover:text-accent"
         >
           <ArrowLeft size={12} /> Dashboard
         </button>
-        <p className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-100">
+        <p className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
           {payload.manifest.title}
-          {dirty && <span className="ml-2 text-emerald-400" title="Unsaved changes">●</span>}
+          {dirty && <span className="ml-2 text-accent-muted" title="Unsaved changes">●</span>}
         </p>
         <button
           onClick={() => setShowPronunciations(true)}
-          className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+          className="inline-flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs text-text-primary hover:border-secondary-fill hover:text-secondary"
           title="Pronunciation dictionary for this audiobook and all audiobooks"
         >
           <MessageSquareQuote size={13} /> Pronunciations
@@ -490,7 +504,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         <button
           onClick={() => void handleSave()}
           disabled={saving || !dirty}
-          className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded bg-accent-fill px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
         >
           {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
           Save
@@ -498,7 +512,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
       </div>
 
       {/* Marker toolbar -- sapphire accents: informational tooling */}
-      <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-zinc-800 px-4 py-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border px-4 py-2">
         {/* The walkthrough leads: it is the guided way to place
             everything the rest of this toolbar inserts by hand. */}
         <button
@@ -507,22 +521,22 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             setWalkthroughStart(textareaRef.current?.selectionStart ?? 0);
           }}
           title="Walk the manuscript from the cursor: pauses at dialogue hand-offs, beats between short sentences, marker repairs. Apply or skip each stop."
-          className="inline-flex items-center gap-1 rounded border border-blue-800 bg-blue-950/50 px-2 py-1 text-mini text-blue-200 hover:border-blue-500 hover:text-blue-100"
+          className="inline-flex items-center gap-1 rounded border border-secondary-fill bg-secondary-soft px-2 py-1 text-mini text-secondary-strong hover:border-secondary-fill hover:text-secondary-strong"
         >
           <Wand2 size={11} /> Formatting Walkthrough
         </button>
-        <span className="mx-1 h-4 w-px bg-zinc-800" />
+        <span className="mx-1 h-4 w-px bg-bg-surface" />
         {PAUSE_ACTIONS.map(action => (
           <button
             key={action.snippet}
             onClick={() => insertAtCursor(action.snippet, action.inline)}
             title={action.title}
-            className="rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+            className="rounded border border-border px-2 py-1 text-mini text-text-primary hover:border-secondary-fill hover:text-secondary"
           >
             {action.label}
           </button>
         ))}
-        <span className="mx-1 h-4 w-px bg-zinc-800" />
+        <span className="mx-1 h-4 w-px bg-bg-surface" />
         {/* Pace spans: wrap the selection; Normal pace = unmarked text. */}
         {/* STEP form: each step is 0.05 off the book's base pace, so a
             span always lands on a speed the engine renders cleanly (the
@@ -532,44 +546,44 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         <button
           onClick={() => wrapSelection("[pace:-2]", "[/pace]")}
           title="Slow the selected passage two steps below your base pace -- let a heavy moment breathe"
-          className="rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+          className="rounded border border-border px-2 py-1 text-mini text-text-primary hover:border-secondary-fill hover:text-secondary"
         >
           Slow
         </button>
         <button
           onClick={() => wrapSelection("[pace:+2]", "[/pace]")}
           title="Quicken the selected passage two steps above your base pace -- carry an action beat"
-          className="rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+          className="rounded border border-border px-2 py-1 text-mini text-text-primary hover:border-secondary-fill hover:text-secondary"
         >
           Fast
         </button>
-        <span className="mx-1 h-4 w-px bg-zinc-800" />
+        <span className="mx-1 h-4 w-px bg-bg-surface" />
         <button
           onClick={handleSay}
           title="One-spot pronunciation: select a word, then type how it should be spoken"
-          className="rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+          className="rounded border border-border px-2 py-1 text-mini text-text-primary hover:border-secondary-fill hover:text-secondary"
         >
           [say]
         </button>
         <button
           onClick={handleExclude}
           title="Keep the selected text in the file but never narrate it"
-          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300"
+          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-mini text-text-primary hover:border-secondary-fill hover:text-secondary"
         >
           <EyeOff size={11} /> Exclude
         </button>
-        <span className="mx-1 h-4 w-px bg-zinc-800" />
+        <span className="mx-1 h-4 w-px bg-bg-surface" />
         <button
           onClick={handleRemoveMarkers}
           title="Remove audio markers from the selection (or the paragraph under the cursor). Your words stay."
-          className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-mini text-zinc-300 hover:border-rose-600 hover:text-rose-300"
+          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-mini text-text-primary hover:border-danger-fill hover:text-danger"
         >
           <Scissors size={11} /> Remove
         </button>
         <button
           onClick={() => setShowMarkerHelp(v => !v)}
           title="What do these buttons do? Includes audio examples."
-          className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-mini text-zinc-500 hover:text-blue-300"
+          className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-mini text-faint hover:text-secondary"
         >
           <HelpCircle size={11} /> {showMarkerHelp ? "Hide help" : "What's this?"}
         </button>
@@ -613,9 +627,9 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
         {/* Left rail: chapters scroll, the settings gear stays pinned at
             the bottom (so it is always one click away, and never floats
             in the middle of a long chapter list). */}
-        <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-800">
+        <aside className="flex w-56 shrink-0 flex-col border-r border-border">
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <h3 className="mb-2 flex items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-blue-300">
+          <h3 className="mb-2 flex items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-secondary">
             <BookMarked size={12} /> Chapters ({chapters.length})
           </h3>
           <ul className="space-y-0.5">
@@ -627,7 +641,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
                 />
                 <button
                   onClick={() => jumpToChapter(chapter)}
-                  className="min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+                  className="min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-xs text-text-muted hover:bg-bg-panel hover:text-text-primary"
                   title={chapter.title}
                 >
                   {chapter.order}. {chapter.title}
@@ -636,7 +650,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
                   onClick={() => removeChapter(chapter)}
                   title={`Remove "${chapter.title}" from this audiobook (the original book is untouched)`}
                   aria-label={`Remove chapter ${chapter.title}`}
-                  className="invisible shrink-0 rounded px-1 py-1 text-zinc-600 hover:text-rose-400 group-hover:visible"
+                  className="invisible shrink-0 rounded px-1 py-1 text-faint hover:text-danger-muted group-hover:visible"
                 >
                   <X size={11} />
                 </button>
@@ -649,30 +663,30 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             title={dirty
               ? "Save your narration changes first, then add chapters."
               : "Pull in chapters the source book gained since this audiobook was made"}
-            className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded border border-dashed border-zinc-700 px-2 py-1.5 text-mini text-zinc-400 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+            className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded border border-dashed border-border px-2 py-1.5 text-mini text-text-muted hover:border-accent-fill hover:text-accent disabled:opacity-40"
           >
             <Plus size={11} /> Add chapters
           </button>
         </div>
-          <div className="shrink-0 space-y-1 border-t border-zinc-800 p-2">
+          <div className="shrink-0 space-y-1 border-t border-border p-2">
             <button
               onClick={() => setSettingsOpen(true)}
               title="Narration engine, API keys, and this book's pacing"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-mini text-zinc-300 transition-colors hover:border-blue-600 hover:text-blue-300"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-mini text-text-primary transition-colors hover:border-secondary-fill hover:text-secondary"
             >
               <SettingsIcon size={12} /> Audiobook Settings
             </button>
             <button
               onClick={openCast}
               title="Give characters their own voices -- free on your local narrator"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-mini text-zinc-300 transition-colors hover:border-violet-600 hover:text-violet-300"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-mini text-text-primary transition-colors hover:border-weave-fill hover:text-weave"
             >
               <Users size={12} /> Cast{castNames.length > 0 && ` (${castNames.length})`}
             </button>
             <button
               onClick={() => setStorageOpen(true)}
               title="How much space this audiobook is using, and what you can safely delete"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-zinc-700 px-2 py-1.5 text-mini text-zinc-300 transition-colors hover:border-sky-600 hover:text-sky-300"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded border border-border px-2 py-1.5 text-mini text-text-primary transition-colors hover:border-secondary-fill hover:text-secondary"
             >
               <HardDrive size={12} /> Storage
             </button>
@@ -708,19 +722,19 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
             />
           )}
           {warnings.length > 0 && (
-            <div className="shrink-0 border-b border-zinc-800 bg-blue-950/40 px-4 py-2">
+            <div className="shrink-0 border-b border-border bg-secondary-soft px-4 py-2">
               {warnings.map((warning, i) => (
-                <p key={i} className="text-mini text-blue-300">{warning}</p>
+                <p key={i} className="text-mini text-secondary">{warning}</p>
               ))}
             </div>
           )}
           {error && (
-            <p className="shrink-0 border-b border-zinc-800 bg-rose-950/60 px-4 py-2 text-xs text-rose-300">
+            <p className="shrink-0 border-b border-border bg-danger-soft px-4 py-2 text-xs text-danger">
               {error}
             </p>
           )}
           {loading ? (
-            <p className="p-6 text-sm text-zinc-500">Loading narration...</p>
+            <p className="p-6 text-sm text-faint">Loading narration...</p>
           ) : (
             <textarea
               ref={textareaRef}
@@ -738,7 +752,16 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
                 if (picked.trim()) lastSelectionRef.current = picked;
               }}
               spellCheck={false}
-              className="min-h-0 flex-1 resize-none bg-zinc-950 p-5 font-mono text-sm leading-relaxed text-zinc-200 outline-none"
+              /* Size and line-height come from the writer's settings, not from
+                 a utility class. `font-mono` STAYS: the marker grammar
+                 ([pause], [say:...], [voice:NAME]) is bracket-dense text that
+                 a fixed pitch keeps scannable, and the walkthrough teaches it
+                 in mono too. Only the SIZE was the complaint. */
+              style={{
+                fontSize:   `${narrationFontPx}px`,
+                lineHeight: String(narrationLineHeight),
+              }}
+              className="min-h-0 flex-1 resize-none bg-bg-primary p-5 font-mono text-text-primary outline-none"
             />
           )}
         </div>
@@ -813,15 +836,15 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
 
       {addChaptersState?.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-96 max-w-[90vw] rounded-lg border border-zinc-700 bg-zinc-900 p-4">
-            <h3 className="mb-2 text-sm font-semibold text-zinc-100">Add chapters</h3>
+          <div className="w-96 max-w-[90vw] rounded-lg border border-border bg-bg-panel p-4">
+            <h3 className="mb-2 text-sm font-semibold text-text-primary">Add chapters</h3>
             {addChaptersState.loading ? (
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-text-muted">
                 <Loader2 size={12} className="mr-1 inline animate-spin" />
                 Reading the original source...
               </p>
             ) : addChaptersState.available.length === 0 && !addChaptersState.error ? (
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-text-muted">
                 The source has no chapters this audiobook is missing. (A
                 renamed chapter counts as missing on the source side --
                 rename it back here if you meant to match it.)
@@ -830,7 +853,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               <ul className="mb-3 max-h-64 space-y-1 overflow-y-auto">
                 {addChaptersState.available.map(chapter => (
                   <li key={chapter.title}>
-                    <label className="flex cursor-pointer items-start gap-2 text-xs text-zinc-300">
+                    <label className="flex cursor-pointer items-start gap-2 text-xs text-text-primary">
                       <input
                         type="checkbox"
                         className="mt-0.5"
@@ -844,7 +867,7 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
                       />
                       <span>
                         {chapter.title}
-                        <span className="ml-1 text-micro text-zinc-500">
+                        <span className="ml-1 text-micro text-faint">
                           ({(chapter.characters / 1000).toFixed(1)}k characters)
                         </span>
                       </span>
@@ -854,21 +877,21 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
               </ul>
             )}
             {addChaptersState.error && (
-              <p className="mb-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-micro text-rose-300">
+              <p className="mb-2 rounded border border-danger-fill bg-danger-soft px-2 py-1.5 text-micro text-danger">
                 {addChaptersState.error}
               </p>
             )}
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setAddChaptersState(null)}
-                className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500"
+                className="rounded border border-border px-3 py-1.5 text-xs text-text-primary hover:border-border-strong"
               >
                 Close
               </button>
               <button
                 onClick={() => void confirmAddChapters()}
                 disabled={addChaptersState.picked.length === 0}
-                className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+                className="rounded bg-accent-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
               >
                 Add {addChaptersState.picked.length || ""} selected
               </button>
@@ -888,17 +911,17 @@ export function WorkspaceView({ payload, onBack }: WorkspaceViewProps) {
 // never paints every chapter as "not generated".
 
 const AUDIO_DOT: Record<ChapterAudioStatus, { className: string; title: string }> = {
-  current: { className: "bg-emerald-500",
+  current: { className: "bg-accent-fill",
              title: "Audio matches this chapter's narration." },
-  partial: { className: "bg-amber-400",
+  partial: { className: "bg-warn-muted",
              title: "Partly outdated -- some sections have been edited since "
                   + "they were narrated." },
-  outdated: { className: "bg-rose-500",
+  outdated: { className: "bg-danger-fill",
               title: "Audio outdated -- this chapter has changed since it was "
                    + "narrated." },
-  not_generated: { className: "border border-zinc-600",
+  not_generated: { className: "border border-border-strong",
                    title: "No audio generated yet." },
-  empty: { className: "border border-zinc-800", title: "Nothing to narrate here." },
+  empty: { className: "border border-border", title: "Nothing to narrate here." },
 };
 
 function AudioDot({ status }: { status?: ChapterAudioStatus }) {

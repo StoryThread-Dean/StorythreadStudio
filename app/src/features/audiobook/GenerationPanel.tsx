@@ -123,38 +123,38 @@ function InstallEngineBlock({ message, onInstalled }: { message: string; onInsta
   const busy = installing && install && ["starting", "downloading", "verifying", "extracting"].includes(install.state);
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
-      <p className="mb-2 text-xs text-zinc-300">{message}</p>
+    <div className="rounded-lg border border-border bg-bg-panel/40 p-3">
+      <p className="mb-2 text-xs text-text-primary">{message}</p>
       {busy ? (
         <>
-          <p className="mb-1 text-mini text-blue-300">
+          <p className="mb-1 text-mini text-secondary">
             {install.state === "downloading"
               ? `Downloading... ${Math.round(install.progress * 100)}%`
               : install.state === "verifying" ? "Verifying download..."
               : "Installing..."}
           </p>
-          <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-            <div className="h-full bg-blue-500"
+          <div className="h-1.5 overflow-hidden rounded-full bg-bg-surface">
+            <div className="h-full bg-secondary-fill"
                  style={{ width: `${Math.round((install.progress ?? 0) * 100)}%` }} />
           </div>
         </>
       ) : (
         <button
           onClick={() => void handleInstall()}
-          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
+          className="inline-flex items-center gap-2 rounded-lg bg-accent-fill px-4 py-2 text-xs font-semibold text-white hover:bg-accent-fill"
         >
           {isUpdate ? "Update Free Local Narrator" : "Install Free Local Narrator"}
           {status?.download_size_mb && (
-            <span className="font-normal opacity-75">(~{Math.round(status.download_size_mb)} MB)</span>
+            <span className="font-normal">(~{Math.round(status.download_size_mb)} MB)</span>
           )}
         </button>
       )}
-      <p className="mt-1.5 text-micro leading-relaxed text-zinc-600">
+      <p className="mt-1.5 text-micro leading-relaxed text-faint">
         One download, all {""}voices included. Runs entirely on your
         computer -- narration is free forever.
       </p>
       {error && (
-        <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-micro text-rose-300">
+        <p className="mt-2 rounded border border-danger-fill bg-danger-soft px-2 py-1.5 text-micro text-danger">
           {error}
         </p>
       )}
@@ -316,7 +316,7 @@ export function GenerationPanel({
       the other shows a ban while it waits its turn. */
   const previewIcon = (own: "voice" | "selection") => {
     if (previewing === own) return <Loader2 size={12} className="animate-spin" />;
-    if (previewing !== null) return <Ban size={12} className="text-zinc-600" />;
+    if (previewing !== null) return <Ban size={12} className="text-faint" />;
     return <Play size={12} />;
   };
 
@@ -368,14 +368,14 @@ export function GenerationPanel({
     ["paused", "cancelled", "partially_completed"].includes(run.status);
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-zinc-800 p-4">
-      <h3 className="flex items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-blue-300">
+    <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-border p-4">
+      <h3 className="flex items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-secondary">
         <Mic2 size={12} /> Narration
       </h3>
 
       {/* Engine / voice picker */}
       {engineState === "starting" && (
-        <p className="flex items-center gap-2 text-xs text-zinc-500">
+        <p className="flex items-center gap-2 text-xs text-faint">
           <Loader2 size={13} className="animate-spin" />
           Starting the free local narrator...
         </p>
@@ -390,7 +390,7 @@ export function GenerationPanel({
             onInstalled={() => void loadVoices()}
           />
         ) : (
-          <p className="rounded border border-rose-800 bg-rose-950/60 px-3 py-2 text-xs text-rose-300">
+          <p className="rounded border border-danger-fill bg-danger-soft px-3 py-2 text-xs text-danger">
             {engineError}
           </p>
         )
@@ -398,7 +398,7 @@ export function GenerationPanel({
       {engineState === "ready" && (
         <>
           <div>
-            <label className="mb-1 block text-mini text-zinc-500" htmlFor="narrator-voice">
+            <label className="mb-1 block text-mini text-faint" htmlFor="narrator-voice">
               Narrator voice ({voices.length} available, free and local)
             </label>
             {/* Voice and its sample share one line: the dropdown sizes to
@@ -413,7 +413,7 @@ export function GenerationPanel({
                   // Fire-and-forget: the book remembers its narrator.
                   void saveVoice(workspacePath, e.target.value).catch(() => {});
                 }}
-                className="w-auto min-w-0 max-w-[11rem] flex-1 truncate rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-emerald-500"
+                className="w-auto min-w-0 max-w-[11rem] flex-1 truncate rounded border border-border bg-bg-panel px-2 py-1.5 text-xs text-text-primary outline-none focus:border-accent-fill"
               >
                 {voices.map(voice => (
                   <option key={voice.id} value={voice.id}>{voice.label}</option>
@@ -423,7 +423,7 @@ export function GenerationPanel({
                 onClick={() => void handlePreview()}
                 disabled={previewing !== null || !voiceId}
                 title={previewing === "selection" ? "Waiting for the selection sample to finish" : "Play a short sample sentence in this voice"}
-                className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-700 px-2 py-1.5 text-mini text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
+                className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1.5 text-mini text-text-primary hover:border-secondary-fill hover:text-secondary disabled:opacity-40"
               >
                 {previewIcon("voice")}
                 Sample
@@ -448,32 +448,32 @@ export function GenerationPanel({
                 onClick={() => void handlePreviewSelection()}
                 disabled={previewing !== null || !voiceId}
                 title={previewing === "voice" ? "Waiting for the voice sample to finish" : "Highlight a passage in the editor, then hear exactly how it will sound -- pauses, pronunciations, and all. Local and free."}
-                className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs text-text-primary hover:border-accent-fill hover:text-accent disabled:opacity-40"
               >
                 {previewIcon("selection")}
                 Sample selection
               </button>
             </div>
-            <p className="mt-1 text-2xs text-zinc-600">local &middot; free &middot; up to 3,000 characters</p>
+            <p className="mt-1 text-2xs text-faint">local &middot; free &middot; up to 3,000 characters</p>
             {previewUrl && (
               <audio controls autoPlay src={previewUrl} className="mt-2 w-full" />
             )}
             {previewWarnings.map((warning, i) => (
-              <p key={i} className="mt-1.5 rounded border border-blue-800 bg-blue-950/40 px-2 py-1.5 text-micro leading-relaxed text-blue-300">
+              <p key={i} className="mt-1.5 rounded border border-secondary-fill bg-secondary-soft px-2 py-1.5 text-micro leading-relaxed text-secondary">
                 {warning}
               </p>
             ))}
             {/* The render trace: ground truth of what each piece used.
                 "Did my pace apply?" is answered here, not by ear. */}
             {previewTrace.length > 0 && (
-              <div className="mt-1.5 rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1.5">
+              <div className="mt-1.5 rounded border border-border bg-bg-panel/60 px-2 py-1.5">
                 {previewTrace.map((piece, i) => (
-                  <p key={i} className="truncate text-micro leading-relaxed text-zinc-500">
-                    <span className={piece.marker_pace ? "text-blue-300" : "text-zinc-400"}>
+                  <p key={i} className="truncate text-micro leading-relaxed text-faint">
+                    <span className={piece.marker_pace ? "text-secondary" : "text-text-muted"}>
                       {piece.speed.toFixed(2)}x
                     </span>
-                    {piece.dialogue && <span className="text-emerald-400"> dialogue</span>}
-                    {piece.marker_pace != null && <span className="text-blue-300"> [pace:{piece.marker_pace}]</span>}
+                    {piece.dialogue && <span className="text-accent-muted"> dialogue</span>}
+                    {piece.marker_pace != null && <span className="text-secondary"> [pace:{piece.marker_pace}]</span>}
                     {" "}&ldquo;{piece.snippet}...&rdquo;
                   </p>
                 ))}
@@ -491,7 +491,7 @@ export function GenerationPanel({
               fast on pause-heavy chapters. Draft audio is stale to a
               Standard run, so it can never ship by accident. */}
           {watching && !active && !resumable && (
-            <p className="flex items-center gap-2 text-mini text-blue-300">
+            <p className="flex items-center gap-2 text-mini text-secondary">
               <Loader2 size={12} className="animate-spin" />
               Checking on the run...
             </p>
@@ -510,14 +510,14 @@ export function GenerationPanel({
               <div className="mt-1">
                 <WhatsThis label="What's the difference?">
                   <span className="block">
-                    <strong className="text-zinc-200">Off (full quality):</strong>{" "}
+                    <strong className="text-text-primary">Off (full quality):</strong>{" "}
                     a paragraph with mid-sentence pauses is rendered as ONE
                     continuous read, then your pauses are placed into its
                     natural sentence gaps. No seams, but the engine does
                     roughly twice the work on those paragraphs.
                   </span>
                   <span className="mt-1.5 block">
-                    <strong className="text-amber-200">On (draft):</strong>{" "}
+                    <strong className="text-warn-strong">On (draft):</strong>{" "}
                     each fragment is rendered on its own and the pauses sit
                     at the cuts. About half the time, at the cost of the
                     slur and cold-start artifacts you hear at pause edges.
@@ -545,8 +545,8 @@ export function GenerationPanel({
               somewhere" into paragraphs to look at. */}
           {!active && !watching && audioStatus
             && audioStatus.flow_fallbacks > 0 && (
-            <p className="rounded border border-zinc-700 bg-zinc-900/60 px-2.5 py-2 text-micro leading-relaxed text-zinc-400">
-              <span className="text-zinc-300">
+            <p className="rounded border border-border bg-bg-panel/60 px-2.5 py-2 text-micro leading-relaxed text-text-muted">
+              <span className="text-text-primary">
                 {audioStatus.flow_fallbacks} pause group
                 {audioStatus.flow_fallbacks === 1 ? "" : "s"} rendered as
                 separate pieces.
@@ -559,15 +559,15 @@ export function GenerationPanel({
           )}
 
           {!active && !watching && audioStatus && audioStatus.outdated_segments > 0 && (
-            <div className="rounded border border-amber-800 bg-amber-950/30 px-2.5 py-2">
-              <p className="text-mini leading-relaxed text-amber-200">
+            <div className="rounded border border-warn-fill bg-warn-soft px-2.5 py-2">
+              <p className="text-mini leading-relaxed text-warn-strong">
                 {audioStatus.outdated_segments === 1
                   ? "1 section no longer matches its audio"
                   : `${audioStatus.outdated_segments} sections no longer match their audio`}
                 {audioStatus.outdated_reason === "voice"
                   ? " -- the voice changed." : "."}
               </p>
-              <p className="mt-1 text-micro leading-relaxed text-amber-200/70">
+              <p className="mt-1 text-micro leading-relaxed text-warn-strong/70">
                 {audioStatus.outdated_reason === "voice"
                   ? "Generating re-narrates the book in the new voice. Keeping "
                     + "the existing audio is fine too -- nothing is regenerated "
@@ -583,7 +583,7 @@ export function GenerationPanel({
             <button
               onClick={() => void (resumable ? control(resumeGeneration) : handleStart())}
               disabled={busy || !voiceId}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent-fill px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
             >
               {busy && <Loader2 size={14} className="animate-spin" />}
               {resumable ? "Resume Generation"
@@ -611,14 +611,14 @@ export function GenerationPanel({
                   }
                 })();
               }}
-              className="self-center text-micro text-rose-400 hover:text-rose-300 hover:underline"
+              className="self-center text-micro text-danger-muted hover:text-danger hover:underline"
             >
               Cancel generation and start over
             </button>
           )}
           {/* A finished draft must say so where the writer will see it. */}
           {run?.draft && (
-            <p className="rounded border border-amber-800 bg-amber-950/50 px-2 py-1.5 text-mini text-amber-300">
+            <p className="rounded border border-warn-fill bg-warn-soft px-2 py-1.5 text-mini text-warn">
               Draft-quality audio{active ? " is generating" : ""}. Regenerate
               in Standard quality before exporting -- a Standard run
               re-queues all draft segments automatically.
@@ -630,7 +630,7 @@ export function GenerationPanel({
             <button
               onClick={() => void handleStart(true)}
               disabled={busy}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-xs text-zinc-200 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-xs text-text-primary hover:border-accent-fill hover:text-accent disabled:opacity-40"
             >
               Regenerate Everything Anyway
             </button>
@@ -640,29 +640,29 @@ export function GenerationPanel({
 
       {/* Live run -- the sapphire path */}
       {run && (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
+        <div className="rounded-lg border border-border bg-bg-panel/60 p-3">
           <div className="mb-1 flex items-center justify-between text-mini">
             <span className={
-              run.status === "completed" ? "text-emerald-300"
-              : run.status === "generating" ? "text-blue-300"
-              : run.failed_segments > 0 ? "text-rose-300" : "text-zinc-400"
+              run.status === "completed" ? "text-accent"
+              : run.status === "generating" ? "text-secondary"
+              : run.failed_segments > 0 ? "text-danger" : "text-text-muted"
             }>
               {run.status === "generating" ? "Generating..." : run.status.replace(/_/g, " ")}
             </span>
-            <span className="text-zinc-500">{done} / {total} segments</span>
+            <span className="text-faint">{done} / {total} segments</span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+          <div className="h-1.5 overflow-hidden rounded-full bg-bg-surface">
             <div
-              className={`h-full ${run.failed_segments > 0 ? "bg-rose-500" : run.status === "completed" ? "bg-emerald-500" : "bg-blue-500"}`}
+              className={`h-full ${run.failed_segments > 0 ? "bg-danger-fill" : run.status === "completed" ? "bg-accent-fill" : "bg-secondary-fill"}`}
               style={{ width: `${percent}%` }}
             />
           </div>
           {run.failed_segments > 0 && (
-            <p className="mt-1.5 text-mini text-rose-300">
+            <p className="mt-1.5 text-mini text-danger">
               {run.failed_segments} segment{run.failed_segments === 1 ? "" : "s"} failed -- resume retries them.
             </p>
           )}
-          {run.note && <p className="mt-1.5 text-mini text-blue-300">{run.note}</p>}
+          {run.note && <p className="mt-1.5 text-mini text-secondary">{run.note}</p>}
 
           {active && (
             <div className="mt-2 flex gap-2">
@@ -670,7 +670,7 @@ export function GenerationPanel({
                 onClick={() => void control(pauseGeneration)}
                 disabled={busy}
                 title="Finishes the current segment, then pauses"
-                className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-200 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1 text-mini text-text-primary hover:border-secondary-fill hover:text-secondary disabled:opacity-40"
               >
                 <Pause size={11} /> Pause
               </button>
@@ -678,7 +678,7 @@ export function GenerationPanel({
                 onClick={() => void control(cancelGeneration)}
                 disabled={busy}
                 title="Finishes the current segment, then stops"
-                className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-200 hover:border-rose-600 hover:text-rose-300 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1 text-mini text-text-primary hover:border-danger-fill hover:text-danger disabled:opacity-40"
               >
                 <Square size={11} /> Cancel
               </button>
@@ -688,7 +688,7 @@ export function GenerationPanel({
       )}
 
       {error && (
-        <p className="rounded border border-rose-800 bg-rose-950/60 px-3 py-2 text-xs text-rose-300">
+        <p className="rounded border border-danger-fill bg-danger-soft px-3 py-2 text-xs text-danger">
           {error}
         </p>
       )}
@@ -714,7 +714,7 @@ export function GenerationPanel({
           but harmless earlier -- the backend refuses honestly. */}
       <ExportPanel workspacePath={workspacePath} />
 
-      <p className="mt-auto text-micro leading-relaxed text-zinc-600">
+      <p className="mt-auto text-micro leading-relaxed text-faint">
         Generation runs while Storythread is open and pauses if you close
         the app -- reopen and resume anytime. Draft free here; premium
         cloud voices arrive in a later update for the final print.

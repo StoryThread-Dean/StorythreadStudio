@@ -131,12 +131,36 @@
   --st-paper:        #FBF8F1;   /* the wordmark plate, both themes */
   --st-brand-deep:   #070724;   /* Black Russian: brand fills only */
 
-  /* Ink -- 87 / 60 / 38% white, the Material dark ladder.
-     These carry alpha and are never used with a Tailwind /NN modifier;
-     the tokens that ARE (border, the surfaces) are opaque on purpose. */
-  --st-text-primary: rgb(255 255 255 / 0.87);
-  --st-text-muted:   rgb(255 255 255 / 0.60);
-  --st-faint:        rgb(255 255 255 / 0.38);
+  /* Ink -- 92 / 72 / 55% white. MEASURED, NOT INHERITED.
+   *
+   * This was the Material dark ladder (87 / 60 / 38) until a writer reported
+   * eye strain and could not evaluate the app: "Never decrease the contrast of
+   * the small text unless you have an excellent reason (such as using gray text
+   * to indicate disabled and thus irrelevant controls)."
+   *
+   * They were right, and --st-faint was the offender. At 38% it measured
+   * 3.54 / 3.48 / 3.54 / 3.20 across bg-primary / panel / surface / raised --
+   * under the WCAG AA floor of 4.5:1 on every surface in the app. It is also
+   * the token this app leans on hardest for SMALL text: 504 call sites, 183 of
+   * them at 9-11px. Small and faded at once is the exact combination the
+   * complaint names.
+   *
+   * The ladder below clears 4.5:1 on all four surfaces while keeping three
+   * levels a reader can still tell apart (gaps of .20 and .17):
+   *
+   *              bg-primary  bg-panel  bg-surface  bg-raised
+   *   primary       14.24     13.34      14.24      10.83
+   *   muted          9.16      8.70       9.16       7.32
+   *   faint          5.91      5.69       5.91       4.98
+   *
+   * App.css.test.ts computes these from this file and fails the build under
+   * 4.5, so the numbers above cannot quietly stop being true.
+   *
+   * These carry alpha and are never used with a Tailwind /NN modifier;
+   * the tokens that ARE (border, the surfaces) are opaque on purpose. */
+  --st-text-primary: rgb(255 255 255 / 0.92);
+  --st-text-muted:   rgb(255 255 255 / 0.72);
+  --st-faint:        rgb(255 255 255 / 0.55);
   --st-on-accent:    #10202E;   /* ink ON a filled accent button */
 
   /* Lines -- opaque, because border-border/60 is a real call site and
@@ -213,12 +237,30 @@
   --st-paper:        #FBF8F1;
   --st-brand-deep:   #070724;
 
-  /* 0.90 / 0.65 / 0.45, not 0.87 / 0.60 / 0.38. Black at 60% on #F5F2EC is
-     4.33:1 -- under AA, across 517 text-text-muted call sites. Measured,
-     not guessed. */
-  --st-text-primary: rgb(26 26 26 / 0.90);
-  --st-text-muted:   rgb(26 26 26 / 0.65);
-  --st-faint:        rgb(26 26 26 / 0.45);
+  /* Ink -- 94 / 78 / 64% black. THE SECOND MEASUREMENT, AND THE WORSE HALF.
+   *
+   * This block was already bumped once for exactly this reason: 0.90 / 0.65 /
+   * 0.45 replaced 0.87 / 0.60 / 0.38 because black at 60% on #F5F2EC is 4.33:1,
+   * under AA across 517 call sites. That fixed muted and left --st-faint alone,
+   * which is why the next report was specifically about light mode: "the Light
+   * color scheme is causing a very fast headache from eye strain."
+   *
+   * At 0.45 faint measured 2.82 / 2.86 / 2.82 / 2.78 across bg-primary / panel
+   * / surface / raised -- the worst number anywhere in the app, in either
+   * theme. Dark's faint was bad; this was worse, and the writer felt the
+   * difference before anyone measured it.
+   *
+   *              bg-primary  bg-panel  bg-surface  bg-raised
+   *   primary       13.37     14.13      13.37      12.42
+   *   muted          7.99      8.28       7.99       7.60
+   *   faint          5.00      5.12       5.00       4.84
+   *
+   * FAINT IS 0.64 AND NOT 0.62 ON PURPOSE. 0.62 clears the 4.5 floor on
+   * bg-raised by 0.05 -- one part in ninety -- which would fail the first time
+   * anyone nudged a surface value by a shade. 0.64 leaves real room. */
+  --st-text-primary: rgb(26 26 26 / 0.94);
+  --st-text-muted:   rgb(26 26 26 / 0.78);
+  --st-faint:        rgb(26 26 26 / 0.64);
   --st-on-accent:    #FFFFFF;
 
   --st-border:        #CBC3B2;
@@ -480,10 +522,70 @@
   --st-bg-panel-alt: #18181b;
   --st-scrim:        rgb(0 0 0 / 0.70);
 
+  /* Ink. ONLY --st-faint moves, and the reason the other two do not is worth
+   * keeping: they already clear AA on the three surfaces text actually sits on,
+   * so retuning them would move the converter's look for no accessibility gain.
+   *
+   *                        bg-primary  bg-panel  bg-surface
+   *   primary #f4f4f5        18.10      16.12      13.55
+   *   muted   #a1a1aa         7.76       6.91       5.81
+   *   faint   #94949c         6.61       5.88       4.95   (was #71717a:
+   *                                                         4.12 / 3.67 / 3.08)
+   *
+   * BG-RAISED IS NOT IN THAT TABLE AND CANNOT BE. #3f3f46 (zinc-700) is a
+   * hover tint painted behind a row, not a surface body copy rests on, and no
+   * plausible grey clears 4.5:1 against it: faint would need to reach #b0b0b8,
+   * which is LIGHTER than muted -- the ladder would invert and the three levels
+   * would stop meaning anything. Darkening raised to #2d2d33 only reaches 4.54.
+   *
+   * This is a pre-existing hole, not one the retune opened: today's muted
+   * #a1a1aa manages only 4.07 on it. App.css.test.ts names bg-raised as an
+   * explicit, dated exemption for this theme rather than quietly omitting it.
+   * Measured 2026-09-01. If a resting surface is ever painted --st-bg-raised
+   * here, this exemption is wrong and this comment is where to start. */
   --st-text-primary: #f4f4f5;   /* zinc-100 */
   --st-text-muted:   #a1a1aa;   /* zinc-400 */
-  --st-faint:        #71717a;   /* zinc-500 */
+  --st-faint:        #94949c;   /* between zinc-500 and zinc-400, for AA */
   --st-on-accent:    #ffffff;
+
+  /* TYPE, AND WHY THIS BLOCK GETS ITS OWN RAMP.
+   *
+   * The Audiobook Converter was built a full step smaller than the rest of the
+   * app, and nothing was in a position to notice because every size here is a
+   * legitimate rem step that scales with Interface size exactly as it should.
+   * It is not a broken control -- it is a different design, measured:
+   *
+   *              <= 11px      of total
+   *   main app     41%        (text-xs dominates)
+   *   audiobook    72%        (text-mini and text-micro dominate)
+   *
+   * CastPanel is the extreme case: 48 of its 52 size classes are 10px or 11px.
+   * So a writer who sets Interface size for the writing app arrives here and
+   * finds everything a notch smaller, which is what "this screen appears to
+   * have different font size problems" was reporting.
+   *
+   * HOW THIS WORKS, because it looks like it should not. Tailwind v4 compiles
+   * `text-mini` to `font-size: var(--text-mini)` -- the variable is read at USE
+   * time, not baked in -- so redefining the step inside this scope moves all
+   * 247 call sites without editing one of them. Verified against the built
+   * stylesheet rather than assumed.
+   *
+   * THE COST, stated plainly: `text-mini` now means 11px in the writing app and
+   * 12px in here, so a SHARED component (GuidedWalk, WhatsThis) renders a shade
+   * larger on this side. That is the intended behaviour -- it should match its
+   * surroundings, which is the same argument that justifies this block
+   * overriding colour -- but it is a real second meaning for one class name,
+   * and worth knowing before adding a third.
+   *
+   * The ramp keeps its shape: every step moves up exactly 1px, so the internal
+   * hierarchy this screen was designed with is preserved. Line heights are
+   * unitless ratios and scale on their own.
+   */
+  --text-2xs:   0.625rem;    /* 10px, was  9px */
+  --text-micro: 0.6875rem;   /* 11px, was 10px */
+  --text-mini:  0.75rem;     /* 12px, was 11px */
+  --text-xs:    0.8125rem;   /* 13px, was 12px */
+  --text-sm:    0.9375rem;   /* 15px, was 14px */
 
   --st-border:        #3f3f46;
   --st-border-strong: #52525b;
@@ -539,6 +641,147 @@
      charcoal in here while they follow the writing app's palette out there. */
 
 }
+
+/* -- The Audiobook Converter on paper --------------------------------------
+ *
+ * The Converter has its OWN theme switch, and this is its light half. Added
+ * 2026-09-02 on the writer's ruling; spec 5.0 is amended to match.
+ *
+ * WHY IT HANGS OFF ITS OWN ATTRIBUTE AND NOT [data-theme="light"].
+ * Spec 5.0 argued that charcoal in both app themes was the point -- the writer
+ * should always know which side of the app they are standing in -- and that
+ * argument is still sound as a DEFAULT. What changed is that it is now the
+ * writer's call rather than the app's. So the Converter carries its own
+ * `data-ab-theme` on its root element and the two sides are independent: a
+ * dark writing app beside a paper Converter is a combination someone can
+ * legitimately want, and coupling this to [data-theme="light"] would have
+ * forbidden it while also making the app's theme switch silently restyle a
+ * feature the writer was not looking at.
+ *
+ * The selector is `.audiobook-theme[data-ab-theme="light"]`, which is one
+ * attribute more specific than the charcoal block above, so it wins for
+ * everything it declares and inherits the rest -- including the type ramp,
+ * which is a size decision and has nothing to do with the palette.
+ *
+ * SURFACES are the writing app's paper exactly, because the writer asked for
+ * that: "the light theme should be same warm paper as the Storythread's editor
+ * side". The one place this differs from the charcoal block is the inset:
+ * charcoal has bg-surface LIGHTER than the panel, and on paper that reads as a
+ * tile floating on top of a card rather than a well you type into. So the
+ * light half follows the writing app's rule -- surfaces alternate, they do not
+ * climb.
+ *
+ * INK IS DELIBERATELY STRONGER THAN THE AA FLOOR, on instruction: "the faded
+ * colors for smaller text should be more contrast popping rather than faded."
+ * The writing app's light theme targets roughly 14 / 8 / 5; this targets
+ * 14 / 9.5 / 7. Measured on the worst surface it lands on (bg-raised):
+ *
+ *                  bg-primary  bg-panel  bg-surface  bg-raised
+ *   primary  0.96     14.13     14.95      14.13      13.09
+ *   muted    0.83      9.46      9.87       9.46       8.93
+ *   faint    0.75      7.21      7.45       7.21       6.89
+ *
+ * That faint figure is the number to defend. On the charcoal side faint is
+ * 4.95 on its lightest surface, which clears AA and no more; here it is 6.89
+ * at worst, because this screen is dense with 10 and 11px labels and the
+ * writer has now said twice that faded small text is the problem.
+ *
+ * JEWEL MEANINGS ARE UNCHANGED and that is the whole constraint: emerald is
+ * still primary action and success, sapphire still information and progress,
+ * ruby still cost and failure, violet still the Weave. Each family is simply
+ * moved down the ramp until it reads on cream -- a jewel tone chosen for a
+ * charcoal ground is a pastel on paper, and pastels on cream are exactly the
+ * complaint that started this work. Every plain (text) variant clears 6.7:1
+ * and every -fill takes white text at 5:1 or better.
+ */
+.audiobook-theme[data-ab-theme="light"] {
+  color-scheme: light;
+
+  /* Surfaces -- the writing app's paper, with the inset RECESSED. */
+  --st-bg-primary:   #F5F2EC;
+  --st-bg-panel:     #FBF9F4;
+  --st-bg-surface:   #F5F2EC;
+  --st-bg-raised:    #EDE9E0;
+  --st-bg-panel-alt: #FBF9F4;
+  --st-scrim:        rgb(26 26 26 / 0.42);
+
+  /* Ink -- 96 / 83 / 75%. See the table above for why these are higher than
+     the writing app's light values rather than copied from them. */
+  --st-text-primary: rgb(26 26 26 / 0.96);
+  --st-text-muted:   rgb(26 26 26 / 0.83);
+  --st-faint:        rgb(26 26 26 / 0.75);
+  --st-on-accent:    #FFFFFF;
+
+  /* Lines. Warm, so a neutral rule does not read grey-blue against cream. */
+  --st-border:        #CBC3B2;
+  --st-border-strong: #A89F8B;
+  /* Focus stays emerald: it is the Converter's identity colour and the ring
+     is the one place that identity is genuinely useful. */
+  --st-focus:         #065F46;
+
+  /* Emerald -- primary action and success. 7.30 on a panel. */
+  --st-accent:        #065F46;
+  --st-accent-strong: #064E3B;
+  --st-accent-muted:  #047857;
+  --st-accent-fill:   #047857;   /* white on this is 5.48 */
+  --st-accent-soft:   rgb(5 150 105 / 0.12);
+
+  /* Sapphire -- information and progress. 7.19 on a panel. */
+  --st-secondary:        #075985;
+  --st-secondary-strong: #0C4A6E;
+  --st-secondary-muted:  #0369A1;
+  --st-secondary-fill:   #0369A1;   /* white on this is 5.93 */
+  --st-secondary-soft:   rgb(3 105 161 / 0.12);
+
+  /* Success shares the emerald family, exactly as the charcoal block does. */
+  --st-success:        #065F46;
+  --st-success-strong: #064E3B;
+  --st-success-muted:  #047857;
+  --st-success-fill:   #047857;
+  --st-success-soft:   rgb(5 150 105 / 0.12);
+
+  /* Amber -- warnings and cost. The hardest family on paper: a readable amber
+     is really a brown, and going lighter to keep it "amber" is what makes a
+     cost warning stop reading as one. 6.74 on a panel. */
+  --st-warn:        #92400E;
+  --st-warn-strong: #78350F;
+  --st-warn-muted:  #B45309;
+  --st-warn-fill:   #B45309;   /* white on this is 5.02 */
+  --st-warn-soft:   rgb(180 83 9 / 0.13);
+
+  /* Ruby -- cost, failure, destructive. 7.62 on a panel. */
+  --st-danger:        #9F1239;
+  --st-danger-strong: #881337;
+  --st-danger-muted:  #BE123C;
+  --st-danger-fill:   #BE123C;   /* white on this is 6.29 */
+  --st-danger-soft:   rgb(190 18 60 / 0.12);
+
+  /* Violet -- the Weave, wherever a shared component brings it in here. */
+  --st-weave:        #5B21B6;
+  --st-weave-strong: #4C1D95;
+  --st-weave-muted:  #6D28D9;
+  --st-weave-fill:   #6D28D9;   /* white on this is 7.10 */
+  --st-weave-soft:   rgb(109 40 217 / 0.12);
+
+  /* The Converter's own identity mark. */
+  --st-audio:        #065F46;
+
+  /* Categorical. THE CHARCOAL BLOCK DOES NOT DECLARE THESE, which is fine
+     while it is dark: it inherits them from :root, and :root's are tuned for
+     a dark ground. On paper those same values are pale washes. So the light
+     half declares them, using the writing app's light scale. Without this,
+     the sidebar's section stripes would be the one thing in a paper Converter
+     still coloured for charcoal. */
+  --st-kind-1: #0277BD;  --st-kind-2: #2E7D32;
+  --st-kind-3: #8A5A00;  --st-kind-4: #C62828;
+  --st-kind-5: #00796B;  --st-kind-6: #6A1B9A;
+  --st-kind-7: #558B2F;  --st-kind-8: #00838F;
+
+  /* Editor layers, for the narration text. */
+  --st-selection:   #BBDEFB;
+  --st-active-line: rgb(21 101 192 / 0.07);
+}
+
 
 
 /*

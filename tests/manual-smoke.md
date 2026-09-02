@@ -1037,37 +1037,140 @@ button that has become invisible against the surface behind it.
    with no flash of the other one.
 3. In LIGHT mode, walk: ProjectHome, the editor, Book Details, Weaving, the
    Profile Extractor, Concepts, Profiles, Global Search, Export.
-   - [ ] No text that is too pale to read. Muted labels especially.
    - [ ] No leftover dark-mode panel on a cream page.
    - [ ] Scrollbars and any `<select>` dropdown are light, not dark.
+   - [ ] **Look at what the contrast test CANNOT see.** Since v2.0.4 every
+         `--st-*` ink token is computed against every surface and the build
+         fails under 4.5:1, so plain token-coloured text is already proven.
+         What is still on you:
+     - Reader Mode, which paints its own colours inline with `style` and is
+       reached by no token check at all.
+     - Disabled buttons and greyed rows. These SHOULD still look unavailable
+       -- low contrast is correct here, and "fixing" it would be the bug.
+     - The Audiobook Converter's hover rows: `--st-bg-raised` there is a
+       declared exemption from the contrast floor (see `appearance-spec.md`
+       3.3), so it is the one place faint text on a hover tint is expected
+       to be dim. Check it is still *legible*, not that it passes.
 4. Repeat the same walk in DARK.
    - [ ] Cards read as raised off the window; inputs read as sunk into the
          card holding them.
    - [ ] Hovering a sidebar row lightens it.
-5. **The audiobook side must look UNCHANGED.** Open the Audiobook Converter
-   in both themes.
-   - [ ] Still charcoal with jewel accents in both. It does not follow the
-         light theme, on purpose.
-   - [ ] Compare against a screenshot from the previous release if there is
-         any doubt.
+5. **Custom theme** (new in v2.0.4). Settings > Appearance > Custom.
+   - [ ] Settings closes and the colour editor opens. It is NOT empty: every
+         row already holds the colour you were just using. Do this once from
+         Dark and once from Light and confirm it seeds from the one you were
+         actually in.
+   - [ ] Change a surface colour. The app behind the dialog repaints as you
+         type. Nothing has been saved yet.
+   - [ ] Close with the X. Confirm it ASKS first, and that your previous theme
+         is back afterwards. This is the one that matters: a cancelled edit
+         must not leave you looking at a palette that disappears on restart.
+   - [ ] Reopen, change something, press Save colours, restart the app.
+         Your palette is still there.
+   - [ ] Click a row, then use the wheel and the lightness slider. The row's
+         hex box follows. Click the small square at the end of a row: your
+         system colour picker opens.
+   - [ ] Drag the faint text colour's % down until the number beside it turns
+         amber. The footer says how many are hard to read. Confirm it still
+         lets you save -- warning, not refusing, is the intended behaviour.
+   - [ ] Set a very light window colour and save. Open a `<select>` dropdown
+         and look at a scrollbar: both should be light, not dark. Those are
+         drawn by the OS and are the one thing CSS variables cannot reach.
+   - [ ] Press "Use Dark instead". You are back on the shipped dark theme
+         immediately, and nothing is left half-applied.
+   - [ ] With a custom theme saved, switch to Light and back to Dark in
+         Settings. Both apply properly -- a leftover custom value winning over
+         the stylesheet would make Dark look like it did nothing.
+6. **The audiobook side has its OWN theme now** (new in v2.0.4), and the
+   first check here is a regression check on 940 converted colour classes.
+   - [ ] Open the Audiobook Converter with the writing app in Dark. It should
+         look EXACTLY as it did before this release: charcoal, jewel accents.
+         Compare against a screenshot from the previous release -- this is the
+         one step where "looks the same" is the pass condition, because every
+         colour class in there was rewritten.
+   - [ ] Switch the writing app to Light and Custom. The Converter does NOT
+         follow either. It keeps its own look, on purpose.
+   - [ ] Audiobook Settings > Look and feel > **Paper**. The Converter goes
+         warm cream. Walk the dashboard, the workspace, the Cast screen and
+         the generation rail: no charcoal panel left behind, no pale pastel
+         text, and the sidebar section stripes are dark enough to read.
+   - [ ] On Paper, check the small labels specifically. They should read as
+         solid dark text, not grey -- this side is dense with 10 and 11px
+         labels and stronger-than-minimum was the instruction.
+   - [ ] Open a `<select>` and look at a scrollbar while on Paper: both
+         light, not dark.
+   - [ ] **Custom.** The colour editor opens seeded from whichever Converter
+         theme you were just on (try it from Charcoal and from Paper). Change
+         a surface, watch the Converter repaint behind the dialog, close
+         without saving: your previous look comes back.
+   - [ ] Save a Converter palette, then restart. It is still there, and the
+         writing app's own theme is untouched by it.
+   - [ ] Press "Use Charcoal instead". Back to the default immediately.
 
 ## 27. Text sizing and spacing
 
-1. Settings > Appearance > **Interface size**. Step through all four.
+1. Settings > Appearance > **Interface size**. Step through all SEVEN
+   (Default through Maximum -- three were added in v2.0.4).
    - [ ] EVERY label grows, including the smallest ones. Roughly half of the
          app ignored this before v2.0.2, so this is the check that matters.
-2. **Line spacing**: set Single, then Double, with a chapter open.
+   - [ ] The MANUSCRIPT does not move. This control is the chrome only.
+   - [ ] At **Maximum** (24px root), open Settings, Book Details and a Weave
+         panel. Nothing is clipped by the window, no button wraps mid-word,
+         no table runs off its card.
+   - [ ] At Maximum, type into a chat box and a profile description. The
+         text-entry surfaces reach 28px there; if either one cramps or wraps
+         badly, say so -- the fix is to hold all three new steps at 24.
+   - [ ] **Icons stay their old size and that is KNOWN.** Lucide icons take a
+         pixel `size=` prop and do not scale. At Maximum they look a size
+         small beside the text. Do not file this; it is on the roadmap.
+2. **Editor text size** (new in v2.0.4). With a chapter open, set 18 pt.
+   - [ ] The manuscript grows. The sidebar, menus and toolbar do NOT.
+   - [ ] The same happens in the Outline, a note, and a summary editor.
+   - [ ] **And in the Audiobook Converter's narration editor.** Open a
+         workspace and look at the narration text: it is the SAME size as the
+         manuscript you just set. This is the one prose surface that is not a
+         MarkdownEditor, so it is the one that silently gets left behind --
+         it stayed at a fixed size until v2.0.4. It stays in a typewriter
+         font on purpose; only the size follows.
+   - [ ] **You can change all three WITHOUT leaving the Converter.** In the
+         audiobook sidebar, bottom left, open Audiobook Settings and scroll to
+         "Text size and spacing". Interface size, Editor text size AND Line
+         spacing are there, they say they are app-wide, and changing one
+         applies immediately behind the dialog. Close with Cancel: the change
+         STAYS (it is not part of that dialog's Save flow, on purpose).
+   - [ ] Set Line spacing to Double and look at the narration text: the lines
+         open up. Paragraph spacing is deliberately absent here and the panel
+         says why -- a textarea has no separate paragraphs to pad, so it would
+         save a value and do nothing.
+   - [ ] Open app Settings > Appearance afterwards. It shows the same values.
+         It is one control rendered twice, so the two cannot disagree.
+   - [ ] Overall, the Audiobook Converter no longer reads a step smaller than
+         the writing app. Compare the Cast screen against the Profile Builder:
+         labels and hints should feel the same weight, not one size down.
+3. Press `Ctrl` `+` a few times, then `Ctrl` `-`, then `Ctrl` `0`.
+   - [ ] The prose resizes as you press, one point at a time.
+   - [ ] `Ctrl 0` returns to 12 pt, and Settings now SHOWS 12 pt -- the
+         shortcut and the control are the same setting, not two.
+4. **Custom**: click Custom, type 30, click away.
+   - [ ] Clamps to 24 on blur rather than accepting it or erroring.
+   - [ ] Typing "abc" puts the live value back and changes nothing.
+5. **Line spacing**: set Single, then Double, with a chapter open.
    - [ ] The gap between wrapped lines inside a paragraph changes visibly.
    - [ ] The number shown beside each option matches what you see.
-3. **Multiple**: type 2.5, click away.
+6. **Multiple**: type 2.5, click away.
    - [ ] Applies on blur, not per keystroke.
    - [ ] Typing something silly (0.1, 900, "abc") does not break the editor.
-4. **Paragraph spacing**: set After to 24pt.
+7. **Paragraph spacing**: set After to 24pt.
    - [ ] The gap BETWEEN paragraphs opens up, while the lines inside a
          paragraph stay where they were. These are separate measurements and
          this is the check that they are.
-5. Restart the app.
-   - [ ] All three settings survived.
+8. Restart the app.
+   - [ ] All FIVE settings survived, Editor text size included. A step that
+         appears to save and is gone after a restart is the exact failure
+         `test_appearance_bounds.py` exists to prevent, so if you see it,
+         the two languages have drifted.
+   - [ ] A writer who never opened Appearance sees no change at all. 12 pt is
+         16px, which is what the editor always rendered.
 
 ## 28. Converting an existing outline -- THE OTHER DANGEROUS ONE
 

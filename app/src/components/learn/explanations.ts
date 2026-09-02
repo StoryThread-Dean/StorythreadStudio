@@ -413,6 +413,37 @@ export const EXPLAIN: Record<string, Explains> = {
         + "you work. Use Show me how this works for the whole page in order.",
     ],
   },
+  "theme.custom": {
+    what: "Your own colour for every part of the app.",
+    why: "Because Dark and Light are two answers and some people want their "
+      + "own. This lists all fifty-six colours the app is built from, grouped "
+      + "by what they do -- surfaces, text, borders, the accent, the colours "
+      + "that mean success or danger -- and lets you set each one. It starts "
+      + "from whichever theme you were just using, so you are adjusting a "
+      + "working palette rather than filling in a blank grid. Nothing is "
+      + "saved until you press Save colours, and closing without saving puts "
+      + "your previous theme back.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Click any row on the left to aim the wheel at it. The wheel sets the "
+        + "colour and its strength, the slider under it sets how light or dark, "
+        + "and the hex box on the row takes a code you paste in.",
+      "The small square at the end of each row opens your system colour "
+        + "picker, which is where the eyedropper lives if you are matching a "
+        + "colour from somewhere else on screen.",
+      "The three text rows show a number like 8.7:1. That is how readable the "
+        + "text is against a panel. Under 4.5 turns amber and is genuinely "
+        + "hard to read at small sizes -- the app warns you rather than "
+        + "stopping you, because it is your app.",
+      "Some rows have a % box. Those colours are see-through on purpose so "
+        + "they work on top of any background, and the % is how much. The "
+        + "wheel leaves it alone.",
+      "Start again from Dark or Light at any time. It replaces every colour "
+        + "in the list, so use it before you have done much rather than after.",
+    ],
+  },
+
   "character.subtext": {
     what: "A trait AI uses and never says out loud.",
     why: "Because the reason a character behaves as they do is often the thing "

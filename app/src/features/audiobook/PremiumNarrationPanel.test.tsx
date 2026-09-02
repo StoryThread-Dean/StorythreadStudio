@@ -196,7 +196,9 @@ describe("PremiumNarrationPanel", () => {
       expect(screen.getByText(/not one of the recommended narration models/)).toBeTruthy());
     // Rose, not the usual violet -- visibly a different state.
     const note = screen.getByText(/not one of the recommended/).closest("div")!;
-    expect(note.className).toContain("rose");
+    // "rose" was the raw shade; the class names a ROLE now, and danger is
+    // still ruby in this theme -- the meaning is what the test is about.
+    expect(note.className).toContain("danger");
     expect(screen.queryByText("Narrate the Final Version")).toBeNull();
 
     fireEvent.click(screen.getByText("Pick a narration engine"));

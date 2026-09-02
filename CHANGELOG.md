@@ -18,13 +18,93 @@ entry while working on a feature, append it under Unreleased.
 
 ---
 
-## [Unreleased]
+## [2.0.4] - 2026-09-02
 
 ### Added
 
+- **Editor text size.** The words in your manuscript, outline, notes and
+  summary editors now have their own size control, in Settings > Appearance,
+  from 9 to 24 points with a Custom box. You can also press `Ctrl +` and
+  `Ctrl -` while writing, or `Ctrl 0` to go back to normal. It starts at
+  12 pt, which is exactly the size the editor has always used, so nothing
+  moves until you ask it to.
+- **The Audiobook Converter has its own theme now: Charcoal, Paper, or
+  Custom.** Audiobook Settings > Look and feel. Paper is the same warm cream
+  as the writing side, with the small text made deliberately stronger rather
+  than faded. Custom opens the same colour editor as the writing app, working
+  on the Converter's own palette.
+  - The two sides are independent on purpose, so a dark editor beside a paper
+    Converter is a perfectly good combination and switching one never
+    restyles the other. Charcoal stays the default.
+  - Getting there meant converting 940 colour classes in the Converter onto
+    the app's named colours, because a literal "zinc 900" cannot follow a
+    theme. In Charcoal it should look exactly as it did.
+- **A third theme: Custom, where you assign your own colours.** Settings >
+  Appearance > Custom opens an editor listing all fifty-six colours the app is
+  built from, grouped by what they do: surfaces, text, borders, the accent, the
+  colours that mean success or danger, the section stripes, and the two used
+  inside the writing editor. Every row takes a hex code, has a swatch that
+  opens your system colour picker (that is where the eyedropper is), and the
+  wheel on the right sets whichever row you click. It starts from whichever
+  theme you were just using, so you are adjusting a working palette rather
+  than filling in a blank grid.
+  - The app repaints as you go, but nothing is saved until you press Save
+    colours -- closing without saving puts your previous theme straight back.
+  - The three text rows show how readable they are, and turn amber when a
+    colour gets hard to read at small sizes. It warns rather than stopping
+    you; it is your app.
+  - "Use Dark instead" is one button away, so a palette you dislike is never
+    something you have to read your way out of.
+  - The colour list reads one size larger than it first shipped.
+- **Interface size, Editor text size and Line spacing are now inside
+  Audiobook Settings.**
+  The Audiobook Converter has its own sidebar and its own settings dialog and
+  no way back to the app's Settings, so making the text bigger meant leaving
+  the Converter, changing it, and coming back. Both controls are now in the
+  Audiobook Settings dialog under "Text size" -- the same controls, not a
+  copy, so they cannot end up disagreeing. They are marked app-wide, because
+  everything else in that dialog belongs to the one audiobook. Paragraph
+  spacing is not among them, and the panel says why: it puts a gap between
+  paragraphs, and the narration box is one plain text field with no separate
+  paragraphs to space, so it would do nothing there.
+- **Line spacing now reaches the narration text as well**, so a chapter reads
+  the same on both sides of the app.
+- **The Audiobook Converter's narration editor follows Editor text size too.**
+  It is the same manuscript prose, so it is sized by the same control -- it
+  used to be stuck at one size no matter what you picked. It stays in a
+  typewriter font, because the `[pause]` and `[voice:]` markers are much easier
+  to pick out that way.
+- **Three larger Interface sizes.** The setting that scales menus, sidebars
+  and dialogs used to stop at 19px, which is small on a 4K screen. It now goes
+  to 24px -- Huge, Huge+ and Maximum. Interface size and Editor text size are
+  deliberately separate: you can have compact menus around roomy prose, or the
+  other way round.
+
 ### Changed
 
+- **Every shade of grey text is easier to read, in all three colour schemes.**
+  The faintest text in the app failed the standard contrast bar on every
+  background -- worst in Light mode, which is why Light was the harder one to
+  read for long. All three text shades were re-measured and lifted in dark,
+  light and the Audiobook Converter's charcoal. There is now a test that
+  computes the contrast from the stylesheet and fails the build if it ever
+  slips again.
+
 ### Fixed
+
+- Eight labels in the Dialogue Check panel were painted a colour that did not
+  exist, so they quietly took whatever colour surrounded them.
+- Text that was faded twice -- already-grey wording with a second layer of
+  transparency on top of it -- in the context chips, Reader Mode's chapter
+  counter and two audiobook buttons. Greyed-out *unavailable* controls are
+  left alone; that one is on purpose.
+- The Find and Replace panel inside the editor, and the small badges on
+  Smart Advisor issues, ignored the Interface size setting. They follow it now.
+- **The Audiobook Converter was built a whole step smaller than the rest of
+  the app** -- nearly three quarters of its text was 11px or under, against
+  four in ten everywhere else, with the Cast screen the worst of it. Its text
+  now sits a step larger across the board, so moving between the writing side
+  and the audiobook side no longer feels like changing glasses.
 
 ---
 
@@ -518,7 +598,8 @@ First public release.
 - Backend sidecar hung at startup in installed builds, causing "Failed to fetch" errors on first project open. The Tauri shell plugin pipes the child process's stdout and stderr through a Receiver that the setup hook was dropping; uvicorn's startup log lines filled the OS pipe buffer and blocked the backend from binding to port 8000. The setup hook now drains the receiver in a detached task so the backend can start cleanly.
 - API requests from the installed app were blocked by CORS even after the backend started, because the allowlist only included Tauri v1's `tauri://localhost` origin. Tauri v2 on Windows uses `http://tauri.localhost`; both Tauri v2 origins are now on the allowlist.
 
-[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v2.0.4...HEAD
+[2.0.4]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v2.0.3...v2.0.4
 [1.1.0]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.11...v1.1.0
 [1.0.11]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/StoryThread-Dean/StorythreadStudio/compare/v1.0.9...v1.0.10

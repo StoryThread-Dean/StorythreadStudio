@@ -63,3 +63,68 @@ describe("type scale -- no frozen pixel font sizes", () => {
     ).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// THE OTHER WAY TO FREEZE A FONT SIZE
+// ---------------------------------------------------------------------------
+// The gate above catches `text-[11px]` in a Tailwind class. It cannot see a
+// size set in JavaScript, and that is exactly where the worst instance of this
+// bug spent the app's entire life:
+//
+//     // MarkdownEditor.tsx, buildFontTheme
+//     "&": { fontSize: "16px" }
+//
+// An absolute pixel size in a CodeMirror theme object. useUiScale moves rem
+// utilities by setting font-size on <html>; nothing it does can reach a px
+// literal inside a JS object. So the writer's own prose -- the manuscript, the
+// outline, notes and both summary editors -- rendered at exactly 16px at every
+// Interface size step, while 1,044 rem-based chrome utilities moved around it.
+//
+// It went unnoticed for the same reason the line-height bug did: 16px is a
+// perfectly plausible size, so nothing looked broken. It surfaced only when a
+// writer on a 4K display said the maximum font size was "way too small".
+//
+// Prose now comes from useEditorFontSize and chrome uses rem. This gate keeps
+// both true. `em`, `rem` and `%` are all fine here -- they inherit, which is
+// the whole point.
+
+describe("type scale -- no frozen pixel sizes in style objects either", () => {
+  /** `fontSize: "16px"` in any quote style. A template literal starts with
+   *  `${` and is therefore computed, which is what we want people to write. */
+  const JS_PX_FONT_SIZE = /fontSize:\s*["'`](\d+(?:\.\d+)?)px["'`]/g;
+
+  /**
+   * Comments are stripped first. Two files legitimately QUOTE the banned
+   * pattern while explaining why it was banned -- useEditorFontSize.ts and its
+   * test -- and excluding them by name would leave a hole in the gate. Reading
+   * only real code closes it without an allowlist.
+   */
+  function stripComments(source: string): string {
+    return source
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+  }
+
+  it("uses inheritable units in CodeMirror and overlay themes", () => {
+    const offenders: string[] = [];
+
+    for (const [path, source] of Object.entries(SOURCES)) {
+      if (path.endsWith("/typeScale.test.ts")) continue;   // quotes the pattern
+
+      const hits = stripComments(source).match(JS_PX_FONT_SIZE);
+      if (hits) {
+        const unique = [...new Set(hits)].sort().join(", ");
+        offenders.push(`${path}: ${unique} (${hits.length})`);
+      }
+    }
+
+    expect(
+      offenders,
+      "a font size written as an absolute pixel string in a style object " +
+        "cannot be moved by ANY setting -- not Interface size, not Editor text " +
+        "size. For the writer's prose, take the value from useEditorFontSize. " +
+        "For editor chrome (the Find panel, issue badges), use rem so it " +
+        "follows Interface size like the rest of the chrome does.",
+    ).toEqual([]);
+  });
+});

@@ -168,8 +168,8 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
     ["starting", "downloading", "verifying", "extracting"].includes(install.state);
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
-      <h4 className="mb-2 flex items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-blue-300">
+    <div className="rounded-lg border border-border bg-bg-panel/40 p-3">
+      <h4 className="mb-2 flex items-center gap-1.5 text-mini font-semibold uppercase tracking-wider text-secondary">
         <Package size={12} /> Export
       </h4>
 
@@ -177,29 +177,29 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
       {ffmpeg && !ffmpeg.installed && (
         installBusy ? (
           <>
-            <p className="mb-1 text-mini text-blue-300">
+            <p className="mb-1 text-mini text-secondary">
               {install.state === "downloading"
                 ? `Downloading audio assembler... ${Math.round(install.progress * 100)}%`
                 : install.state === "verifying" ? "Verifying download..."
                 : "Installing..."}
             </p>
-            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-              <div className="h-full bg-blue-500"
+            <div className="h-1.5 overflow-hidden rounded-full bg-bg-surface">
+              <div className="h-full bg-secondary-fill"
                    style={{ width: `${Math.round((install.progress ?? 0) * 100)}%` }} />
             </div>
           </>
         ) : (
           <>
-            <p className="mb-2 text-mini text-zinc-400">
+            <p className="mb-2 text-mini text-text-muted">
               Exporting needs the audio assembler (FFmpeg) -- a one-time free
               download.
             </p>
             <button
               onClick={() => void handleInstall()}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-fill px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-fill"
             >
               Install Audio Assembler
-              <span className="font-normal opacity-75">(~{Math.round(ffmpeg.download_size_mb)} MB)</span>
+              <span className="font-normal">(~{Math.round(ffmpeg.download_size_mb)} MB)</span>
             </button>
           </>
         )
@@ -210,7 +210,7 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
         <>
           <div className="mb-2 space-y-1">
             {FORMATS.map(format => (
-              <label key={format.key} className="flex cursor-pointer items-start gap-2 text-mini text-zinc-300"
+              <label key={format.key} className="flex cursor-pointer items-start gap-2 text-mini text-text-primary"
                      title={format.hint}>
                 <input
                   type="checkbox"
@@ -229,7 +229,7 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
             <button
               onClick={() => void handleExport()}
               disabled={busy || formats.length === 0}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-fill px-4 py-2 text-xs font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
             >
               {busy && <Loader2 size={12} className="animate-spin" />}
               Export Audiobook
@@ -240,33 +240,33 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
             <div className="mt-2">
               {exportActive && (
                 <>
-                  <p className="mb-1 text-mini text-blue-300">{exportState.message}</p>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                    <div className="h-full bg-blue-500"
+                  <p className="mb-1 text-mini text-secondary">{exportState.message}</p>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-bg-surface">
+                    <div className="h-full bg-secondary-fill"
                          style={{ width: `${Math.round(exportState.progress * 100)}%` }} />
                   </div>
                 </>
               )}
               {exportState.state === "done" && (
                 <>
-                  <p className="mb-1 text-mini text-emerald-300">{exportState.message}</p>
+                  <p className="mb-1 text-mini text-accent">{exportState.message}</p>
                   <ul className="mb-2 space-y-0.5">
                     {exportState.outputs.map(path => (
-                      <li key={path} className="truncate text-micro text-zinc-500" title={path}>
+                      <li key={path} className="truncate text-micro text-faint" title={path}>
                         {path}
                       </li>
                     ))}
                   </ul>
                   <button
                     onClick={() => void openOutputFolder()}
-                    className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-3 py-1.5 text-mini text-zinc-200 hover:border-emerald-600 hover:text-emerald-300"
+                    className="inline-flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-mini text-text-primary hover:border-accent-fill hover:text-accent"
                   >
                     <FolderOpen size={12} /> Open Output Folder
                   </button>
                 </>
               )}
               {exportState.state === "error" && (
-                <p className="rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-micro text-rose-300">
+                <p className="rounded border border-danger-fill bg-danger-soft px-2 py-1.5 text-micro text-danger">
                   {exportState.error}
                 </p>
               )}
@@ -279,11 +279,11 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
           asked to be asked. The size leads, because that is the whole
           reason anyone considers deleting. */}
       {prompt && (
-        <div className="mt-2 rounded border border-sky-800 bg-sky-950/40 px-2.5 py-2">
-          <p className="text-mini font-medium text-sky-200">
+        <div className="mt-2 rounded border border-secondary-fill bg-secondary-soft px-2.5 py-2">
+          <p className="text-mini font-medium text-secondary-strong">
             Export complete.
           </p>
-          <p className="mt-1 text-micro leading-relaxed text-sky-100/80">
+          <p className="mt-1 text-micro leading-relaxed text-secondary-strong/80">
             Intermediate generation files use{" "}
             {formatBytes(prompt.categories
               .filter(c => INTERMEDIATE.includes(c.key))
@@ -294,19 +294,19 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
           <div className="mt-2 flex flex-wrap gap-1.5">
             <button
               onClick={() => setPrompt(null)}
-              className="rounded bg-emerald-600 px-2.5 py-1 text-mini font-semibold text-white hover:bg-emerald-500"
+              className="rounded bg-accent-fill px-2.5 py-1 text-mini font-semibold text-white hover:bg-accent-fill"
             >
               Keep Files
             </button>
             <button
               onClick={() => void deleteIntermediate()}
-              className="rounded border border-zinc-600 px-2.5 py-1 text-mini text-zinc-200 hover:border-rose-500 hover:text-rose-300"
+              className="rounded border border-border-strong px-2.5 py-1 text-mini text-text-primary hover:border-danger-fill hover:text-danger"
             >
               Delete Segment Files
             </button>
             <button
               onClick={() => { setPrompt(null); setStorageOpen(true); }}
-              className="rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-300 hover:border-sky-500 hover:text-sky-300"
+              className="rounded border border-border px-2.5 py-1 text-mini text-text-primary hover:border-secondary-fill hover:text-secondary"
             >
               Review Storage
             </button>
@@ -315,13 +315,13 @@ export function ExportPanel({ workspacePath }: { workspacePath: string }) {
       )}
 
       {reclaimed && (
-        <p className="mt-2 rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-micro leading-relaxed text-zinc-300">
+        <p className="mt-2 rounded border border-border bg-bg-panel px-2 py-1.5 text-micro leading-relaxed text-text-primary">
           {reclaimed}
         </p>
       )}
 
       {error && (
-        <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1.5 text-micro text-rose-300">
+        <p className="mt-2 rounded border border-danger-fill bg-danger-soft px-2 py-1.5 text-micro text-danger">
           {error}
         </p>
       )}

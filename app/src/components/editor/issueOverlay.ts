@@ -113,7 +113,7 @@ export const issueOverlayTheme = EditorView.theme({
     padding: "0 4px",
     marginRight: "2px",
     borderRadius: "8px",
-    fontSize: "10px",
+    fontSize: "0.625rem",
     fontWeight: "600",
     lineHeight: "14px",
     textAlign: "center",

@@ -47,55 +47,55 @@ export function NarrationPacingSection({
   const [open, setOpen] = useState(true);
   return (
     <section>
-      <h3 className="mb-1 border-b border-zinc-800 pb-2 text-mini font-semibold uppercase tracking-wider text-zinc-500">
+      <h3 className="mb-1 border-b border-border pb-2 text-mini font-semibold uppercase tracking-wider text-faint">
         Narration Settings
       </h3>
       <button
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
-        className="mt-2 flex w-full items-center justify-between rounded border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-left transition-colors hover:border-blue-700"
+        className="mt-2 flex w-full items-center justify-between rounded border border-border bg-bg-primary/60 px-3 py-2 text-left transition-colors hover:border-secondary-fill"
       >
         <span className="flex items-center gap-2">
-          <Gauge size={13} className="text-blue-300" />
-          <span className="text-mini font-semibold text-zinc-200">
+          <Gauge size={13} className="text-secondary" />
+          <span className="text-mini font-semibold text-text-primary">
             Pacing and pauses for this book
           </span>
         </span>
         <span className="flex items-center gap-2">
           {dirty && (
-            <span className="text-micro font-normal text-amber-400"
+            <span className="text-micro font-normal text-warn-muted"
                   title="Previews and generation use the SAVED values -- save to apply">
               unsaved
             </span>
           )}
           {!dirty && saved && (
-            <span className="text-micro font-normal text-emerald-400">saved</span>
+            <span className="text-micro font-normal text-accent-muted">saved</span>
           )}
           <ChevronDown
             size={12}
-            className={"text-zinc-500 transition-transform " + (open ? "rotate-180" : "")}
+            className={"text-faint transition-transform " + (open ? "rotate-180" : "")}
           />
         </span>
       </button>
 
       {open && (
-        <div className="mt-2 space-y-2 rounded border border-zinc-800 bg-zinc-950/40 p-3">
+        <div className="mt-2 space-y-2 rounded border border-border bg-bg-primary/40 p-3">
           {FIELDS.map(([key, label, min, max, step, hint]) => (
             <label key={key} className="block" title={hint}>
-              <span className="mb-0.5 block text-micro text-zinc-400">{label}</span>
+              <span className="mb-0.5 block text-micro text-text-muted">{label}</span>
               <input
                 type="number"
                 min={min} max={max} step={step}
                 value={pacing[key]}
                 onChange={e => onChange({ ...pacing, [key]: Number(e.target.value) })}
-                className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 outline-none focus:border-emerald-500"
+                className="w-full rounded border border-border bg-bg-primary px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
               />
-              <span className="mt-0.5 block text-2xs leading-relaxed text-zinc-600">
+              <span className="mt-0.5 block text-2xs leading-relaxed text-faint">
                 {hint}
               </span>
             </label>
           ))}
-          <p className="text-2xs leading-relaxed text-zinc-600">
+          <p className="text-2xs leading-relaxed text-faint">
             Pace changes mark affected audio as outdated -- the next Generate
             re-does exactly those segments. [pace] markers step up or down
             from these base speeds.

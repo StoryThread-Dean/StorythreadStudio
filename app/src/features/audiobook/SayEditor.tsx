@@ -239,7 +239,7 @@ export function SayEditor({
 
   return (
     <div
-      className="absolute z-40 w-[26rem] max-w-[92%] overflow-y-auto rounded-lg border border-blue-800 bg-zinc-900 p-3 shadow-xl shadow-black/50"
+      className="absolute z-40 w-[26rem] max-w-[92%] overflow-y-auto rounded-lg border border-secondary-fill bg-bg-panel p-3 shadow-xl shadow-black/50"
       style={style}
       onKeyDown={e => {
         if (e.key === "Escape") onClose();
@@ -252,7 +252,7 @@ export function SayEditor({
         // sitting over the manuscript that only Escape could dismiss,
         // and only while it still had focus (live finding).
         <div className="flex items-center gap-3">
-          <p className="flex-1 text-xs text-zinc-300">
+          <p className="flex-1 text-xs text-text-primary">
             {applied > 0
               ? `Done -- ${applied} spot${applied === 1 ? "" : "s"} set.`
               : word
@@ -262,7 +262,7 @@ export function SayEditor({
           <button
             ref={doneRef}
             onClick={onClose}
-            className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-500"
+            className="rounded bg-secondary-fill px-3 py-1 text-xs font-semibold text-white hover:bg-secondary-fill"
           >
             Close
           </button>
@@ -271,25 +271,25 @@ export function SayEditor({
         <>
           {/* The structured marker: only the spoken form is typeable. */}
           <div className="mb-2 flex flex-wrap items-center gap-1 font-mono text-xs">
-            <span className="text-zinc-500">[say:</span>
+            <span className="text-faint">[say:</span>
             <input
               ref={inputRef}
               value={spoken}
               onChange={e => setSpoken(e.target.value)}
               placeholder="how to speak it"
               aria-label="Spoken form"
-              className="w-36 rounded border border-blue-800 bg-zinc-950 px-1.5 py-0.5 text-blue-200 placeholder:text-zinc-600 focus:border-blue-500 focus:outline-none"
+              className="w-36 rounded border border-secondary-fill bg-bg-primary px-1.5 py-0.5 text-secondary-strong placeholder:text-faint focus:border-secondary-fill focus:outline-none"
             />
-            <span className="text-zinc-500">]</span>
-            <span className="font-semibold text-zinc-100">{word}</span>
-            <span className="text-zinc-500">[/say]</span>
+            <span className="text-faint">]</span>
+            <span className="font-semibold text-text-primary">{word}</span>
+            <span className="text-faint">[/say]</span>
             <button
               onClick={() => void handlePreview()}
               disabled={previewing}
               title={spoken.trim()
                 ? "Hear the word with your spoken form applied"
                 : "Hear the engine's current reading of the word"}
-              className="ml-auto inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-mini text-zinc-300 hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+              className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-mini text-text-primary hover:border-accent-fill hover:text-accent disabled:opacity-40"
             >
               {previewing ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
               Preview
@@ -301,7 +301,7 @@ export function SayEditor({
               whether the text was right and the ENGINE read it oddly,
               or the text never made it through intact. */}
           {heard && (
-            <p className="mb-2 truncate font-mono text-micro text-zinc-500"
+            <p className="mb-2 truncate font-mono text-micro text-faint"
                title={heard}>
               engine heard: {heard}
             </p>
@@ -310,33 +310,33 @@ export function SayEditor({
           {/* Tips: the vetted respelling tricks, expandable. */}
           <button
             onClick={() => setShowTips(v => !v)}
-            className="mb-1 inline-flex items-center gap-1 text-mini text-blue-300 hover:text-blue-200"
+            className="mb-1 inline-flex items-center gap-1 text-mini text-secondary hover:text-secondary-strong"
           >
             {showTips ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
             Tips: ways writers use this
           </button>
           {showTips && (
-            <div className="mb-2 max-h-56 overflow-y-auto rounded border border-zinc-800 bg-zinc-950">
+            <div className="mb-2 max-h-56 overflow-y-auto rounded border border-border bg-bg-primary">
               {[
                 { heading: "Most Useful", tips: TIPS.filter(t => t.important) },
                 { heading: "Additional useful information", tips: TIPS.filter(t => !t.important) },
               ].map(section => (
                 <div key={section.heading}>
-                  <p className="border-b border-zinc-800/60 bg-zinc-900/60 px-2 py-1 text-micro font-semibold uppercase tracking-wider text-zinc-500">
+                  <p className="border-b border-border/60 bg-bg-panel/60 px-2 py-1 text-micro font-semibold uppercase tracking-wider text-faint">
                     {section.heading}
                   </p>
                   <ul>
                     {section.tips.map(tip => {
                       const index = TIPS.indexOf(tip);
                       return (
-                        <li key={tip.title} className="border-b border-zinc-800/60 last:border-b-0">
+                        <li key={tip.title} className="border-b border-border/60 last:border-b-0">
                           <button
                             type="button"
                             onClick={() => setOpenTip(prev => (prev === index ? null : index))}
                             className={"flex w-full items-center gap-1 px-2 py-1.5 text-left text-mini font-medium "
                               + (tip.important
-                                ? "text-blue-300 hover:text-blue-100"   // the essential five
-                                : "text-zinc-300 hover:text-blue-200")}
+                                ? "text-secondary hover:text-secondary-strong"   // the essential five
+                                : "text-text-primary hover:text-secondary-strong")}
                           >
                             {openTip === index
                               ? <ChevronDown size={10} className="shrink-0" />
@@ -344,7 +344,7 @@ export function SayEditor({
                             {tip.title}
                           </button>
                           {openTip === index && (
-                            <p className="px-3 pb-2 pl-6 text-mini leading-relaxed text-zinc-400">
+                            <p className="px-3 pb-2 pl-6 text-mini leading-relaxed text-text-muted">
                               {tip.body}
                             </p>
                           )}
@@ -361,7 +361,7 @@ export function SayEditor({
             <button
               onClick={handleAccept}
               disabled={!spoken.trim()}
-              className="inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-1 text-mini font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded bg-accent-fill px-3 py-1 text-mini font-semibold text-white hover:bg-accent-fill disabled:opacity-40"
             >
               <Check size={11} /> Accept
             </button>
@@ -369,25 +369,25 @@ export function SayEditor({
               onClick={handleNext}
               disabled={remaining.length <= 1}
               title={`Skip to the next "${word}"`}
-              className="rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-300 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40"
+              className="rounded border border-border px-2.5 py-1 text-mini text-text-primary hover:border-secondary-fill hover:text-secondary disabled:opacity-40"
             >
               Next ({position} of {occurrences.length})
             </button>
             <button
               onClick={onClose}
-              className="rounded border border-zinc-700 px-2.5 py-1 text-mini text-zinc-400 hover:border-zinc-500"
+              className="rounded border border-border px-2.5 py-1 text-mini text-text-muted hover:border-border-strong"
             >
               Cancel
             </button>
             <button onClick={onClose} aria-label="Close say editor"
-                    className="ml-auto rounded p-0.5 text-zinc-500 hover:text-zinc-200">
+                    className="ml-auto rounded p-0.5 text-faint hover:text-text-primary">
               <X size={12} />
             </button>
           </div>
         </>
       )}
       {error && (
-        <p className="mt-2 rounded border border-rose-800 bg-rose-950/60 px-2 py-1 text-micro text-rose-300">
+        <p className="mt-2 rounded border border-danger-fill bg-danger-soft px-2 py-1 text-micro text-danger">
           {error}
         </p>
       )}

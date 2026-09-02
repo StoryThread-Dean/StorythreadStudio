@@ -122,8 +122,8 @@ describe("AudiobookDashboard", () => {
     // The finished book's bars are all lit; the paused one's are not.
     const waves = container.querySelectorAll(".flex.h-4.items-end");
     expect(waves.length).toBe(2);
-    const dimInPaused = waves[0].querySelectorAll(".bg-zinc-700").length;
-    const dimInDone = waves[1].querySelectorAll(".bg-zinc-700").length;
+    const dimInPaused = waves[0].querySelectorAll(".bg-bg-raised").length;
+    const dimInDone = waves[1].querySelectorAll(".bg-bg-raised").length;
     expect(dimInPaused).toBeGreaterThan(0);
     expect(dimInDone).toBe(0);
   });
