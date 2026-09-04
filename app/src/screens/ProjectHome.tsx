@@ -13,11 +13,11 @@
 // All data flows through the FastAPI backend; the frontend never touches
 // the filesystem directly.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   BookOpen, BookText, Book, FileText, Library,
-  X, ArrowLeft,
+  X, ArrowLeft, RefreshCw, Loader, AlertTriangle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type {
@@ -36,6 +36,22 @@ import { formatDateTime12h } from "../utils/dateFormat";
 import { Wordmark } from "../components/Wordmark";
 
 const API_BASE = "http://localhost:8000";
+
+
+// Nothing answered at all -- as opposed to the backend answering with an
+// error. Only this one is worth waiting out; see loadRecents below.
+class Unreachable extends Error {}
+
+// How long the dashboard keeps quietly retrying the recent-projects list
+// before it tells the writer something is wrong.
+//
+// The installed app spawns the backend as a onefile PyInstaller exe, which
+// unpacks itself to a temp folder on every launch while Defender reads the
+// freshly written DLLs -- seconds, not milliseconds. A single attempt at mount
+// loses that race more often than it wins it, which is exactly how a writer
+// with six books came to be told they had none.
+const RECENTS_POLL_MS    = 750;
+const RECENTS_GIVE_UP_MS = 10_000;
 
 
 // ── Story type catalog ────────────────────────────────────────────────────────
@@ -77,14 +93,99 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
   const [loading, setLoading] = useState(false);
 
   // ── Recent projects ─────────────────────────────────────────────────────
-  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
+  // `null` means "we have not managed to read the list yet" -- NOT "the list
+  // is empty". Those were the same value here for a long time, and it caused
+  // the bug this code is shaped around: on a cold start the backend has not
+  // bound its port yet, the fetch was rejected, the catch set [], and the
+  // column rendered "No recent projects yet." to a writer with six books.
+  // Nothing retried, so it stayed wrong until they navigated away.
+  //
+  // Worse, the global backend-down banner is deliberately suppressed in
+  // exactly that window (App.tsx only shows it once a ping has succeeded, to
+  // avoid a flash on startup), so the writer got a confident wrong answer and
+  // no warning at all. Hence a message local to this column.
+  const [recentProjects, setRecentProjects] = useState<RecentProject[] | null>(null);
+  const [recentsError,   setRecentsError]   = useState<string | null>(null);
+
+  // Cancels an in-flight cold-start poll when the screen unmounts.
+  const recentsPollRef = useRef<{ cancelled: boolean } | null>(null);
+
+  const loadRecents = useCallback(async (opts?: { poll?: boolean }) => {
+    // Retire any previous poll so two of them cannot fight over the state.
+    if (recentsPollRef.current) recentsPollRef.current.cancelled = true;
+    const token = { cancelled: false };
+    recentsPollRef.current = token;
+
+    setRecentsError(null);
+    setRecentProjects(prev => (opts?.poll ? null : prev));
+
+    const deadline = Date.now() + RECENTS_GIVE_UP_MS;
+
+    // One attempt. Returns the entries, or throws with the best message we
+    // can give -- the backend's own `detail` when it sent one, because a
+    // corrupt recents file and an absent backend are different problems and
+    // must not read identically.
+    //
+    // The two failures are also worth RETRYING differently, which is why
+    // Unreachable is its own type. A rejected fetch means nothing answered:
+    // the port is not bound yet, and waiting is the correct response. An HTTP
+    // error means the backend is up and has given its answer, so retrying it
+    // for ten seconds would just make the writer wait to be told something we
+    // already know.
+    const attempt = async (): Promise<RecentProject[]> => {
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE}/api/projects/recent`);
+      } catch {
+        throw new Unreachable("The backend service isn't responding.");
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof body?.detail === "string"
+            ? body.detail
+            : "The backend could not read your recent projects."
+        );
+      }
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error("The recent projects list came back malformed.");
+      return data as RecentProject[];
+    };
+
+    for (;;) {
+      try {
+        const data = await attempt();
+        if (token.cancelled) return;
+        setRecentProjects(data);
+        setRecentsError(null);
+        return;
+      } catch (err) {
+        if (token.cancelled) return;
+
+        // Keep waiting only for a cold start we were asked to poll for, only
+        // while nothing is answering, and only while there is time left.
+        const keepWaiting =
+          opts?.poll && err instanceof Unreachable && Date.now() < deadline;
+
+        if (!keepWaiting) {
+          setRecentProjects([]);
+          setRecentsError(
+            err instanceof Error ? err.message : "Could not load your recent projects."
+          );
+          return;
+        }
+        await new Promise(resolve => setTimeout(resolve, RECENTS_POLL_MS));
+        if (token.cancelled) return;
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/projects/recent`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => setRecentProjects(Array.isArray(data) ? data : []))
-      .catch(() => setRecentProjects([]));
-  }, []);
+    void loadRecents({ poll: true });
+    return () => {
+      if (recentsPollRef.current) recentsPollRef.current.cancelled = true;
+    };
+  }, [loadRecents]);
 
   // ── Vault root (where new projects are auto-placed) ─────────────────────
   // Fetched from settings so we can show the writer where the new project
@@ -388,8 +489,9 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
         const e = await res.json().catch(() => ({}));
         throw new Error(e.detail ?? "Failed to remove from recent list.");
       }
-      // Local update -- avoids a refetch round-trip.
-      setRecentProjects(prev => prev.filter(p => p.project_id !== rp.project_id));
+      // Local update -- avoids a refetch round-trip. Guarded because `null`
+      // here means the list was never read; there is nothing to filter.
+      setRecentProjects(prev => prev ? prev.filter(p => p.project_id !== rp.project_id) : prev);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not remove from list.");
     }
@@ -400,7 +502,10 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
   // still where it was. `exists` is false when the folder has been moved or
   // deleted, and offering a button that cannot work is worse than offering
   // none. Recents arrive newest-first from the backend.
-  const mostRecent = recentProjects.find(rp => rp.exists);
+  // Optional-chained on purpose: while the list is still being read this is
+  // undefined, so the hero stays hidden rather than briefly claiming there is
+  // nothing to continue.
+  const mostRecent = recentProjects?.find(rp => rp.exists);
   // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen flex-col bg-bg-primary text-text-primary">
@@ -805,14 +910,53 @@ export function ProjectHome({ onProjectOpen, onOpenAudiobooks }: ProjectHomeProp
 
         {/* ── Right column: Recent Projects ──────────────────────────── */}
         <aside className="flex w-2/5 min-w-0 flex-col overflow-y-auto bg-bg-primary p-8">
-          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-accent">
-            Recent Projects
-          </h2>
+          <div className="mb-1 flex items-center gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-accent">
+              Recent Projects
+            </h2>
+            <button
+              type="button"
+              onClick={() => void loadRecents()}
+              title="Refresh the list"
+              aria-label="Refresh the recent projects list"
+              className="rounded p-1 text-text-muted transition-colors hover:text-secondary"
+            >
+              <RefreshCw size={12} />
+            </button>
+          </div>
           <p className="mb-5 text-xs text-text-muted">
             Newest first. Click to open. Use [X] to remove from this list (does not delete files).
           </p>
 
-          {recentProjects.length === 0 ? (
+          {/* The order of these branches is the fix. "Could not read the list"
+              is checked FIRST, so the empty-state wording below is unreachable
+              on a failure -- it used to be the only thing a failed load could
+              produce, which is how the screen came to tell a writer with six
+              books that they had none. */}
+          {recentsError ? (
+            <div
+              role="alert"
+              className="rounded border border-danger-fill bg-danger-soft/40 p-3"
+            >
+              <p className="text-xs text-danger">
+                <AlertTriangle size={13} className="mr-1.5 inline" />
+                Couldn't load your projects.
+              </p>
+              <p className="mt-1 text-xs text-danger-muted">{recentsError}</p>
+              <button
+                type="button"
+                onClick={() => void loadRecents()}
+                className="mt-2 rounded border border-danger-fill/60 bg-danger-soft/30 px-2 py-0.5 text-mini text-danger transition-colors hover:border-danger-fill hover:bg-danger-soft/40 hover:text-danger-strong"
+              >
+                Try again
+              </button>
+            </div>
+          ) : recentProjects === null ? (
+            <p className="flex items-center gap-1.5 text-xs text-text-muted">
+              <Loader size={12} className="animate-spin" />
+              Connecting to your library...
+            </p>
+          ) : recentProjects.length === 0 ? (
             <p className="text-xs text-faint">No recent projects yet.</p>
           ) : (
             <div className="flex flex-col gap-2">

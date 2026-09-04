@@ -20,7 +20,12 @@ from datetime import datetime, timezone
 
 import re
 from fastapi import APIRouter, HTTPException
-from app.recent_projects import load_recent, track_project, remove_project
+from app.recent_projects import (
+    load_recent,
+    track_project,
+    remove_project,
+    RecentsUnreadable,
+)
 from app.utils.atomic import replace_atomic
 from app.outline_worksheet import (
     OutlineMetadata, write_worksheet,
@@ -665,8 +670,20 @@ class UpdateProjectSettingsRequest(BaseModel):
 
 @router.get("/recent", response_model=list[RecentProjectItem])
 async def get_recent_projects():
-    """Return the list of recently opened projects, sorted by last opened."""
-    entries = load_recent()
+    """
+    Return the list of recently opened projects, sorted by last opened.
+
+    An unreadable file is reported as an ERROR rather than as an empty list.
+    That distinction is the whole point: the dashboard renders an empty list
+    as "No recent projects yet", so answering [] here would have the screen
+    tell the writer they have no books when the truth is that we could not
+    read them. The store raises instead, and this hands the reason on so the
+    dashboard can show it.
+    """
+    try:
+        entries = load_recent()
+    except RecentsUnreadable as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     return [RecentProjectItem(**e) for e in entries if "project_id" in e]
 
 

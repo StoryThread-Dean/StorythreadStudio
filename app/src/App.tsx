@@ -261,6 +261,10 @@ function App() {
   // Project switcher dropdown
   const [showSwitcher, setShowSwitcher]   = useState(false);
   const [switcherProjects, setSwitcherProjects] = useState<RecentProject[]>([]);
+  // Same distinction the dashboard draws: a failed read must not render as
+  // "No recent projects". Less likely to bite here (the dropdown is opened
+  // deliberately, long after the backend came up) but it is the same lie.
+  const [switcherError, setSwitcherError] = useState<string | null>(null);
 
   // Text currently selected in the editor -- drives the AI assistant panel
   const [selectedText, setSelectedText] = useState("");
@@ -2121,10 +2125,26 @@ function App() {
                 onClick={() => {
                   // Fetch recent projects when opening the switcher
                   if (!showSwitcher) {
+                    setSwitcherError(null);
                     fetch(`${API_BASE}/api/projects/recent`)
-                      .then(r => r.ok ? r.json() : [])
+                      .then(async r => {
+                        if (!r.ok) {
+                          const body = await r.json().catch(() => ({}));
+                          throw new Error(
+                            typeof body?.detail === "string"
+                              ? body.detail
+                              : "The backend could not read your recent projects."
+                          );
+                        }
+                        return r.json();
+                      })
                       .then(data => setSwitcherProjects(Array.isArray(data) ? data : []))
-                      .catch(() => setSwitcherProjects([]));
+                      .catch(err => {
+                        setSwitcherProjects([]);
+                        setSwitcherError(
+                          err instanceof Error ? err.message : "Could not load your projects."
+                        );
+                      });
                   }
                   setShowSwitcher(s => !s);
                 }}
@@ -2139,7 +2159,11 @@ function App() {
             {/* Project switcher dropdown */}
             {showSwitcher && (
               <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded border border-border bg-bg-panel shadow-e3">
-                {switcherProjects.length === 0 ? (
+                {switcherError ? (
+                  <p role="alert" className="px-3 py-2 text-mini text-danger">
+                    {switcherError}
+                  </p>
+                ) : switcherProjects.length === 0 ? (
                   <p className="px-3 py-2 text-xs text-faint">No recent projects</p>
                 ) : (
                   switcherProjects.filter(p => p.exists).map(rp => (
