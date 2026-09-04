@@ -156,9 +156,13 @@ MyNovel/
   codex/                           the Weave: one linked, time-aware world model
     types.json                     which kinds of thing this world has, and which
                                    connections are meaningful between them
-    characters/  relationships/  locations/  lore/
+    characters/  locations/  lore/
     factions/  religions/  governments/  deities/  creatures/  cultures/
     objects/  concepts/  events/
+    relationships/                 retired kind: existing entries still open
+                                   and save, no new ones are made. Who a
+                                   character is to everyone else lives on that
+                                   character now
   exports/                         full-manuscript and dated snapshots
   .storythread/                    app cache; safe to delete and rebuild
     app.db
@@ -200,6 +204,22 @@ left byte-for-byte alone, and the Weave opens read-only until it is fixed. This 
 the deliberate OPPOSITE of `structure.json`, which is treated as absent when
 corrupt -- and both are right for their file, because structure.json is derivable
 from the folder and types.json is not.
+
+**Which raises the problem a shipped section has to solve: a project seeded before
+that section existed does not have it.** A `types.json` is written once, when the
+Weave first opens a project, and never rewritten -- so when v2.0.5 added the
+character `relationships` section, every existing world would have gone on not
+offering it, with nothing on screen to explain why the release notes described a
+section that was not there. Rewriting their file is not available: it is their
+data, and a merge is exactly the kind of edit that silently drops a customisation.
+
+So `load_registry` reconciles in MEMORY. `_adopt_new_shipped_sections` folds
+shipped sections and flags onto the loaded registry on every read, touching
+nothing on disk -- a writer's own sections, order and renames all survive, because
+adoption only ever ADDS what the shipped defaults have and the file does not.
+The file is written only when the writer changes something, and it then records
+the adopted state as their own. The same mechanism is what lets a retirement
+(`relationship`) reach a world seeded before the kind was retired.
 
 ### Audiobook workspace layout
 
@@ -368,6 +388,19 @@ POST   /arc/create
 POST   /arc/save
 ```
 
+**A heading the section list does not recognise is preserved, not dropped.**
+`_parse_profile_markdown` collects headings as an ordered list of pairs rather
+than a dict (duplicates were being lost), matches them to the section config by
+SLUG rather than by exact string (so case and stray double spaces still find
+their section), and keeps anything left over under a suffixed key that
+`_generate_profile_markdown` writes back after the known sections. Before this
+the older `profiles/` dialect had nowhere to put such a heading, so opening a
+profile with a mistyped one and pressing Save wrote the file back without it --
+data loss from an ordinary save, raising nothing. The Profile Builder surfaces
+whatever is left over as **Fix Profile**; the parser's job is only to make sure
+it survives the round trip. Pinned by
+[`test_profile_unknown_sections.py`](../backend/tests/test_profile_unknown_sections.py).
+
 ### AI — `/api/ai`
 ```
 GET    /models?provider=       (provider optional; defaults to the active one)
@@ -472,7 +505,9 @@ Threads and Ties
 GET    /list  /entity  /ties
 POST   /entity  /thread/new    save; create an empty Thread from a name
 DELETE /entity
-POST   /tie                    DELETE /tie
+POST   /tie   PATCH /tie   DELETE /tie
+                               DELETE takes an optional `at`: without it every
+                               state of that connection goes, with it only one
 POST   /fact                   PATCH /fact   DELETE /fact
 
 Time

@@ -19,7 +19,7 @@ Each project is a folder the user owns. The app reads and writes Markdown files 
 
 - `manuscript/` — one chapter per Markdown file; `structure.json` holds acts + reading order once the writer uses acts
 - `notes/` — outline, style guide, themes, plus any free notes the writer adds
-- `profiles/` — character, relationship, location, lore profiles
+- `profiles/` — character, location and lore profiles. A `relationships/` folder is present in projects made before v2.0.5; the kind is retired rather than deleted, so those entries still open, still parse and still save
 - `profiles/arcs/` — for series projects, per-book overrides on canonical profiles
 - `summaries/chapters/` — one summary file per chapter
 - `summaries/scenes/<chapter-stem>/scene-NN.md` — per-scene summaries (with an optional `## Beats` checklist)
@@ -208,6 +208,29 @@ A right-side panel for refining a profile in conversation. Five behavior modes: 
 ### Profile import and fork
 
 Import a character profile from another project as a fully independent copy. The fork gets a new profile ID and is editable in the new story; there is no sync back to the source.
+
+### Fix Profile
+
+A profile file can hold a section the page has no place for -- most often a
+heading edited by hand and left slightly wrong ("Physcial Traits"). The page
+now says so at the top and offers a way to put it back rather than showing the
+writer a profile that silently omits their own words.
+
+Two offers, and which one appears depends on the heading. A near miss (within
+two edits of a real section name, and only for headings long enough that a
+short word cannot land on an unrelated one) offers the section it probably
+meant, which keeps trait blocks as trait blocks. Anything else offers to move
+the words into Notes with the original heading kept above them as a label, so
+nothing is thrown away and the writer can see what it used to be called.
+
+Nothing is chosen automatically and nothing reaches the file until the writer
+saves, which is the same rule the rest of the Profile Builder follows.
+
+It does **not** offer to add absent sections. An empty section is not damage:
+sections with nothing in them are not written to the file at all, and they
+already appear as empty fields in the right place on the page. Offering to
+"add" them would write empty headings into every profile in the project and
+repair nothing.
 
 ## Smart Advisor
 
