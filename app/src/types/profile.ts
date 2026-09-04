@@ -109,6 +109,16 @@ export interface ProfileSection {
   content: string;           // Plain Markdown text (for non-trait-block sections)
   trait_blocks: TraitBlock[]; // Structured entries (for trait-block sections)
   ai_summary: string;        // Content under the ## AI Summary: subheading
+  /**
+   * The heading exactly as the FILE spells it.
+   *
+   * Carried only for a section the type registry does not know about -- a
+   * hand-edited "# Physcial Traits", say. Those render nowhere on this page,
+   * so Fix Profile needs the writer's own wording to name one back to them,
+   * and the save needs it to write the section out unchanged. Absent for
+   * every ordinary section, whose heading comes from the registry.
+   */
+  heading?: string;
 }
 
 // Full structured profile data -- what the backend parses from and writes to Markdown

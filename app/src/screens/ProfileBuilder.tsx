@@ -15,7 +15,7 @@
 //   4. On Ctrl+S or Save: POST to backend, mark saved
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
-import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors, HelpCircle, X, Eye, EyeOff, BookOpen } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Trash2, Download, Sparkles, Send, Bot, Settings2, ChevronDown, Scissors, HelpCircle, X, Eye, EyeOff, BookOpen, AlertTriangle } from "lucide-react";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import { ChatMarkdown } from "../components/ChatMarkdown";
 import { Explain } from "../components/learn/Explain";
@@ -88,6 +88,9 @@ import { ProfilePageGuide } from "./ProfilePageGuide";
 // test now, because this is the second time in this recovery (the first was
 // the Weaving panel, rendered inside a branch that never ran).
 import { ProfileConnections } from "../features/codex/ProfileConnections";
+import { RelationshipsSection } from "../features/codex/RelationshipsSection";
+import { RETIRED_TYPES } from "../features/codex/lexicon";
+import { findUnshownSections, foldIntoNotes, renameSection } from "./profileRepair";
 import { RunEditor } from "../features/codex/RunEditor";
 import { AppearsIn } from "../features/codex/AppearsIn";
 import { TraitWindow } from "../components/profiles/TraitWindow";
@@ -580,6 +583,39 @@ export function ProfileBuilder({
     }),
     [allSections, profile]
   );
+
+  // ── CONTENT THIS PAGE CANNOT SHOW ───────────────────────────────────
+  //
+  // The form renders from the registry, which is what lets a new section
+  // appear on every existing profile without touching a file. The other side
+  // of that: a section in the FILE the registry does not know about renders
+  // nowhere. It survives every save and the writer cannot see it, edit it, or
+  // suspect it is there. One transposed letter in a hand-edited heading does
+  // it -- "# Physcial Traits", and the traits under it go invisible.
+  //
+  // Compared against `allSections` rather than `sections`, deliberately: a
+  // RETIRED section is hidden on purpose and is not damage.
+  const unshown = useMemo(
+    () => (profile ? findUnshownSections(profile, allSections) : []),
+    [profile, allSections]
+  );
+
+  // Both repairs write to the BUFFER and nothing else, so the writer saves in
+  // the usual way and can walk away from a repair they did not want. Same rule
+  // as every other edit on this page.
+  const repairRename = useCallback((fromKey: string, toKey: string) => {
+    setProfile(current => (current
+      ? { ...current, sections: renameSection(current, fromKey, toKey) }
+      : current));
+    setIsDirty(true);
+  }, []);
+
+  const repairToNotes = useCallback((fromKey: string) => {
+    setProfile(current => (current
+      ? { ...current, sections: foldIntoNotes(current, fromKey) }
+      : current));
+    setIsDirty(true);
+  }, []);
 
   // Which character template the OPEN profile uses. Side/background
   // characters render every section as a single free-text field (no trait
@@ -1792,6 +1828,118 @@ export function ProfileBuilder({
           </div>
         </div>
 
+        {/* ── A KIND THE APP NO LONGER MAKES ─────────────────────────────
+            Said on the page rather than only in a changelog, because a writer
+            with fourteen of these has no other way to find out where the job
+            moved. It is a NOTICE and not a wall: the page below stays fully
+            editable, because these are their words and a retired shape is not
+            a reason to lock them out of their own writing.
+
+            A relationship profile was one blob of prose about everything a
+            character is to everyone else. It entered every brief whole and
+            unwindowed, ranked lowest and was pruned first, could legally
+            connect to almost nothing, and the app paid a model at inference
+            time to reconcile it against the character's own page. */}
+        {profile && RETIRED_TYPES.has(profile.type ?? "") && (
+          <div role="status"
+               className="flex shrink-0 flex-wrap items-start gap-2 border-b border-warn-fill bg-warn-soft/30 px-4 py-2">
+            <AlertTriangle size={13} className="mt-0.5 shrink-0 text-warn" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-text-primary">
+                Relationship profiles have been replaced by connections on each
+                character.
+              </p>
+              <p className="mt-0.5 text-micro text-text-muted">
+                A connection carries the same description, and can also say
+                which chapter it starts in, whose view it is, and what replaced
+                it later -- none of which a page like this could hold. This
+                entry still works and is still yours to edit; nothing has been
+                changed or deleted.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── FIX PROFILE ───────────────────────────────────────────────
+            Only appears when there is something to fix, and what it fixes is
+            narrow: content in the file that this page renders nowhere.
+
+            It does NOT offer to restore "missing" sections, because a section
+            absent from a file is the ordinary state -- empty ones are never
+            written to disk, so every profile lacks the ones its writer has not
+            filled in, and they all already render as empty fields in the right
+            place. Adding them would put meaningless headings in every file and
+            repair nothing.
+
+            Nothing is applied automatically. A near-miss heading is offered as
+            a RENAME first, because that is the repair that keeps a trait list a
+            trait list; Notes is offered beside it, because the guess can be
+            wrong. Both edit the buffer, so the writer still saves by hand. */}
+        {unshown.length > 0 && (
+          <div className="shrink-0 border-b border-warn-fill bg-warn-soft/25 px-4 py-2">
+            <div className="mb-1.5 flex items-start gap-2">
+              <AlertTriangle size={13} className="mt-0.5 shrink-0 text-warn" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-text-primary">
+                  {unshown.length === 1
+                    ? "1 section in this file is not shown on this page"
+                    : `${unshown.length} sections in this file are not shown on this page`}
+                </p>
+                <p className="text-micro text-text-muted">
+                  This page shows the sections of the template, so a heading it
+                  does not recognise has nowhere to appear. Your words are safe
+                  in the file either way -- this is about being able to see and
+                  edit them again.
+                </p>
+              </div>
+            </div>
+
+            <ul className="space-y-1.5 pl-5">
+              {unshown.map(item => (
+                <li key={item.key} className="text-mini">
+                  <span className="text-text-primary">
+                    &ldquo;{item.heading}&rdquo;
+                  </span>
+                  <span className="text-faint">
+                    {" "}
+                    {item.traitCount > 0
+                      ? `${item.traitCount} ${item.traitCount === 1 ? "trait" : "traits"}`
+                      : `${item.wordCount} ${item.wordCount === 1 ? "word" : "words"}`}
+                  </span>
+                  <span className="ml-2 inline-flex flex-wrap items-center gap-1.5">
+                    {item.looksLike && (
+                      <button
+                        onClick={() => repairRename(item.key, item.looksLike!.key)}
+                        title={`Move everything under "${item.heading}" into ${item.looksLike.heading}, keeping any traits as traits`}
+                        className="rounded border border-accent-fill/60 bg-accent-soft/30 px-1.5 py-0.5 text-micro text-accent transition-colors hover:bg-accent-soft/50"
+                      >
+                        Did you mean {item.looksLike.heading}? Move it there
+                      </button>
+                    )}
+                    <button
+                      onClick={() => repairToNotes(item.key)}
+                      title={`Move everything under "${item.heading}" into Notes as text, keeping the heading as a label`}
+                      className="rounded border border-border px-1.5 py-0.5 text-micro text-text-muted transition-colors hover:border-text-muted hover:text-text-primary"
+                    >
+                      Move to Notes
+                    </button>
+                  </span>
+                  {!item.looksLike && (
+                    <span className="ml-2 text-micro text-faint">
+                      not close to any section here
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <p className="mt-1.5 pl-5 text-micro text-faint">
+              Either choice edits this page only. Nothing reaches the file until
+              you save.
+            </p>
+          </div>
+        )}
+
         {/* Find & Replace bar -- searches every text field in the open
             profile (name, role, tags, section content, trait blocks, AI
             summaries). Plain <textarea> fields can't hook into the browser's
@@ -2367,8 +2515,20 @@ export function ProfileBuilder({
               {/* CONNECTIONS, high on the page because they are most of what a
                   scene runs on and because Weaving fills them in for the writer.
                   Codex entries only -- a tie is the Weave's own idea and a
-                  profiles/ file has nowhere to record one. */}
-              {home === "codex" && profile.entity_id && (
+                  profiles/ file has nowhere to record one.
+
+                  ── NOT ON A CHARACTER ANY MORE ──────────────────────────
+                  A character's Relationships section IS this list now, with
+                  room to say what each relationship actually is rather than
+                  only that it exists. Two views of one thing on one page is
+                  the disease this whole change removed from the app; leaving
+                  the panel here would have put it straight back, one screen
+                  above the editor that replaced it.
+
+                  Every other kind keeps the panel: a location or a faction has
+                  connections and no Relationships section to hold them. */}
+              {home === "codex" && profile.entity_id
+                  && profile.type !== "character" && (
                 <div className="mb-6">
                   <ProfileConnections
                     projectPath={project.root_path}
@@ -2519,6 +2679,59 @@ export function ProfileBuilder({
                 // component, and every AI summary the writer opened on the last
                 // character would still be open on this one -- exactly what
                 // "minimise upon opening the profile" asks it not to do.
+                // ── RELATIONSHIPS IS ITS OWN EDITOR ─────────────────
+                //
+                // It used the trait-block editor at first, because that was
+                // already built, and the result asked the wrong question
+                // outright:
+                //
+                //     "Why would there be a need for Importance: Background
+                //      for a relationship with her Mother Victoria."
+                //
+                // None. A relationship's dropdown is the KIND of relationship,
+                // from the world's own connection vocabulary -- and a row here
+                // is a real connection, so it carries the chapter it starts
+                // in, it reaches AI, and the map draws it. A trait block could
+                // do none of that.
+                if (cfg.key === "relationships" && home === "codex") {
+                  return (
+                    <div key={`${profile.filename}:${cfg.key}`}
+                         className="border-b border-border px-4 py-3">
+                      <h3 className="mb-1 text-sm font-semibold text-text-primary">
+                        {cfg.heading}
+                      </h3>
+                      <RelationshipsSection
+                        projectPath={project.root_path}
+                        entityId={profile.entity_id}
+                        entityType={profile.type}
+                        entityName={profile.name || "this character"}
+                        // A relationship whose other end is not an entry --
+                        // "her parents... they do not have a charcter profile
+                        // and won't" -- lives in this section on the character
+                        // and saves with the page, like every other field on
+                        // it. The connections beside them are shared records
+                        // and save on their own.
+                        blocks={section.trait_blocks.map(block => ({
+                          id: block.id,
+                          trait: block.trait,
+                          description: block.description,
+                          importance: block.importance,
+                          rel: (block as { rel?: string }).rel,
+                        }))}
+                        onBlocksChange={next => updateSection(cfg.key, {
+                          trait_blocks: next.map(block => ({
+                            id: block.id ?? uuidv4(),
+                            trait: block.trait,
+                            description: block.description,
+                            importance: (block.importance ?? "present") as TraitBlock["importance"],
+                            ...(block.rel ? { rel: block.rel } : {}),
+                          })) as TraitBlock[],
+                        })}
+                      />
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={`${profile.filename}:${cfg.key}`}>
                   <ProfileSectionEditor
