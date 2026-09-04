@@ -42,8 +42,9 @@ from app.codex.findings import (
     remember_choice, retire, save_book, save_run, unpin,
 )
 from app.codex.mentions import alias_display, build_alias_map, find_mentions
-from app.codex.normalize import REASON_LIMIT, normalize_reason
+from app.codex.normalize import REASON_LIMIT, TRUTH, normalize_reason
 from app.codex.resolve import resolve_thread
+from app.codex.tie_run import resolve_ties
 from app.codex.scan import DEPTH_FULL, ScanRequest, scan
 from app.codex.snags import check_ties
 from app.codex.sections import (
@@ -775,6 +776,63 @@ async def get_ties(project_path: str = Query(...), entity_id: str = Query(...)):
     threads = {t.get("entity_id"): t for t in codex_store.load_threads(project_path)}
     label_for = _label_lookup(project_path)
 
+    # ── WHICH OF THESE IS TRUE NOW ──────────────────────────────────────
+    #
+    # THE BUG THIS CLOSES. This route applied no resolution at all, so a
+    # character whose relationship had CHANGED -- friends in the first half,
+    # rivals in the second -- had both states listed side by side as peers,
+    # with nothing on screen to say which one holds. The one feature that took
+    # the most care to build read, on the page a writer actually visits, as
+    # though the app had lost track of its own answer.
+    #
+    # Resolved through `resolve_ties`, per owning Thread, because that is the
+    # engine the brief and the map use. Deriving it again here would be a third
+    # opinion about what is true now.
+    #
+    # Read at the END of the book (at=None): this is a reference page rather
+    # than a point in the story, and a writer looking at a profile means "as
+    # things stand". The scrubber is where a point in the story is chosen.
+    index = AnchorIndex.for_project(project_path)
+    verdict_for: dict[tuple, str] = {}
+    # The whole record beside the verdict, because two things a profile row
+    # needs are not in the SQLite index: the `description` paragraph (the index
+    # keeps only what the graph and the checks query on) and nothing else has
+    # to be re-parsed to get it -- resolve_ties already carries the record it
+    # resolved.
+    record_for: dict[tuple, dict] = {}
+    for src_id in {row["src_id"] for row in rows}:
+        owner = threads.get(src_id) or {}
+        owner_ties = owner.get("ties") or []
+        frames = {TRUTH} | {str(t.get("frame") or TRUTH) for t in owner_ties}
+        resolution = resolve_ties(owner_ties, index, None, frames=frames,
+                                  hide_spoilers=False, include_on_request=True)
+
+        def _key(state, src=src_id):
+            # FRAME IS PART OF THE IDENTITY. Two views of one pair can share a
+            # relation and an anchor and be different records -- the truth of
+            # it and what she believes about it. Left out, both collapsed onto
+            # one key and whichever was written last decided the verdict for
+            # both, so the truth of a relationship could be reported as
+            # superseded by somebody's opinion of it.
+            return (src, state.target, str(state.rel or ""),
+                    str(state.frame or TRUTH), str(state.at or ""))
+
+        for state in (list(resolution.states) + list(resolution.history)
+                      + list(resolution.unplaced) + list(resolution.ambiguous)):
+            record_for[_key(state)] = state.record or {}
+
+        for state in resolution.states:
+            verdict_for[_key(state)] = "in_force"
+        for state in resolution.history:
+            verdict_for[_key(state)] = "superseded"
+        for state in resolution.unplaced:
+            verdict_for[_key(state)] = "unplaced"
+        for state in resolution.ambiguous:
+            # Two states of one pair at one anchor with nothing to order them.
+            # Not silently ranked -- the walkthrough raises it as a Snag, and
+            # saying "in force" here would hide the question.
+            verdict_for[_key(state)] = "ambiguous"
+
     ties = []
     for row in rows:
         other_id = row["src_id"] if row["incoming"] else row["dst_id"]
@@ -816,8 +874,51 @@ async def get_ties(project_path: str = Query(...), entity_id: str = Query(...)):
                     if row["incoming"] else (row.get("reason") or "")),
             "at_label": label_for(row["at"]) if row.get("at") else "",
             "until_label": label_for(row["until"]) if row.get("until") else "",
+            # Whether this state is the one that holds, and if not, why not.
+            # `state` is the honest answer and `in_force` is the shorthand a
+            # screen can style on without branching on four strings.
+            "state": _tie_state_verdict(verdict_for, row),
+            "in_force": _tie_state_verdict(verdict_for, row) == "in_force",
+            # The paragraph, when the writer wrote one. Not in the index, so it
+            # comes from the resolved record.
+            "description": str(
+                (record_for.get(_tie_row_key(row)) or {}).get("description")
+                or ""),
+            # WHOSE VIEW, by name rather than by id. A row saying
+            # "e-8f3c1a2b sees it this way" is not something to show a
+            # novelist, and two records of one pair read as a contradiction in
+            # their own notes unless each says whose reading it is.
+            "frame_name": ("" if (row.get("frame") or TRUTH) == TRUTH
+                           else ((threads.get(row["frame"]) or {}).get("name")
+                                 or known.get(row["frame"], {}).get("name", "")
+                                 or "")),
         })
     return {"ties": ties}
+
+
+def _tie_row_key(row: dict) -> tuple:
+    """How a stored row is paired with the state the resolver made of it.
+
+    The row comes from the SQLite index and the state from the Markdown, so
+    they are two readings of one record and have to be matched by value. Frame
+    is part of it: two views of one pair can share a relation and an anchor.
+    """
+    return (row["src_id"], row["dst_id"], str(row.get("rel") or ""),
+            str(row.get("frame") or TRUTH), str(row.get("at") or ""))
+
+
+def _tie_state_verdict(verdict_for: dict, row: dict) -> str:
+    """
+    What the resolver said about this stored row.
+
+    Matched on (owner, other end, relation, anchor) -- the row comes from the
+    SQLite index and the state from the Markdown, so they are two readings of
+    one record and have to be paired up by value. `in_force` is the default for
+    anything the resolver did not mention, which is the safe way round: a
+    connection wrongly shown as current is a smaller error than the whole list
+    quietly going blank because a key did not match.
+    """
+    return verdict_for.get(_tie_row_key(row), "in_force")
 
 
 def _tie_wording(rel: dict, incoming: bool, registry: dict | None = None,
@@ -997,6 +1098,11 @@ class TieRequest(BaseModel):
     # saved without. See post_tie for the argument.
     reason: str = ""
     reason_inverse: str = ""
+    # The long version, beside the line rather than instead of it. `reason` is
+    # capped at 140 characters because every connection's line goes into every
+    # brief; a relationship the writer has thought about runs several hundred.
+    # See normalize_tie for why this one is not capped.
+    description: str = ""
     # How it reads from the OTHER end, when that is a different relation and not
     # merely this one backwards. Optional: the registry's inverse is the default.
     rel_inverse: str = ""
@@ -1062,10 +1168,24 @@ async def post_tie(request: TieRequest):
     # they were friends in chapter 2, barely speaking by chapter 5, and friends
     # again in chapter 9. Refusing the third would make a relationship that
     # recovers impossible to record.
+    # AND THE FRAME IS PART OF THE TEST TOO, which it was not, and the omission
+    # refused the asymmetric case this feature exists for. `resolve_ties` keys
+    # its states on (other end, FRAME), so the objective truth and one
+    # character's view of the same pair are two different records that are both
+    # in force at once -- she thinks he is a father-like mentor while the truth
+    # is that he will always choose the party over her. Comparing without the
+    # frame made the second one look like a duplicate of the first and refused
+    # it, so the app accepted the model's shape everywhere except at the door.
+    #
+    # Found by recording the writer's own Kipling and Milton end to end; the
+    # unit tests all passed, because every one of them used the default frame.
     for existing in thread.get("ties") or []:
         same_pair = (existing.get("rel") == request.rel
                      and existing.get("target") == request.dst_id)
-        if same_pair and (existing.get("at") or None) == (request.at or None):
+        same_frame = ((existing.get("frame") or TRUTH)
+                      == (request.frame or TRUTH))
+        if (same_pair and same_frame
+                and (existing.get("at") or None) == (request.at or None)):
             where = (f" at {request.at}" if request.at
                      else " with no point in the story given")
             raise CodexError(
@@ -1079,6 +1199,7 @@ async def post_tie(request: TieRequest):
         "reason": reason,
         "reason_inverse": normalize_reason(request.reason_inverse),
         "rel_inverse": request.rel_inverse.strip(),
+        "description": request.description,
         "at": request.at,
         "until": request.until, "frame": request.frame,
         "revealed_at": request.revealed_at, "ai_scope": request.ai_scope,
@@ -1103,7 +1224,23 @@ async def post_tie(request: TieRequest):
 
 @router.delete("/tie")
 async def delete_tie(project_path: str = Query(...), src_id: str = Query(...),
-                     rel: str = Query(...), dst_id: str = Query(...)):
+                     rel: str = Query(...), dst_id: str = Query(...),
+                     at: str | None = Query(None)):
+    """
+    Remove a connection -- or, given an anchor, ONE STATE of it.
+
+    THE BUG THE ANCHOR FIXES. This filtered on (rel, target) alone, so a pair
+    holding several states of one relationship lost all of them at once. The
+    recurrence case `post_tie` goes out of its way to permit -- friends in
+    chapter 2, barely speaking by chapter 5, friends again in chapter 9 -- was
+    recordable and not individually removable, and since there was no PATCH
+    either, delete-and-recreate was the only way to edit a connection. So the
+    one path a writer had for fixing a mistake destroyed its siblings.
+
+    Omitting the anchor still removes every state, deliberately: a writer who
+    wants the whole relationship gone should not have to delete it a chapter at
+    a time. The anchor NARROWS; its absence means all of them.
+    """
     project_path = validate_project_path(project_path)
     registry = _registry(project_path)
     source = await _locate(project_path, src_id)
@@ -1112,14 +1249,147 @@ async def delete_tie(project_path: str = Query(...), src_id: str = Query(...),
     before = len(thread.get("ties") or [])
     thread["ties"] = [
         t for t in (thread.get("ties") or [])
-        if not (t.get("rel") == rel and t.get("target") == dst_id)
+        if not (t.get("rel") == rel and t.get("target") == dst_id
+                and (at is None or (t.get("at") or None) == (at or None)))
     ]
     if len(thread["ties"]) == before:
-        raise CodexError("tie_endpoint_invalid", "That connection is not recorded.")
+        where = f" at {at}" if at else ""
+        raise CodexError("tie_endpoint_invalid",
+                         f"That connection is not recorded{where}.")
 
     _write_thread(project_path, registry, thread)
     await codex_store.reindex(project_path)
     return {"deleted": True}
+
+
+class TiePatchRequest(BaseModel):
+    """
+    One state of one connection, addressed and corrected.
+
+    The ADDRESS is (src_id, rel, dst_id, at) -- the anchor is part of it for
+    the same reason it is part of the delete: a pair can hold several states
+    and editing "friends" must not touch "rivals". Everything else is a change
+    to apply, and `None` means LEAVE ALONE rather than clear, which is what
+    lets a screen send only the field the writer touched.
+    """
+    project_path: str
+    src_id: str
+    rel: str
+    dst_id: str
+    at: str | None = None                # which state -- part of the address
+
+    # The changes. None = leave as it is.
+    reason: str | None = None
+    reason_inverse: str | None = None
+    rel_inverse: str | None = None
+    description: str | None = None
+    frame: str | None = None
+    revealed_at: str | None = None
+    until: str | None = None
+    ai_scope: str | None = None
+    intentional: bool | None = None
+    # Moving the state itself: "it actually starts in chapter two" is an
+    # ordinary correction and used to mean deleting and rebuilding.
+    new_at: str | None = None
+    new_rel: str | None = None
+
+
+@router.patch("/tie")
+async def patch_tie(request: TiePatchRequest):
+    """
+    Correct a connection in place.
+
+    There was no route for this at all. The only way to change a recorded
+    connection was to delete it and make it again -- and DELETE was anchor
+    blind, so on a relationship with more than one state that lost the rest of
+    it. A writer fixing a typo could not do so without collateral damage.
+    """
+    project_path = validate_project_path(request.project_path)
+    registry = _registry(project_path)
+    source = await _locate(project_path, request.src_id)
+
+    thread = _read_thread(project_path, registry, source)
+
+    found = None
+    for tie in thread.get("ties") or []:
+        if (tie.get("rel") == request.rel
+                and tie.get("target") == request.dst_id
+                and (tie.get("at") or None) == (request.at or None)):
+            found = tie
+            break
+
+    if found is None:
+        where = f" at {request.at}" if request.at else ""
+        raise CodexError("tie_endpoint_invalid",
+                         f"That connection is not recorded{where}, so there is "
+                         f"nothing to correct.")
+
+    # THE REASON STAYS REQUIRED. It is the one field a connection cannot be
+    # saved without, and an edit is not a loophole around that -- otherwise the
+    # cheapest way to get an unexplained connection would be to make a good one
+    # and then empty it.
+    if request.reason is not None:
+        reason = normalize_reason(request.reason)
+        if not reason:
+            raise CodexError(
+                "reason_required",
+                "A connection still needs to say why these two are connected. "
+                "Change the wording if it is wrong, but it cannot be emptied.",
+            )
+        found["reason"] = reason
+
+    if request.reason_inverse is not None:
+        found["reason_inverse"] = normalize_reason(request.reason_inverse)
+    if request.rel_inverse is not None:
+        found["rel_inverse"] = request.rel_inverse.strip()
+    if request.description is not None:
+        found["description"] = request.description
+    if request.frame is not None:
+        found["frame"] = request.frame
+    if request.revealed_at is not None:
+        found["revealed_at"] = request.revealed_at
+    if request.until is not None:
+        found["until"] = request.until
+    if request.ai_scope is not None:
+        found["ai_scope"] = request.ai_scope
+    if request.intentional is not None:
+        found["intentional"] = bool(request.intentional)
+
+    # Moving the state. Checked against the other states on the same pair,
+    # because two states of one relationship at one anchor is the ambiguity the
+    # resolver refuses to rank -- better refused here, where the writer knows
+    # what they just did, than raised as a Snag three screens later.
+    moved_rel = (request.new_rel or found.get("rel") or "").strip()
+    moved_at = request.new_at if request.new_at is not None else found.get("at")
+    if (moved_rel, moved_at or None) != (found.get("rel"), found.get("at") or None):
+        for other in thread.get("ties") or []:
+            if other is found:
+                continue
+            # Frame included for the same reason as on create: two views of one
+            # pair at one anchor are two records, not a collision.
+            if (other.get("rel") == moved_rel
+                    and other.get("target") == request.dst_id
+                    and (other.get("frame") or TRUTH) == (found.get("frame") or TRUTH)
+                    and (other.get("at") or None) == (moved_at or None)):
+                raise CodexError(
+                    "tie_endpoint_invalid",
+                    "There is already a connection like that at that point in "
+                    "the story.",
+                )
+        found["rel"] = moved_rel
+        found["at"] = moved_at
+
+    _write_thread(project_path, registry, thread)
+    await codex_store.reindex(project_path)
+
+    warnings: list[str] = []
+    index = AnchorIndex.for_project(project_path)
+    for snag in check_ties(request.src_id, thread["ties"], registry, index,
+                           at=found.get("at"),
+                           label_for=_label_lookup(project_path)):
+        warnings.append(snag.summary)
+
+    return {"updated": True, "warnings": warnings}
 
 
 # ── Facts ────────────────────────────────────────────────────────────────────

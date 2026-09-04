@@ -98,6 +98,10 @@ def test_ties_are_read_with_their_anchor():
         # must not fail to load for lacking one. Empty, never None -- same
         # argument as frame and ai_scope above.
         "reason": "", "reason_inverse": "", "rel_inverse": "",
+        # And it predates the paragraph and the deliberate-contradiction mark
+        # by longer still. Same rule: absent reads as empty and as false, so
+        # nothing has to ask whether a key exists before using it.
+        "description": "", "intentional": False,
     }]
 
 
@@ -700,3 +704,291 @@ def test_both_dialects_read_the_same_map():
     from app.codex.normalize import INFLUENCE_TO_IMPORTANCE
     from app.routers.profiles import _INFLUENCE_TO_IMPORTANCE
     assert _INFLUENCE_TO_IMPORTANCE is INFLUENCE_TO_IMPORTANCE
+
+
+# ── The depth, and the "yes, I meant that" ───────────────────────────────────
+#
+# TWO FIELDS, ONE OF WHICH WAS ALREADY HALF PRESENT AND SILENTLY LOST.
+#
+# `description` is new and is the writer's answer to a real problem: their
+# relationship prose runs 700-900 characters per person, and `reason` is capped
+# at 140 because the cap is derived from brief budget (every connection's line
+# is sent every time). So the short line stays the summary, and the paragraph
+# lives beside it -- sent only when the other end is in scope.
+#
+# `intentional` is the bug. `check_ties` has always read it, meaning "yes, I
+# meant that; stop asking" -- but it was absent from TIE_KEYS and from the
+# serialiser, so a writer who marked a deliberate contradiction on a CONNECTION
+# had that mark thrown away on the next save, and the Snag came back. Facts
+# have it in all three places. Ties had it in none.
+
+WITH_DEPTH = """---
+type: character
+entity_id: e-1
+name: Kipling
+ties:
+  - rel: mentored_by
+    target: e-2
+    reason: "father-like mentor; she chafes at his control"
+    description: "Kipling initially sees Milton as an experienced expedition leader whose rules often make sense and often frustrate her. As he begins trusting her dungeon instincts she gradually recognizes him as a father-like mentor."
+    intentional: true
+---
+
+# Overview
+A young woman from the mountain village.
+"""
+
+
+def test_a_connection_can_carry_a_paragraph_as_well_as_a_line():
+    tie = parse_thread(WITH_DEPTH, REGISTRY)["ties"][0]
+    assert tie["reason"] == "father-like mentor; she chafes at his control"
+    assert tie["description"].startswith("Kipling initially sees Milton")
+    assert tie["description"].endswith("a father-like mentor.")
+
+
+def test_the_paragraph_is_not_squeezed_into_the_line_limit():
+    # REASON_LIMIT is 140 and applies to `reason` alone. Applying it here would
+    # silently truncate the writer's paragraph mid-sentence on load.
+    tie = parse_thread(WITH_DEPTH, REGISTRY)["ties"][0]
+    assert len(tie["description"]) > 140
+
+
+def test_a_deliberate_contradiction_on_a_connection_survives_a_save():
+    # Verified by reinstating the bug: with `intentional` out of TIE_KEYS this
+    # assertion fails on the second parse, and the writer's Snag comes back
+    # from the dead with nothing to explain why.
+    once = parse_thread(WITH_DEPTH, REGISTRY)
+    assert once["ties"][0]["intentional"] is True
+    twice = parse_thread(render_thread(once, REGISTRY), REGISTRY)
+    assert twice["ties"][0]["intentional"] is True
+
+
+def test_the_paragraph_survives_a_round_trip():
+    once = parse_thread(WITH_DEPTH, REGISTRY)
+    twice = parse_thread(render_thread(once, REGISTRY), REGISTRY)
+    assert twice["ties"] == once["ties"]
+    assert twice["ties"][0]["description"] == once["ties"][0]["description"]
+
+
+def test_neither_field_is_written_when_absent():
+    # The rule the tie serialiser already follows for frame and ai_scope: a
+    # default is not written back, or every connection in the book gains lines
+    # the first time it is saved -- a diff of pure noise over files nobody
+    # changed.
+    source = """---
+type: character
+entity_id: e-1
+name: Kipling
+ties:
+  - rel: mentored_by
+    target: e-2
+    reason: "her mentor"
+---
+
+# Overview
+A.
+"""
+    rendered = render_thread(parse_thread(source, REGISTRY), REGISTRY)
+    assert "description:" not in rendered
+    assert "intentional:" not in rendered
+
+
+# ── The Relationships section on a character ─────────────────────────────────
+#
+# Relationships come home to the character. One with an entry on the other end
+# is a CONNECTION, in the frontmatter, where it can resolve against that entry
+# and be drawn on the map. This section is for the other half -- the ones with
+# nobody on the other end, which no Tie can hold because a Tie needs two ends:
+#
+#     From Milton's own notes: "Former Partner", "His Expedition Party",
+#     "Guild and City Adventurers", "Mother and Stepfather". Four of his eight
+#     relationships. None of them an entry. All of them real, and one of them
+#     ("estranged for reasons not yet established") is exactly the kind of note
+#     a writer needs to keep and cannot yet resolve.
+#
+# THE HAZARD THESE TESTS EXIST FOR. The section is trait-blocked, and this repo
+# has already paid once for prose living in a trait section and becoming
+# invisible on disk (a Main character page rendered ONLY the trait list). A
+# writer will type a paragraph straight into this heading, so both shapes have
+# to survive a save.
+
+REL_SECTION = """---
+type: character
+entity_id: e-milton
+name: Milton Buchanan
+---
+
+# Overview
+An expedition leader.
+
+# Relationships
+- trait: Former Partner
+  description: "Once shared a close relationship with a woman who later joined the military as a medic. They are estranged for reasons not yet established."
+  importance: present
+
+- trait: Guild and City Adventurers
+  description: "His reputation is divided. People who know only the scandal may regard him as unstable."
+  importance: background
+
+# Notes
+Nothing yet.
+"""
+
+
+def test_a_relationship_with_nobody_on_the_other_end_is_recorded():
+    thread = parse_thread(REL_SECTION, REGISTRY)
+    blocks = thread["sections"]["relationships"]["trait_blocks"]
+    assert [b["trait"] for b in blocks] == ["Former Partner",
+                                            "Guild and City Adventurers"]
+    assert "estranged for reasons not yet established" in blocks[0]["description"]
+
+
+def test_it_carries_a_weight_like_any_other_trait():
+    # Reusing the trait shape is what gets importance, subtext and true_in for
+    # free. A relationship the story turns on and one the writer mentioned once
+    # should not weigh the same in a brief.
+    thread = parse_thread(REL_SECTION, REGISTRY)
+    blocks = thread["sections"]["relationships"]["trait_blocks"]
+    assert blocks[0]["importance"] == "present"
+    assert blocks[1]["importance"] == "background"
+
+
+def test_it_survives_a_round_trip():
+    once = parse_thread(REL_SECTION, REGISTRY)
+    twice = parse_thread(render_thread(once, REGISTRY), REGISTRY)
+    assert (twice["sections"]["relationships"]["trait_blocks"]
+            == once["sections"]["relationships"]["trait_blocks"])
+
+
+def test_prose_typed_into_the_section_is_not_swallowed():
+    # THE INVISIBLE-PROSE HAZARD, checked rather than assumed. A writer will
+    # type a paragraph under this heading before they discover the structured
+    # form, and a save that dropped it would destroy their writing silently.
+    source = REL_SECTION.replace(
+        "# Relationships\n",
+        "# Relationships\nHe keeps people at arm's length and calls it method.\n\n")
+    #
+    # WHAT ACTUALLY HAPPENS, pinned because it surprised me and it is the same
+    # for every trait section in the app: leading prose makes the WHOLE section
+    # parse as prose, and the trait lines stay in it as literal text. The
+    # structure is not recognised -- and not one word is lost, which is the rule
+    # that matters. A parser declining to guess is right; one that silently kept
+    # half of what was typed would not be.
+    once = parse_thread(source, REGISTRY)
+    content = once["sections"]["relationships"]["content"]
+    assert "arm's length" in content
+    assert "Former Partner" in content, "the writer's words were eaten"
+
+    twice = parse_thread(render_thread(once, REGISTRY), REGISTRY)
+    after = twice["sections"]["relationships"]["content"]
+    assert "arm's length" in after
+    assert "Former Partner" in after
+    assert "estranged for reasons not yet established" in after
+
+
+def test_the_retired_section_still_round_trips():
+    # It is retired, not deleted: a section missing from the registry is a
+    # section silently dropped from the file on the next save, and some writers
+    # have prose under the old heading.
+    source = REL_SECTION.replace(
+        "# Relationships\n",
+        "# Relationships Overview\nThe old home, still holding words.\n\n# Relationships\n")
+    once = parse_thread(source, REGISTRY)
+    twice = parse_thread(render_thread(once, REGISTRY), REGISTRY)
+    assert "still holding words" in twice["sections"]["relationships_overview"]["content"]
+
+
+def test_an_empty_section_adds_nothing_a_writer_would_notice():
+    # Adding a section to the registry writes its heading into every character
+    # file on the next save. That is an additive diff and acceptable; what would
+    # not be acceptable is content appearing that the writer did not type.
+    source = """---
+type: character
+entity_id: e-x
+name: X
+---
+
+# Overview
+A.
+"""
+    rendered = render_thread(parse_thread(source, REGISTRY), REGISTRY)
+    # BETTER THAN "an additive diff": an empty section is not written at all,
+    # so adding this one to the registry changes NOTHING in any existing file
+    # until the writer puts a relationship in it. Worth pinning, because the
+    # alternative -- a heading appearing in every character file on the next
+    # save -- is the kind of churn that makes a git history useless, and it
+    # would have been an acceptable-looking cost to accept by accident.
+    assert "Relationships" not in rendered
+
+
+# ── A relationship with nobody on the other end ──────────────────────────────
+#
+#     "I'm trying to add the following relationship with her parents, but they
+#      do not have a charcter profile and won't."
+#
+# A Tie needs two ends that exist, so this cannot be one. It is a trait-shaped
+# block in the character's own Relationships section instead, and it carries
+# `rel` -- the KIND of relationship -- because "The Barksdale Family" on its
+# own does not say she is their child.
+#
+# The field is written only when set, so no ordinary trait in any existing
+# profile gains a line for it.
+
+REL_BLOCK = """---
+type: character
+entity_id: e-gwen
+name: Gwendolyn Barksdale
+---
+
+# Overview
+A companion.
+
+# Relationships
+- trait: The Barksdale Family
+  description: "Gwen left them and does not talk about why."
+  importance: present
+  rel: child of
+
+- trait: Her Former Company
+  description: "Disbanded after the northern road."
+  importance: background
+"""
+
+
+def test_the_kind_of_relationship_is_read():
+    blocks = parse_thread(REL_BLOCK, REGISTRY)["sections"]["relationships"]["trait_blocks"]
+    assert blocks[0]["trait"] == "The Barksdale Family"
+    assert blocks[0]["rel"] == "child of"
+
+
+def test_a_relationship_block_survives_a_round_trip():
+    once = parse_thread(REL_BLOCK, REGISTRY)
+    twice = parse_thread(render_thread(once, REGISTRY), REGISTRY)
+    assert (twice["sections"]["relationships"]["trait_blocks"]
+            == once["sections"]["relationships"]["trait_blocks"])
+
+
+def test_a_block_without_one_stays_without_one():
+    # The writer may not have said what kind it is, and inventing "connected
+    # to" for them would put a word in the file they did not choose.
+    blocks = parse_thread(REL_BLOCK, REGISTRY)["sections"]["relationships"]["trait_blocks"]
+    assert not blocks[1].get("rel")
+
+
+def test_no_ordinary_trait_gains_a_line_for_it():
+    # THE RULE THAT KEEPS THIS SAFE TO SHIP. Adding a key that were written
+    # unconditionally would put `rel:` under every trait in every profile on
+    # the next save -- a diff on every file for a field none of them use.
+    source = """---
+type: character
+entity_id: e-x
+name: X
+---
+
+# Physical Traits
+- trait: Hazel Eyes
+  description: "From her father."
+  importance: core
+"""
+    rendered = render_thread(parse_thread(source, REGISTRY), REGISTRY)
+    assert "rel:" not in rendered

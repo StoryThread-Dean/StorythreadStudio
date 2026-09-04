@@ -48,7 +48,8 @@ from dataclasses import dataclass, field
 
 from app.codex.anchors import AnchorIndex
 from app.codex.normalize import chapter_of
-from app.codex.resolve import resolve_thread
+from app.codex.resolve import frames_for, resolve_thread
+from app.codex.tie_run import resolve_ties
 from app.codex.visibility import VISIBLE, Lens, thread_visibility
 
 __all__ = [
@@ -236,6 +237,31 @@ def assemble(
     lens = Lens.for_pov(at, pov, include_on_request=include_on_request)
     connected = _connected_to(threads, mentioned)
 
+    # ── ONE PASS FIRST, so connections can be rendered at all ───────────
+    #
+    # A connection needs two things this loop cannot supply one Thread at a
+    # time: the other end's NAME (a target is an id, and "mentored by
+    # 25346497-4a97" tells a model nothing), and whether that other end is
+    # someone the reader has met.
+    #
+    # The second is visibility.py's rule, which the map already keeps: A
+    # CONNECTION IS ONLY AS VISIBLE AS THE LEAST VISIBLE THING IT TOUCHES.
+    # Judging the Tie alone would happily announce a character who has not
+    # appeared yet, through the back door of somebody else's connection list.
+    #
+    # Verdicts are cached rather than recomputed, because the loop below needs
+    # the same answer for its own filtering and a second call would be a
+    # second chance to disagree.
+    names: dict[str, str] = {}
+    verdicts: dict[str, str] = {}
+    for thread in threads:
+        entity_id = str(thread.get("entity_id") or "")
+        if not entity_id:
+            continue
+        names[entity_id] = str(thread.get("name") or "")
+        verdicts[entity_id] = thread_visibility(thread, index, lens)
+    met = {eid for eid, verdict in verdicts.items() if verdict == VISIBLE}
+
     pieces: list[Piece] = []
     spoilers = 0
     by_scope = 0
@@ -252,7 +278,7 @@ def assemble(
             # specific instruction wins.
             continue
 
-        verdict = thread_visibility(thread, index, lens)
+        verdict = verdicts.get(entity_id, VISIBLE)
         if verdict != VISIBLE:
             by_scope += 1
             continue
@@ -289,6 +315,56 @@ def assemble(
         spoilers += int(resolved.get("withheld_spoilers") or 0)
         by_scope += int(resolved.get("withheld_by_scope") or 0)
         not_true_here += int(resolved.get("withheld_traits") or 0)
+
+        # THE CONNECTIONS AS THEY STAND HERE, through the resolver written for
+        # them. `resolve_ties` was finished, tested and called by nothing; this
+        # is its first caller in the brief. Reimplementing supersession here
+        # would give the app a second definition of what is true now, which is
+        # the thing tie_run.py exists to prevent.
+        resolution = resolve_ties(
+            thread.get("ties") or [], index, at,
+            frames=frames_for(pov), hide_spoilers=True,
+            include_on_request=include_on_request,
+        )
+        spoilers += int(resolution.withheld_spoilers or 0)
+        by_scope += int(resolution.withheld_by_scope or 0)
+
+        rendered_ties = []
+        for state in resolution.states:
+            # The least-visible-endpoint rule. A pair whose other end the
+            # reader has not met is dropped WHOLE -- not merely unnamed --
+            # because "mentored by someone" still asserts a mentor exists.
+            if state.target not in met:
+                spoilers += 1
+                continue
+            # THE PARAGRAPH, AND WHY IT IS RATIONED.
+            #
+            # `reason` is capped at 140 characters because every connection's
+            # line is sent every time. The depth beside it runs several hundred
+            # -- the writer's own relationship paragraphs are 700 to 900 -- and
+            # eleven of those for one character IS the 920-word blob this whole
+            # feature exists to replace. Sending them all always would move the
+            # cost rather than remove it.
+            #
+            # So the line always goes and the paragraph goes when the OTHER END
+            # is something the writer is actively working with: named in the
+            # text they are writing, or pinned by hand.
+            #
+            # Not "both ends are in the brief", which sounds tighter and is
+            # not: an entry with no `appears_in` is never filtered by presence,
+            # and no entry in the writer's 56-entry world sets one -- so every
+            # entry is a candidate in every brief and that rule would include
+            # every paragraph always. Being NAMED is the signal that actually
+            # tracks what they are doing right now.
+            wanted = state.target in mentioned or state.target in pinned
+            rendered_ties.append({
+                "rel": state.rel, "frame": state.frame,
+                "reason": state.reason,
+                "target_name": names.get(state.target, ""),
+                "description": state.record.get("description", "") if wanted
+                else "",
+            })
+        resolved["ties"] = rendered_ties
 
         text = render_thread_brief(resolved)
         if not text.strip():
@@ -491,6 +567,51 @@ def render_thread_brief(resolved: dict) -> str:
             label = f" [{', '.join(marks)}]" if marks else ""
             lines.append(f"- {block.get('trait', '')}{label}: "
                          f"{block.get('description', '')}")
+
+    # ── WHO THIS IS TO EVERYONE ELSE ────────────────────────────────────
+    #
+    # THE BUG THIS CLOSES. This function never read `ties`, so a connection's
+    # reason line reached no model on any path -- while `post_tie` refused to
+    # save one without a reason and told the writer, in the refusal, "this is
+    # what gets sent to AI when you ask for help". It was not. And
+    # REASON_LIMIT is 140 characters precisely BECAUSE "the cost is the cap
+    # times the number of connections in scope" -- a cap derived from a budget
+    # the field never entered.
+    #
+    # Connections come last on purpose. The Run is what is true NOW and has to
+    # be read first; a relationship is context around it rather than a
+    # correction to it.
+    #
+    # What arrives here is already RESOLVED (see assemble): one state per pair
+    # and frame, superseded states dropped, spoilers withheld, and any pair
+    # whose other end the reader has not met removed whole. So this renders
+    # what it is given and makes no judgement of its own.
+    ties = resolved.get("ties") or []
+    if ties:
+        lines.append("Connections:")
+        for tie in ties:
+            # (believed) is the same marker the Run uses above, for the same
+            # reason and it matters more here. A connection held in one
+            # character's frame is what they THINK -- "he believes they are
+            # together" while she has never heard of him -- and a model told
+            # that flatly would write it as the world's truth.
+            prefix = "- " if str(tie.get("frame") or "truth") == "truth" \
+                else "- (believed) "
+            # The relation as WORDS. `mentored_by` is an id, not English, and
+            # the map already renders it this way -- one habit, not two.
+            rel = str(tie.get("rel") or "").replace("_", " ").strip()
+            name = str(tie.get("target_name") or "").strip()
+            head = " ".join(p for p in (rel, name) if p) or name
+            reason = str(tie.get("reason") or "").strip()
+            lines.append(f"{prefix}{head}: {reason}" if reason
+                         else f"{prefix}{head}")
+            # Indented under its own line so a model reads the paragraph as
+            # belonging to that connection rather than as loose prose about
+            # the character. Present only when it earned its place -- see the
+            # rationing note in assemble.
+            depth = str(tie.get("description") or "").strip()
+            if depth:
+                lines.append(f"  {depth}")
 
     return "\n".join(lines).strip()
 

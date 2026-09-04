@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 
 from app.codex.anchors import AnchorIndex
 from app.codex.normalize import TRUTH, normalize_fact
+from app.codex.tie_run import resolve_ties
 
 __all__ = [
     "Snag", "SNAG_AXIS_CONFLICT", "SNAG_AMBIGUOUS_ORDER", "SNAG_BAD_SUPERSEDE",
@@ -442,21 +443,60 @@ def check_ties(
                     "where": _anchor_label(tie.get("at"), label_for)}],
         ))
 
+    # ── WHAT IS ACTUALLY IN FORCE, THROUGH THE RESOLVER ─────────────────
+    #
+    # THE BUG THIS CLOSES, and it accused the writer of an error they had not
+    # made. This filter used to read `at` and `until` directly, which knows
+    # nothing about supersession -- and supersession is the whole mechanism by
+    # which a relationship is allowed to CHANGE (tie_run.py: the pair is the
+    # axis). Friends at chapter 1, rivals at chapter 19, nothing closed by
+    # hand, because "replacement is derived; ending is declared".
+    #
+    # Read at chapter 25 by dates alone, BOTH looked live: friends started and
+    # never ended, rivals started. Put the two relations in one
+    # `exclusive_group` and the writer was told the arc they had recorded
+    # correctly was a contradiction -- an accusation pointed straight at the
+    # feature that took the most care to get right.
+    #
+    # So the active set comes from `resolve_ties` now. It is the same engine
+    # the brief and the map use, which is the point: a second opinion here
+    # about what is true now is exactly what tie_run.py exists to prevent.
+    #
+    # Spoilers and scope are deliberately NOT applied -- a contradiction is a
+    # contradiction whether or not the reader knows about it yet, and a check
+    # that skipped secrets would go quiet on the writer's most tangled plots.
+    frames = {TRUTH} | {str(t.get("frame") or TRUTH) for t in ties}
+    resolution = resolve_ties(ties, index, at, frames=frames,
+                              hide_spoilers=False, include_on_request=True)
+
     active: list[dict] = []
-    for tie in ties:
-        start = index.ordinal(tie.get("at")) if tie.get("at") else None
-        if start is not None and now is not None and start > now:
-            continue                    # not true yet at the point being asked
-        end = index.ordinal(tie.get("until")) if tie.get("until") else None
+    # `unplaced` is included because it was included before: a tie whose
+    # chapter was deleted still describes a relationship the writer meant, and
+    # dropping it here would silently stop checking it.
+    #
+    # `ambiguous` is included for the opposite reason -- it is NOT in force
+    # anywhere, and that is exactly why it belongs to a contradiction check.
+    # Two mutually exclusive connections asserted at the same anchor is the
+    # clash this function exists to report; leaving them out made the check go
+    # quiet on the clearest case it has.
+    for state in (list(resolution.states) + list(resolution.unplaced)
+                  + list(resolution.ambiguous)):
+        # `until` is the one thing resolution does not filter -- it resolves
+        # replacement, and an ending is declared rather than derived.
+        end = index.ordinal(state.until) if state.until else None
         if end is not None and now is not None and end <= now:
             continue                    # over by now
-        active.append(tie)
+        active.append(state.record or {})
 
-    by_rel: dict[str, list[dict]] = {}
+    # GROUPED BY FRAME, because two readings of one world are not a clash.
+    # She believes they are friends while the truth is that he is using her:
+    # both are in force, in different frames, and saying so is the feature.
+    by_rel: dict[tuple[str, str], list[dict]] = {}
     for tie in active:
-        by_rel.setdefault(str(tie.get("rel", "")), []).append(tie)
+        frame = str(tie.get("frame") or TRUTH)
+        by_rel.setdefault((frame, str(tie.get("rel", ""))), []).append(tie)
 
-    for rel_id, group in sorted(by_rel.items()):
+    for (_frame, rel_id), group in sorted(by_rel.items()):
         relation = relations.get(rel_id)
         if not relation:
             continue
@@ -473,15 +513,16 @@ def check_ties(
             ))
 
     # Exclusive groups: two DIFFERENT relations that cannot both be live.
-    by_group: dict[str, list[tuple[str, dict]]] = {}
-    for rel_id, group in by_rel.items():
+    # Keyed by frame as well, for the same reason as above.
+    by_group: dict[tuple[str, str], list[tuple[str, dict]]] = {}
+    for (frame, rel_id), group in by_rel.items():
         exclusive = (relations.get(rel_id) or {}).get("exclusive_group")
         if not exclusive:
             continue
         for tie in group:
-            by_group.setdefault(exclusive, []).append((rel_id, tie))
+            by_group.setdefault((frame, exclusive), []).append((rel_id, tie))
 
-    for group_id, entries in sorted(by_group.items()):
+    for (_frame, group_id), entries in sorted(by_group.items()):
         if len({rel for rel, _ in entries}) < 2:
             continue
         snags.append(Snag(

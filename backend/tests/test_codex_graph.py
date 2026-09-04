@@ -524,3 +524,136 @@ def test_A_PLACEMENT_NEVER_MAKES_A_HIDDEN_ENTRY_VISIBLE(project):
     _place(path, "e-garrick", [c1])
     body = _graph(path, at=c1)
     assert "e-garrick" not in {n["entity_id"] for n in body["nodes"]}
+
+
+# ── Why the map does NOT share the brief's resolver ──────────────────────────
+#
+# RECORDED SO A LATER SESSION DOES NOT "TIDY" THIS INTO A REGRESSION.
+#
+# `tie_run.resolve_ties` is the one definition of which connection state is in
+# force, and the brief, the profile list and the Snag checker all go through
+# it. The obvious next tidy is to route the map through it too and delete
+# `_edge_rank`. That would break this file.
+#
+# The map asks a DIFFERENT question. It needs three kinds of edge at once --
+# in force (solid), not yet true (dashed), and ended (faded) -- because the
+# writer scrubbing their own timeline is looking at their whole book, not at a
+# reader's view. `resolve_ties` deliberately answers only "what holds here",
+# and the graph route's own comment names the reason it must keep doing so:
+#
+#     `show_future` ... skips the not-yet check for THIS caller only: the
+#     resolver and the brief must go on treating a future fact as not in
+#     force, which is the one thing anchors exist to guarantee.
+#
+# So the two are not the same question wearing different clothes, and merging
+# them would either lose the dashed line (R8.6b, which existed as unreachable
+# documentation for the whole of the Weave's build before it was fixed) or make
+# the resolver report as in force something that is not. These tests fail if
+# either happens.
+
+def _pair_with_states(tmp_path, states):
+    """A project where one pair holds several states, given as (rel, at_key)."""
+    root = tmp_path / "ArcNovel"
+    (root / "manuscript").mkdir(parents=True)
+    (root / "codex" / "characters").mkdir(parents=True)
+    (root / "project.json").write_text(json.dumps({"title": "N"}), encoding="utf-8")
+    for name in ("01-a.md", "02-b.md", "03-c.md"):
+        (root / "manuscript" / name).write_text("# C\n\nText.\n", encoding="utf-8")
+    ids = ensure_chapter_ids(str(root))
+    anchors = {"one": ids["01-a.md"], "two": ids["02-b.md"],
+               "three": ids["03-c.md"]}
+
+    # BOTH ENDS MUST BE AROUND ALREADY, or the endpoint rule hides the whole
+    # edge and the test measures the wrong thing. A Thread is "introduced" at
+    # the earliest point ANYTHING about it is anchored -- including a tie -- so
+    # a character whose only dated item is a chapter-three connection does not
+    # exist in chapter one. Each of these gets a chapter-one fact to stand on.
+    lines = ["---", "type: character", "entity_id: e-kip", "name: Kipling",
+             "ties:"]
+    for rel, at_key in states:
+        lines += [f"  - rel: {rel}", "    target: e-milton",
+                  f'    reason: "state {rel}"']
+        if at_key:
+            lines.append(f"    at: {anchors[at_key]}")
+    lines += ["---", "", "# Overview", "A guide.", "",
+              "# Run",
+              f'- id: f-kip\n  at: {anchors["one"]}\n  axis: home\n'
+              f'  value: "In the village."', ""]
+    (root / "codex" / "characters" / "kip.md").write_text(
+        "\n".join(lines), encoding="utf-8")
+    (root / "codex" / "characters" / "milton.md").write_text(
+        "---\ntype: character\nentity_id: e-milton\nname: Milton\n---\n\n"
+        "# Overview\nA leader.\n\n# Run\n"
+        f'- id: f-mil\n  at: {anchors["one"]}\n  axis: home\n'
+        f'  value: "In the valley."\n', encoding="utf-8")
+    return str(root), anchors
+
+
+def test_the_map_still_draws_a_future_state_the_brief_withholds(tmp_path):
+    # ONE PAIR, ONE STATE, IN THE FUTURE. The map draws it dashed; the brief
+    # must not mention it at all. Both behaviours are correct and they are
+    # opposite, which is the whole argument for two callers.
+    path, anchors = _pair_with_states(tmp_path, [("rivals", "three")])
+
+    body = _graph(path, at=anchors["one"], hide_spoilers=False)
+    edges = body["edges"]
+    assert len(edges) == 1, "the map lost the coming connection"
+    assert edges[0]["active"] is False
+    assert edges[0]["expired"] is False      # not over -- not yet
+
+    # And the same records, asked the brief's question, yield nothing.
+    from app.codex.anchors import AnchorIndex
+    from app.codex.tie_run import resolve_ties
+    import app.codex_store as codex_store
+
+    threads = {t["entity_id"]: t for t in codex_store.load_threads(path)}
+    index = AnchorIndex.for_project(path)
+    resolution = resolve_ties(threads["e-kip"]["ties"], index, anchors["one"])
+    assert resolution.states == [], (
+        "resolve_ties reported a future connection as in force -- the one "
+        "thing anchors exist to guarantee"
+    )
+
+
+def test_the_map_draws_one_line_where_the_resolver_reports_one_state(tmp_path):
+    # Where the two DO agree, they must agree exactly: a relationship that
+    # changed is one line whose label moves, not two lines.
+    path, anchors = _pair_with_states(
+        tmp_path, [("connected_to", "one"), ("rivals", "two")])
+
+    body = _graph(path, at=anchors["two"], hide_spoilers=False)
+    assert len(body["edges"]) == 1
+    assert body["edges"][0]["rel"] == "rivals"
+
+    from app.codex.anchors import AnchorIndex
+    from app.codex.tie_run import resolve_ties
+    import app.codex_store as codex_store
+
+    threads = {t["entity_id"]: t for t in codex_store.load_threads(path)}
+    index = AnchorIndex.for_project(path)
+    resolution = resolve_ties(threads["e-kip"]["ties"], index, anchors["two"])
+    assert [s.rel for s in resolution.states] == ["rivals"]
+    # The earlier state is history rather than gone -- "friends, and before
+    # that acquaintances" is worth being able to show.
+    assert [s.rel for s in resolution.history] == ["connected_to"]
+
+
+def test_an_undated_state_is_superseded_by_a_dated_one_on_both_paths(tmp_path):
+    # The premise case: an undated connection is true of the whole book, and a
+    # dated state still replaces it from its own anchor. Otherwise "always
+    # true" would mean "unchangeable" and a relationship that starts as the
+    # premise could never develop.
+    path, anchors = _pair_with_states(
+        tmp_path, [("connected_to", None), ("rivals", "two")])
+
+    body = _graph(path, at=anchors["two"], hide_spoilers=False)
+    assert [e["rel"] for e in body["edges"]] == ["rivals"]
+
+    from app.codex.anchors import AnchorIndex
+    from app.codex.tie_run import resolve_ties
+    import app.codex_store as codex_store
+
+    threads = {t["entity_id"]: t for t in codex_store.load_threads(path)}
+    index = AnchorIndex.for_project(path)
+    resolution = resolve_ties(threads["e-kip"]["ties"], index, anchors["two"])
+    assert [s.rel for s in resolution.states] == ["rivals"]

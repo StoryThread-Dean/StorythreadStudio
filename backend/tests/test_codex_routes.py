@@ -1134,3 +1134,291 @@ def test_the_same_chapter_twice_is_recorded_once(project):
         "project_path": project, "entity_id": "e-elara",
         "appears_in": [anchor, anchor]})
     assert response.json()["appears_in"] == [anchor]
+
+
+# ── A connection that CHANGES, over HTTP ─────────────────────────────────────
+#
+# The model has always supported this -- the pair is the axis, so friends at
+# chapter 1 and rivals at chapter 19 supersede correctly and the writer closes
+# nothing by hand. What did not exist was any way to work with ONE state:
+#
+#   * DELETE took (rel, target) with NO anchor, so removing "friends" removed
+#     every "friends" state to that person at once. The recurrence case
+#     post_tie deliberately allows -- friends, estranged, friends again -- was
+#     savable and not individually deletable.
+#   * There was no PATCH at all, so the only way to correct a connection was
+#     delete-and-recreate, which the bug above made lossy.
+
+def _two_chapters(project: str) -> tuple[str, str]:
+    from app.utils.structure_store import ensure_chapter_ids
+
+    second = os.path.join(project, "manuscript", "02-b.md")
+    with open(second, "w", encoding="utf-8") as f:
+        f.write("# Chapter Two\n\nText.\n")
+    ids = ensure_chapter_ids(project)
+    return ids["01-a.md"], ids["02-b.md"]
+
+
+def _make(project, rel, at=None, reason="because", **kw):
+    body = {"project_path": project, "src_id": "e-elara", "rel": rel,
+            "dst_id": "e-garrick", "reason": reason}
+    if at:
+        body["at"] = at
+    body.update(kw)
+    return client.post("/api/codex/tie", json=body)
+
+
+def _ties(project, entity_id="e-elara"):
+    return client.get("/api/codex/ties",
+                      params={"project_path": project,
+                              "entity_id": entity_id}).json()["ties"]
+
+
+def test_the_same_pair_can_hold_two_states(project):
+    one, two = _two_chapters(project)
+    assert _make(project, "connected_to", at=one,
+                 reason="they trust each other").status_code == 200
+    assert _make(project, "rivals", at=two,
+                 reason="she cannot forgive him").status_code == 200
+    assert len(_ties(project)) == 2
+
+
+def test_only_the_state_in_force_is_marked_as_such(project):
+    # THE PROFILE PAGE BUG. /ties applied no resolution at all, so a character
+    # whose relationship had changed listed "friends" and "rivals" side by
+    # side as equals, with nothing to say which one is true now.
+    one, two = _two_chapters(project)
+    _make(project, "connected_to", at=one, reason="they trust each other")
+    _make(project, "rivals", at=two, reason="she cannot forgive him")
+
+    by_rel = {t["rel"]: t for t in _ties(project)}
+    assert by_rel["rivals"]["in_force"] is True
+    assert by_rel["connected_to"]["in_force"] is False
+    # And it says WHY the earlier one is not, rather than merely hiding it.
+    assert by_rel["connected_to"]["state"] == "superseded"
+    assert by_rel["rivals"]["state"] == "in_force"
+
+
+def test_an_undated_connection_is_in_force(project):
+    # An undated connection is true of the whole book -- dating the premise is
+    # not something to ask a writer for.
+    _make(project, "connected_to", reason="her oldest friend")
+    assert _ties(project)[0]["in_force"] is True
+
+
+def test_the_far_end_sees_the_same_verdict(project):
+    # Ties are stored one way round and read from both ends. A superseded
+    # state must not look current just because it is being read from the other
+    # person's page.
+    one, two = _two_chapters(project)
+    _make(project, "connected_to", at=one, reason="they trust each other")
+    _make(project, "rivals", at=two, reason="she cannot forgive him")
+
+    by_rel = {t["rel"]: t for t in _ties(project, "e-garrick")}
+    assert by_rel["rivals"]["in_force"] is True
+    assert by_rel["connected_to"]["in_force"] is False
+
+
+def test_deleting_one_state_leaves_the_others(project):
+    one, two = _two_chapters(project)
+    _make(project, "connected_to", at=one, reason="acquaintances")
+    _make(project, "connected_to", at=two, reason="close friends now")
+
+    response = client.delete("/api/codex/tie",
+                             params={"project_path": project,
+                                     "src_id": "e-elara", "rel": "connected_to",
+                                     "dst_id": "e-garrick", "at": two})
+    assert response.status_code == 200
+    assert [t["why"] for t in _ties(project)] == ["acquaintances"]
+
+
+def test_deleting_without_an_anchor_still_removes_every_state(project):
+    # The old behaviour, kept on purpose: a writer who wants the whole
+    # relationship gone should not have to delete it a chapter at a time. The
+    # anchor NARROWS the delete; omitting it means all of them.
+    one, two = _two_chapters(project)
+    _make(project, "connected_to", at=one, reason="acquaintances")
+    _make(project, "connected_to", at=two, reason="close friends now")
+
+    client.delete("/api/codex/tie",
+                  params={"project_path": project, "src_id": "e-elara",
+                          "rel": "connected_to", "dst_id": "e-garrick"})
+    assert _ties(project) == []
+
+
+def test_deleting_a_state_that_is_not_there_says_so(project):
+    one, two = _two_chapters(project)
+    _make(project, "connected_to", at=one, reason="acquaintances")
+    response = client.delete("/api/codex/tie",
+                             params={"project_path": project,
+                                     "src_id": "e-elara", "rel": "connected_to",
+                                     "dst_id": "e-garrick", "at": two})
+    assert _code(response) in CODES
+
+
+def test_a_connection_can_be_corrected_in_place(project):
+    # Without PATCH the only way to fix a typo in a reason was to delete the
+    # connection and make it again -- and until the fix above, deleting took
+    # its siblings with it.
+    one, _two = _two_chapters(project)
+    _make(project, "connected_to", at=one, reason="they trust each other")
+
+    response = client.patch("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara", "rel": "connected_to",
+        "dst_id": "e-garrick", "at": one,
+        "reason": "she trusts him with the shop keys",
+        "description": "Since the northern gate fell she has trusted him with "
+                       "everything, which is not the same as liking him.",
+    })
+    assert response.status_code == 200
+
+    ties = _ties(project)
+    assert len(ties) == 1
+    assert ties[0]["why"] == "she trusts him with the shop keys"
+
+
+def test_a_correction_keeps_the_state_it_was_applied_to(project):
+    # Editing the chapter-2 state must not touch the chapter-1 one, which is
+    # the whole reason the anchor is part of the address.
+    one, two = _two_chapters(project)
+    _make(project, "connected_to", at=one, reason="acquaintances")
+    _make(project, "connected_to", at=two, reason="friends now")
+
+    client.patch("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara", "rel": "connected_to",
+        "dst_id": "e-garrick", "at": two, "reason": "real friends now",
+    })
+    assert sorted(t["why"] for t in _ties(project)) == [
+        "acquaintances", "real friends now"]
+
+
+def test_a_correction_can_move_a_state_to_a_different_chapter(project):
+    # "It actually starts in chapter two" is an ordinary correction and used to
+    # mean deleting and rebuilding the connection.
+    one, two = _two_chapters(project)
+    _make(project, "connected_to", at=one, reason="friends")
+
+    client.patch("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara", "rel": "connected_to",
+        "dst_id": "e-garrick", "at": one, "new_at": two,
+    })
+    assert _ties(project)[0]["at"] == two
+
+
+def test_a_correction_leaves_untouched_fields_alone(project):
+    # A PATCH that only fixes the reason must not blank the paragraph, which is
+    # the expensive half of the record.
+    paragraph = "The long version, written once and not to be lost to a typo fix."
+    _make(project, "connected_to", reason="first go", description=paragraph)
+
+    client.patch("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara", "rel": "connected_to",
+        "dst_id": "e-garrick", "reason": "second go",
+    })
+    entity = client.get("/api/codex/entity",
+                        params={"project_path": project,
+                                "entity_id": "e-elara"}).json()
+    assert entity["ties"][0]["description"] == paragraph
+    assert entity["ties"][0]["reason"] == "second go"
+
+
+def test_correcting_a_connection_that_is_not_there_is_refused(project):
+    response = client.patch("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara", "rel": "connected_to",
+        "dst_id": "e-garrick", "reason": "x",
+    })
+    assert _code(response) in CODES
+
+
+def test_a_correction_cannot_empty_the_required_reason(project):
+    # The reason is the one field a connection cannot be saved without. An
+    # edit is not a loophole around that.
+    _make(project, "connected_to", reason="a real reason")
+    response = client.patch("/api/codex/tie", json={
+        "project_path": project, "src_id": "e-elara", "rel": "connected_to",
+        "dst_id": "e-garrick", "reason": "   ",
+    })
+    assert _code(response) == "reason_required"
+
+
+def test_a_paragraph_can_be_recorded_with_a_connection(project):
+    paragraph = ("Elara initially reads Garrick as an obstacle whose rules "
+                 "exist to keep her small, and only later understands that he "
+                 "has been protecting her from something she could not see.")
+    assert _make(project, "connected_to", reason="he taught her everything",
+                 description=paragraph).status_code == 200
+
+    entity = client.get("/api/codex/entity",
+                        params={"project_path": project,
+                                "entity_id": "e-elara"}).json()
+    tie = entity["ties"][0]
+    assert tie["description"] == paragraph
+    # And the short line is untouched by it -- the two are different jobs.
+    assert tie["reason"] == "he taught her everything"
+
+
+# ── Two views of one pair, at one point in the story ─────────────────────────
+#
+# FOUND BY RECORDING THE WRITER'S OWN WORLD END TO END, with every unit test
+# passing -- because every one of them used the default frame.
+#
+# The duplicate guard compared (relation, other end, anchor) and ignored the
+# frame. `resolve_ties` keys its states on (other end, FRAME), so the objective
+# truth and one character's view of the same pair are two records that are both
+# in force at once. Comparing without the frame made the second look like a
+# duplicate of the first and refused it -- so the app accepted the model's
+# shape everywhere except at the door, and the asymmetric case this whole
+# feature exists for was the one thing that could not be saved:
+#
+#     "Character A is infatuated with Character B, adores them, buys them
+#      gifts, pays their bills... From Character B's perspective, they don't
+#      even know Character A exists because character A is stalking them."
+
+def test_the_truth_and_a_belief_about_it_can_both_be_recorded(project):
+    one, _two = _two_chapters(project)
+    assert _make(project, "connected_to", at=one,
+                 reason="he will always choose the party over her").status_code == 200
+    assert _make(project, "connected_to", at=one, frame="e-elara",
+                 reason="she believes he is a father-like mentor").status_code == 200
+
+    ties = _ties(project)
+    assert len(ties) == 2
+    assert {t["why"] for t in ties} == {
+        "he will always choose the party over her",
+        "she believes he is a father-like mentor",
+    }
+
+
+def test_both_views_are_in_force_at_once(project):
+    # Not a contradiction and not a supersession. Two frames, two answers, both
+    # true of their own frame -- which is what makes the stalker case
+    # expressible at all.
+    one, _two = _two_chapters(project)
+    _make(project, "connected_to", at=one, reason="the truth of it")
+    _make(project, "connected_to", at=one, frame="e-elara",
+          reason="what she believes")
+
+    assert all(t["in_force"] for t in _ties(project))
+
+
+def test_the_same_frame_twice_at_one_anchor_is_still_refused(project):
+    # The guard still does its job. Two identical claims in ONE frame at one
+    # point would draw two identical edges and count twice against cardinality.
+    one, _two = _two_chapters(project)
+    _make(project, "connected_to", at=one, frame="e-elara", reason="first")
+    response = _make(project, "connected_to", at=one, frame="e-elara",
+                     reason="second")
+    assert _code(response) in CODES
+
+
+def test_one_frame_can_change_without_touching_the_other(project):
+    # Her view of him moves in chapter two; the truth is unchanged. If the
+    # frames were not kept apart, one would supersede the other and the writer
+    # would lose whichever they recorded first.
+    one, two = _two_chapters(project)
+    _make(project, "connected_to", at=one, reason="the truth, all book")
+    _make(project, "connected_to", at=one, frame="e-elara", reason="she trusts him")
+    _make(project, "rivals", at=two, frame="e-elara", reason="she blames him now")
+
+    in_force = {t["why"] for t in _ties(project) if t["in_force"]}
+    assert in_force == {"the truth, all book", "she blames him now"}

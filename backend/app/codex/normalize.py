@@ -260,6 +260,18 @@ def normalize_tie(tie: dict) -> dict:
     # connection -- because a relationship can genuinely be one thing to one
     # person and another to the other, and neither of them is wrong.
     out["rel_inverse"] = str(out.get("rel_inverse") or "").strip()
+    # THE DEPTH. Deliberately NOT put through normalize_reason: that caps at
+    # REASON_LIMIT, and the whole point of this field is to hold what the line
+    # cannot. Nor is it capped here -- silently truncating the writer's own
+    # paragraph on LOAD would destroy prose they can still see in the file, and
+    # the brief already prunes what will not fit. Whitespace is collapsed so
+    # the value stays a single quoted YAML scalar; a paragraph has no newlines
+    # in it to lose.
+    out["description"] = " ".join(str(out.get("description") or "").split())
+    # "Yes, I meant that." Coerced to a real bool so a hand-written
+    # `intentional: yes` and the app's own `true` mean the same thing to
+    # check_ties, and so the serialiser can decide whether to write it at all.
+    out["intentional"] = bool(out.get("intentional"))
     out["frame"] = _clean(out.get("frame")) or TRUTH
     out["ai_scope"] = normalize_ai_scope(out.get("ai_scope"))
     out["at"] = _clean(out.get("at"))
