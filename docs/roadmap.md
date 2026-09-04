@@ -221,7 +221,29 @@ The label is separate from the name: `display_name` is what the story calls a
 thing, `name` is what it is. Alexandra Langford stays Alexandra Langford while
 the map says Lexa.
 
-#### Connection Types -- the next expansion, deliberately deferred
+#### Connection Types -- SHIPPED in v2.0.5
+
+**Delivered, and by a different route than this section planned.** The
+Relationships editor on a character page offers the world's own relation
+vocabulary, grouped as the connect dialog groups it (Family, Knows / Known,
+Intimate, Against), with a box the writer can type their own into -- which
+`POST /relation` then adopts or mints. So the "[Custom]" half is real rather
+than a placeholder, and the list is the seventy-odd relations the registry
+already held rather than the curated six sketched below.
+
+The ordering argument below still stands and is why it works this way: making
+the connection comes first, saying what KIND it is comes second, and neither
+the connect dialog nor the Relationships row requires a type to save.
+
+The **Connection Type Check** noted at the end of this section is NOT built.
+The backend already refuses a relation that is not legal between two kinds
+(`relation_allows`), so a location cannot be somebody's Rival -- but that is a
+refusal at save time rather than the warn-do-not-refuse guidance described
+here. Still open.
+
+The original entry follows, kept because the reasoning is the record.
+
+#### Connection Types -- the original plan, deliberately deferred
 
 A connection is currently either plain ("connected to") or one of the named
 relations in `types.json`. The next step, agreed in review, is a small set of
