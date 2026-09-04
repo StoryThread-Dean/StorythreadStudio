@@ -35,15 +35,24 @@ Steps:
    the sidecar leaked; capture the `OwningProcess` and file the
    regression before proceeding.
 3. Launch Storythread Studio.
-4. From the Project Home, click a project in the Recent list (or open
+4. Watch the Recent Projects column as the window appears. On a slow
+   machine it may say "Connecting to your library..." for a moment
+   before your books appear. That is correct -- see the expectations.
+5. From the Project Home, click a project in the Recent list (or open
    the throwaway project created above).
-5. Close the app again. Re-run the port check from step 2.
+6. Close the app again. Re-run the port check from step 2.
 
 Expected:
 - Window opens; no "Backend not responding" banner appears.
+- Recent Projects shows your books, or briefly says "Connecting to your
+  library..." and then shows them. It must NEVER say "No recent projects
+  yet" while you have projects -- that wording is now reserved for a
+  genuinely empty list, and the app showing it wrongly is the bug this
+  step exists to catch. If the service never answers you get "Couldn't
+  load your projects" and a Try again button, which is also correct.
 - Left panel shows the project title, the Writing Progress gauge, and
   the Manuscript / Notes / Profiles navigation.
-- After step 5's port check, port 8000 is free -- clean shutdown.
+- After step 6's port check, port 8000 is free -- clean shutdown.
 
 ---
 
@@ -65,7 +74,11 @@ input), and the new project folder contains all of:
 - `manuscript/` -- with at least one starter chapter `.md`
 - `notes/` -- containing `outline.md`
 - `profiles/characters/`
-- `profiles/relationships/`
+- `profiles/relationships/` -- still scaffolded, and the Relationship KIND is
+  retired: the app no longer offers to create one, so this folder stays empty
+  on a new project. It is kept because an existing project's entries live here
+  and the legacy reader finds them by folder. Do NOT file the empty folder, or
+  the missing "Relationships" option in a create menu, as a bug.
 - `profiles/locations/`
 - `profiles/lore/`
 - `profiles/chapters/` -- legacy dir, still scaffolded; current chapter
@@ -1227,6 +1240,52 @@ made before v2.0.2, and copy the folder first.
 9. Writing Progress gauge.
    - [ ] The Outline row shows a count like "4 of 10", not a yes/no.
    - [ ] Filling in another header line moves it.
+
+## 30. Relationships on the character (a connection that changes)
+
+**Touches:** the retired Relationship kind, the connection editor's four
+switches, the profile's connection list, and what actually reaches AI. Needs a
+project with at least two characters and three chapters.
+
+**Set up:** if you have a project with existing Relationship profiles, use a
+COPY of it so you can check they still open.
+
+Steps:
+1. Try to create a new Relationship profile. Expect it NOT to be offered
+   anywhere -- not in the Weave's create menu, not in Quick Create, not as a
+   Profiles tab on a project that has none.
+2. On the copy WITH old relationship entries: open one. Expect it to open
+   normally, be fully editable, and carry a notice saying relationships have
+   moved to connections on each character. Nothing should be greyed out.
+3. On a character, connect them to another character. Expect the reason line to
+   be required, and expect an optional longer description beside it.
+4. Open "This changes during the book, is one person's view, or is a secret".
+   Set **From when** to chapter one. Record it.
+5. Connect the same two again, a different relation, **From when** chapter
+   three.
+6. Look at the character's connections. Expect the chapter-three one listed
+   FIRST as current, and the chapter-one one still listed and marked
+   **Earlier** -- not hidden.
+7. Record a third connection between them with **Whose view is this?** set to
+   one of the two characters. Expect it to save (it is a different record, not
+   a duplicate) and to say whose view it is in the list.
+8. Open the AI context inspector at chapter one, then at chapter three. Expect
+   the connection's reason line to appear in what will be sent, and expect it
+   to be the chapter-one wording at chapter one and the chapter-three wording
+   at chapter three.
+9. With the other character named in your text, expect the longer description to
+   appear too. With nobody named, expect only the short line.
+
+Expected:
+- No way to create a Relationship profile; every existing one still opens and
+  saves.
+- Two states of one relationship coexist, with only one presented as current.
+- A view belonging to one character appears only when writing from that
+  character's point of view.
+- The reason line reaches AI. If the context inspector shows no connections at
+  all, that is the bug this scenario exists to catch.
+
+---
 
 ## What this checklist does NOT cover
 

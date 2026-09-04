@@ -731,6 +731,45 @@ The Weave — a story-aware world model, and Model Roles
  them drift. Ties carry optional at / until, so a connection that only becomes true in chapter 9 is
  recordable as such rather than as a flat truth.
 
+ **AMENDED 2026-09-04. A CONNECTION IS WHERE A RELATIONSHIP LIVES, and three things had to change
+ for that to be true.** Reported from live use of a full series: a separate `relationship` ENTRY per
+ character, holding one blob of prose about everyone. "Cumbersome, not efficent, creates another tag
+ in The Weave connection... not an efficent use of tokens if send to ai for draft or context
+ checking." All correct, and the mechanisms were worse: the prose entered every brief whole and
+ unwindowed while ranking lowest and being pruned first, the kind was `is_active` False so the walk
+ never asked how it related to anything, no relation named it at either end, and `ai/prompts.py`
+ instructed the model to reconcile it against the character's own page at request time.
+
+ So the `relationship` kind is RETIRED (not deleted: existing entries stay readable, editable and
+ listed, and `profiles.py` parses by config, so removing it would make their files unopenable).
+ A relationship with an entry on the other end is a Tie; one without is a trait block in the
+ character's own `relationships` section, which is added for the purpose.
+
+ Three amendments to the Tie itself:
+
+ - **`description`.** `reason` is capped at 140 characters BECAUSE every connection's line enters
+   every brief, and a relationship the writer has thought about runs several hundred. So the line
+   stays the summary and the paragraph sits beside it, sent only when the other end is also in
+   scope. Without this, moving relationship prose onto Ties would have meant discarding 90% of it.
+ - **`frame` IS THE MECHANISM FOR AN ASYMMETRIC RELATIONSHIP**, and `reason_inverse` is not. The
+   writer's own case: "Character A is infatuated with Character B... From Character B's perspective,
+   they don't even know Character A exists because character A is stalking them." An empty
+   `reason_inverse` means "the same, backwards" -- there is no way to say the far side holds nothing.
+   Two framed records on A and none on B says it exactly, and `resolve_ties` keys states on
+   (other end, frame) so both are in force at once. `reason_inverse` and `rel_inverse` are therefore
+   de-emphasised in the editor: they invite fabricating the far side's view.
+ - **Ties now reach the brief.** `render_thread_brief` never read them, so a reason line reached no
+   model on any path -- while `post_tie` refused a reason-less connection saying "this is what gets
+   sent to AI when you ask for help". The 140-character cap was derived from a budget the field
+   never entered. Same class as R8.1: computed, correct, connected to nothing.
+
+ The editor gap was the other half. `at`, `until`, `frame` and `revealed_at` were stored, resolved,
+ indexed and honoured, and `TieEditor` sent none of them -- so "a relationship can change from
+ Friends in the first half, then rivals the second half" was expressible in the file and unreachable
+ from the app. `resolve_ties` itself was finished, tested and called by nothing; it now feeds the
+ brief, `GET /ties` and `check_ties`. It is deliberately NOT wired into `/graph`: the map needs
+ in-force plus not-yet plus ended, and the resolver answers only what holds. See `test_codex_graph.py`.
+
  The Weave map ⭐
 
  The centrepiece, and the thing that makes the data layer visible instead of theoretical.

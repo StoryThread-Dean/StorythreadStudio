@@ -125,7 +125,16 @@ A guided workspace for authoring structured project context.
 
 ### Profile types
 
-Character, Relationship, Location, Lore. Each type has its own section template (Overview, Personality Traits, History, Tone and Atmosphere, Rule or Concept, etc.) defined in code, not user-edited.
+Character, Location, Lore. Each type has its own section template (Overview, Personality Traits, History, Tone and Atmosphere, Rule or Concept, etc.) defined in code, not user-edited.
+
+**Relationship profiles are retired.** They were a separate entry holding one blob of prose about everything a character was to everyone else, and they were the wrong shape for the job: the same names were described twice (once there, once on the character), the prose entered every AI brief whole and was usually pruned before it arrived, almost nothing could legally connect to such an entry, and the app ended up instructing the model to reconcile the two copies at request time.
+
+A relationship now lives on the character, in one of two places depending on whether the other party exists as an entry:
+
+- **It does** -- the relationship is a **connection**, which carries the same description plus what no profile page could hold: the chapter it becomes true, the chapter it ends, whose view it is, and when the reader learns of it. A relationship that changes ("friends in the first half, rivals in the second") is recorded as two connections and the later one takes over on its own.
+- **It does not** -- "Former Partner", "Guild and City Adventurers", a mother who has no entry -- it is a block in the character's own **Relationships** section, carrying the same description and weight, simply not drawn on the map.
+
+Existing relationship profiles are untouched: still readable, still editable, still listed while they hold anything. The app no longer offers to create new ones, and an open one says where the job moved.
 
 ### Trait blocks
 
