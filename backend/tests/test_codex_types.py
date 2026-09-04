@@ -26,6 +26,7 @@ from app.codex.types_registry import (
     relation_allows,
     relation_by_id,
     seed_registry,
+    type_by_id,
     validate_registry,
 )
 
@@ -277,10 +278,16 @@ def test_the_kinds_the_profile_builder_edits_carry_its_full_set():
     # disagreed; deciding the other way would have meant handing the writer a
     # thinner page for the same job.
     expected = {
+        # `relationships_overview` is retired and still listed: it round trips
+        # so a writer's legacy prose is not dropped on the next save. The
+        # section that does the job now is `relationships`, which carries trait
+        # blocks -- one per relationship with nobody on the other end. A
+        # relationship that HAS an entry on the other end is a Connection and
+        # lives in the frontmatter, where it can resolve and be drawn.
         "character": ["overview", "physical_traits", "personality_traits",
                       "motivations", "voice_notes",
                       "hidden_and_foreshadowing_traits",
-                      "relationships_overview", "notes"],
+                      "relationships_overview", "relationships", "notes"],
         "location": ["overview", "physical_description", "tone_and_atmosphere",
                      "historical_significance", "cultural_significance",
                      "scene_use_notes", "notes"],
@@ -406,3 +413,165 @@ def test_the_heal_writes_nothing_to_disk(tmp_path):
 
     load_registry(str(tmp_path))
     assert open(path, encoding="utf-8").read() == before
+
+
+# ── Sections the app gained after a project was seeded ───────────────────────
+#
+# THE BUG THESE CLOSE, and this module's own rules are what made it easy to
+# walk into. `types.json` is seeded per project at first use and is never
+# rewritten, because the moment a writer adds a kind or a relation of their own
+# it stops being config and becomes THEIR DATA. That rule is right.
+#
+# The consequence is not. A section added to DEFAULT_TYPES reached NEW projects
+# only. Every existing project went on rendering the list it was seeded with,
+# so the writer's twenty-one characters had no Relationships section at all --
+# and nothing said so, because a section the registry does not list is a
+# section the form has no place for. Reported as exactly that: "all 20 require
+# Relationships to be added."
+#
+# Reconciled in memory on every read. The file is never touched.
+
+def _seeded(tmp_path, sections, type_id="character", extra_types=None):
+    """A project whose types.json predates a shipped change."""
+    root = tmp_path / "Novel"
+    (root / "codex").mkdir(parents=True)
+    types = [{
+        "id": type_id, "label": "Characters", "folder": "characters",
+        "icon": "User", "group": "profiles", "default_section": True,
+        "sections": [{"id": s, "heading": s.replace("_", " ").title(),
+                      "trait_blocks": False} for s in sections],
+        "required_fields": [], "custom_fields": [],
+    }]
+    types += list(extra_types or [])
+    (root / "codex" / "types.json").write_text(
+        json.dumps({"schema_version": SCHEMA_VERSION, "types": types, "relations": []}, indent=2),
+        encoding="utf-8")
+    return str(root)
+
+
+OLD_CHARACTER = ["overview", "physical_traits", "personality_traits",
+                 "motivations", "voice_notes",
+                 "hidden_and_foreshadowing_traits", "relationships_overview",
+                 "notes"]
+
+
+def test_a_project_seeded_before_the_section_existed_gets_it(tmp_path):
+    registry, from_file = load_registry(_seeded(tmp_path, OLD_CHARACTER))
+    assert from_file is True
+    ids = [s["id"] for s in type_by_id(registry, "character")["sections"]]
+    assert "relationships" in ids
+
+
+def test_it_lands_where_it_ships_rather_than_at_the_end(tmp_path):
+    # Between Relationships Overview and Notes. Appended after the writer's own
+    # additions it would read as an afterthought on a page whose ordering is
+    # the template.
+    registry, _ = load_registry(_seeded(tmp_path, OLD_CHARACTER))
+    ids = [s["id"] for s in type_by_id(registry, "character")["sections"]]
+    assert ids.index("relationships_overview") < ids.index("relationships")
+    assert ids.index("relationships") < ids.index("notes")
+
+
+def test_it_arrives_with_its_shipped_shape(tmp_path):
+    # Trait-blocked, or the section renders as one text box and a relationship
+    # cannot carry a weight or a window.
+    registry, _ = load_registry(_seeded(tmp_path, OLD_CHARACTER))
+    section = next(s for s in type_by_id(registry, "character")["sections"]
+                   if s["id"] == "relationships")
+    assert section["trait_blocks"] is True
+
+
+def test_the_file_on_disk_is_never_touched(tmp_path):
+    # THE RULE THIS HAS TO OBEY. It is the writer's file; a read must not
+    # rewrite it, or every project shows a diff for a change nobody made.
+    root = _seeded(tmp_path, OLD_CHARACTER)
+    path = os.path.join(root, "codex", "types.json")
+    before = open(path, "rb").read()
+    load_registry(root)
+    load_registry(root)
+    assert open(path, "rb").read() == before
+
+
+def test_a_retired_kind_is_retired_for_an_old_project_too(tmp_path):
+    # Otherwise the app goes on offering a kind it has retired, to exactly the
+    # writers who already have too many of them.
+    root = _seeded(tmp_path, OLD_CHARACTER, extra_types=[{
+        "id": "relationship", "label": "Relationships",
+        "folder": "relationships", "icon": "Heart", "group": "profiles",
+        "default_section": False,
+        "sections": [{"id": "overview", "heading": "Overview",
+                      "trait_blocks": False}],
+        "required_fields": [], "custom_fields": [],
+    }])
+    registry, _ = load_registry(root)
+    assert type_by_id(registry, "relationship")["retired"] is True
+
+
+# ── What it must never do ───────────────────────────────────────────────────
+
+def test_a_kind_the_writer_invented_is_left_completely_alone(tmp_path):
+    root = _seeded(tmp_path, ["overview", "my_own_section"],
+                   type_id="starship")
+    registry, _ = load_registry(root)
+    ids = [s["id"] for s in type_by_id(registry, "starship")["sections"]]
+    assert ids == ["overview", "my_own_section"]
+
+
+def test_the_writers_own_sections_are_kept_and_not_reordered(tmp_path):
+    # They moved things around, or added their own. Reconciling shipped
+    # sections must insert, never rearrange.
+    order = ["overview", "my_own_section", "physical_traits",
+             "personality_traits", "motivations", "voice_notes",
+             "hidden_and_foreshadowing_traits", "relationships_overview",
+             "notes"]
+    registry, _ = load_registry(_seeded(tmp_path, order))
+    ids = [s["id"] for s in type_by_id(registry, "character")["sections"]]
+    assert ids.index("my_own_section") == 1
+    assert [i for i in ids if i in order] == order
+
+
+def test_nothing_is_ever_removed(tmp_path):
+    root = _seeded(tmp_path, OLD_CHARACTER + ["a_section_we_never_shipped"])
+    registry, _ = load_registry(root)
+    ids = [s["id"] for s in type_by_id(registry, "character")["sections"]]
+    assert "a_section_we_never_shipped" in ids
+
+
+def test_an_existing_sections_shape_is_not_rewritten(tmp_path):
+    # A writer -- or an older build -- may have a shipped section with
+    # different flags. Changing `trait_blocks` under existing content is how
+    # prose becomes invisible and a trait list becomes a paragraph, so only
+    # sections being ADDED get their shipped shape.
+    sections = [{"id": "overview", "heading": "Overview", "trait_blocks": True}]
+    root = tmp_path / "Odd"
+    (root / "codex").mkdir(parents=True)
+    (root / "codex" / "types.json").write_text(json.dumps({
+        "schema_version": SCHEMA_VERSION, "relations": [], "types": [{
+            "id": "character", "label": "Characters", "folder": "characters",
+            "icon": "User", "group": "profiles", "default_section": True,
+            "sections": sections, "required_fields": [], "custom_fields": [],
+        }]}, indent=2), encoding="utf-8")
+    registry, _ = load_registry(str(root))
+    overview = next(s for s in type_by_id(registry, "character")["sections"]
+                    if s["id"] == "overview")
+    assert overview["trait_blocks"] is True
+
+
+def test_a_project_with_no_file_still_gets_the_defaults(tmp_path):
+    # The absent-file lifecycle is unchanged: defaults in memory, nothing
+    # written, so a project that never opens the Weave stays untouched.
+    root = tmp_path / "Fresh"
+    (root / "codex").mkdir(parents=True)
+    registry, from_file = load_registry(str(root))
+    assert from_file is False
+    ids = [s["id"] for s in type_by_id(registry, "character")["sections"]]
+    assert "relationships" in ids
+    assert not os.path.exists(os.path.join(str(root), "codex", "types.json"))
+
+
+def test_reading_twice_adds_it_once(tmp_path):
+    root = _seeded(tmp_path, OLD_CHARACTER)
+    load_registry(root)
+    registry, _ = load_registry(root)
+    ids = [s["id"] for s in type_by_id(registry, "character")["sections"]]
+    assert ids.count("relationships") == 1

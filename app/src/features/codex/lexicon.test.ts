@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   BUILT_IN_TYPES,
   TYPE_GROUPS,
+  RETIRED_TYPES,
   kindChoices,
   CONCEPTS,
   GROUP_GUIDES,
@@ -294,10 +295,24 @@ describe("which group each kind belongs to", () => {
     expect(groups.map(g => g.group)).toEqual(["Profiles", "Other"]);
   });
 
-  it("puts every kind in exactly one group", () => {
+  it("puts every kind it offers in exactly one group", () => {
     const listed = kindChoices().flatMap(g => g.kinds.map(k => k.id));
-    expect(new Set(listed)).toEqual(new Set(BUILT_IN_TYPES));
-    expect(listed).toHaveLength(BUILT_IN_TYPES.length);
+    const offered = BUILT_IN_TYPES.filter(id => !RETIRED_TYPES.has(id));
+    expect(new Set(listed)).toEqual(new Set(offered));
+    expect(listed).toHaveLength(offered.length);
+  });
+
+  it("does not offer a retired kind", () => {
+    // The fix for the reported problem, at its source: a relationship profile
+    // was the wrong shape for the job, so the app stops making them. It does
+    // NOT stop reading them -- an existing one is still an ordinary entry, and
+    // the sidebar shows it as long as it holds something.
+    const listed = kindChoices().flatMap(g => g.kinds.map(k => k.id));
+    expect(listed).not.toContain("relationship");
+    // And it is still a KIND, or every file already on disk would be
+    // unopenable rather than merely un-creatable.
+    expect(BUILT_IN_TYPES).toContain("relationship");
+    expect(threadTypeEntry("relationship").term).toBeTruthy();
   });
 
   it("names them in the app's own words", () => {

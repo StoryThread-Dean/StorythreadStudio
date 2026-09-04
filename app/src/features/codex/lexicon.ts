@@ -472,12 +472,34 @@ export const TYPE_GROUPS: Record<string, "profiles" | "other"> = {
   object: "other", concept: "other", event: "other", language: "other",
 };
 
+/**
+ * Kinds the app no longer offers to create.
+ *
+ * `relationship` is the first. A relationship profile was one blob of prose
+ * about everything a character is to everyone else, and it was the wrong shape
+ * for the job: reported as "cumbersome, not efficent", it entered every brief
+ * whole and unwindowed, ranked lowest and got pruned first, could legally
+ * connect to almost nothing, and the app paid a model at inference time to
+ * reconcile it against the character's own page. Relationships live on the
+ * character now -- as Connections where there is an entry on the other end, and
+ * as blocks in the character's Relationships section where there is not.
+ *
+ * EXISTING ENTRIES ARE UNTOUCHED. Retiring a kind stops a new one being made;
+ * it does not hide or delete the ones a writer already has, which stay
+ * readable, editable and reachable exactly as long as they hold something.
+ *
+ * Mirrors `retired` in the backend registry, and pinned by a test that reads
+ * DEFAULT_TYPES -- a copy nothing checks is a copy that drifts.
+ */
+export const RETIRED_TYPES = new Set<string>(["relationship"]);
+
 /** The kinds a new entry can be, grouped, in the app's own words. */
 export function kindChoices(): { group: string; kinds: { id: string; term: string }[] }[] {
   const groups: Record<string, { id: string; term: string }[]> = {
     profiles: [], other: [],
   };
   for (const id of BUILT_IN_TYPES) {
+    if (RETIRED_TYPES.has(id)) continue;
     groups[TYPE_GROUPS[id] ?? "other"].push({ id, term: threadTypeEntry(id).term });
   }
   return [
