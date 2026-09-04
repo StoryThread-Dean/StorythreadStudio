@@ -58,7 +58,7 @@ import {
 import { Explain } from "../../components/learn/Explain";
 import { useAttemptClose } from "../../components/learn/useAttemptClose";
 import { TONE_CLASSES, kindChoices, threadTypeEntry } from "./lexicon";
-import { nodeLabel, type GraphNode } from "./api";
+import { fetchAnchors, nodeLabel, type ChapterAnchor, type GraphNode } from "./api";
 
 const API_BASE = "http://localhost:8000";
 
@@ -191,6 +191,32 @@ export function TieEditor({
   const [pickedInverseRel, setPickedInverseRel] = useState("");
   const [reasonInverse, setReasonInverse] = useState("");
   const [showInverse, setShowInverse] = useState(false);
+
+  // ── WHEN, WHOSE, AND THE LONG VERSION ───────────────────────────────
+  //
+  // THE GAP THIS CLOSES, and it was an editor gap rather than a model one. A
+  // Tie has carried `at`, `until`, `frame` and `revealed_at` since it was
+  // written; the store keeps them, the resolver honours them, the map draws
+  // them. This screen sent NONE of them, so the one thing the writer asked for
+  // -- "a relationship can change from Friends in the first half, then rivals
+  // the second half" -- was expressible in the file and unreachable from the
+  // app.
+  //
+  // `description` is the other half: `reason` is capped at 140 characters
+  // because every connection's line goes into every brief, and a relationship
+  // the writer has actually thought about runs several hundred. So the line
+  // stays the summary and this holds the paragraph.
+  const [description, setDescription] = useState("");
+  const [at, setAt] = useState("");
+  const [until, setUntil] = useState("");
+  const [frame, setFrame] = useState("");
+  const [revealedAt, setRevealedAt] = useState("");
+  // Folded away by default. Most connections are simply true of the whole book
+  // -- "Lara is Lord Benjamin's daughter" -- and asking a writer to date the
+  // premise is asking them for something they do not have. Opening on four
+  // empty selects would make the ordinary case look like the hard one.
+  const [showTiming, setShowTiming] = useState(false);
+  const [chapters, setChapters] = useState<ChapterAnchor[]>([]);
   // The connection just recorded, in words. Held so the screen can say what
   // happened before asking what is next -- "recorded" with nothing named reads
   // as a system message rather than as an account of the writer's own work.
@@ -220,6 +246,18 @@ export function TieEditor({
 
   useEffect(() => { void load(); }, [load]);
 
+  // The writer's own chapters, so "from when" offers their book rather than a
+  // date box. Failure is non-fatal on purpose: with no chapters the timing
+  // controls simply have nothing to offer, and a connection that is true of
+  // the whole book -- which is most of them -- needs none of them.
+  useEffect(() => {
+    let cancelled = false;
+    fetchAnchors(projectPath)
+      .then(body => { if (!cancelled) setChapters(body.chapters ?? []); })
+      .catch(() => { if (!cancelled) setChapters([]); });
+    return () => { cancelled = true; };
+  }, [projectPath]);
+
   // THE REASON LINE IS THE EXPENSIVE ONE. It is the field a connection cannot be
   // saved without, and the spec singles it out as outranking the relation type
   // for what the brief is worth -- so losing it to a stray click costs the
@@ -230,6 +268,11 @@ export function TieEditor({
   // backdrop handler, and they disagreed about what closing meant.
   const dirty = Boolean(
     reason.trim() || reasonInverse.trim() || newLabel.trim()
+    // The paragraph counts too, and counts for MORE than the line: it is the
+    // longest thing on this screen and the only one a writer might have spent
+    // real time on. Left out of this list it would be the one field a stray
+    // backdrop click could silently cost them.
+    || description.trim()
     || newInverse.trim() || madeName.trim() || other);
   const attemptClose = useAttemptClose(
     dirty, onClose,
@@ -439,6 +482,15 @@ function relOptionLabel(rel: Relation): string {
           // friends of Lara Croft / in reverse / Lara Croft business partners
           // with Alexandra." Left empty, the registry's own inverse is used.
           rel_inverse: relation.flipped ? pickedRel : pickedInverseRel,
+          // The four switches the store has always kept and this screen never
+          // sent. Empty strings become null server-side, which is what "true
+          // all the way through", "it does not end", "what is actually true"
+          // and "as it happens" each mean.
+          description,
+          at: at || null,
+          until: until || null,
+          frame: frame || null,
+          revealed_at: revealedAt || null,
         }),
       });
       const body = await response.json();
@@ -464,6 +516,16 @@ function relOptionLabel(rel: Relation): string {
       setShowInverse(false);
       setPickedRel("");
       setPickedInverseRel("");
+      // Same argument as the reason: the next connection is a different
+      // connection, and a paragraph or a chapter left in the box would be
+      // recorded against the wrong pair. The DISCLOSURE stays open if it was
+      // open -- a writer recording several dated states in a row should not
+      // have to reopen it each time.
+      setDescription("");
+      setAt("");
+      setUntil("");
+      setFrame("");
+      setRevealedAt("");
       await load();
       onChanged();
     } catch (e) {
@@ -985,6 +1047,159 @@ function relOptionLabel(rel: Relation): string {
                     >
                       <Plus size={9} /> It reads differently from{" "}
                       {nodeLabel(other)}&apos;s side
+                    </button>
+                  )}
+
+                  {/* THE LONG VERSION. Optional, and shaped as a textarea on
+                      purpose -- the opposite decision from the line above, for
+                      the opposite reason. The line is capped because it is sent
+                      every time; this is sent only when the other end is in
+                      play, so it can afford to be prose. */}
+                  <label htmlFor="tie-description"
+                         className="mb-1 mt-2 block text-mini text-text-muted">
+                    The longer version{" "}
+                    <span className="text-faint">optional</span>
+                  </label>
+                  <textarea
+                    id="tie-description"
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    rows={3}
+                    placeholder="Kipling initially sees Milton as an experienced expedition leader whose rules often make sense and often frustrate her..."
+                    aria-label="The longer version of this connection"
+                    className="w-full resize-y rounded border border-border bg-bg-surface px-2 py-1 text-xs leading-relaxed text-text-primary outline-none focus:border-accent-fill"
+                  />
+                  <p className="mt-1 text-micro text-faint">
+                    Sent to AI only when {nodeLabel(other)} is also in the scene
+                    you are working on, so this can be as long as it needs to be
+                    without making every other request more expensive.
+                  </p>
+
+                  {/* ── WHEN, AND WHOSE ─────────────────────────────── */}
+                  {showTiming ? (
+                    <div className="mt-2 rounded border border-border bg-bg-surface/40 p-2">
+                      <div className="mb-1.5 flex items-center justify-between gap-2">
+                        <span className="text-mini font-medium text-text-primary">
+                          When is this true, and whose view is it?
+                        </span>
+                        <button
+                          onClick={() => setShowTiming(false)}
+                          className="text-micro text-text-muted hover:text-text-primary"
+                        >
+                          Hide
+                        </button>
+                      </div>
+
+                      <label htmlFor="tie-at"
+                             className="mb-0.5 block text-micro text-text-muted">
+                        From when
+                      </label>
+                      <select
+                        id="tie-at"
+                        value={at}
+                        onChange={e => setAt(e.target.value)}
+                        aria-label="From when this connection is true"
+                        className="mb-1.5 w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
+                      >
+                        {/* THE DEFAULT, AND IT IS THE RIGHT ONE. An undated
+                            connection is true of the whole book -- that is the
+                            one place connections differ from facts, because
+                            "Lara is Lord Benjamin's daughter" is simply true
+                            and dating it would mean dating the premise. A dated
+                            state still replaces it from its own anchor, which
+                            is how "friends, then rivals in chapter nineteen"
+                            works without closing anything by hand. */}
+                        <option value="">True all the way through</option>
+                        {chapters.map((chapter, n) => (
+                          <option key={chapter.chapter_id} value={chapter.anchor}>
+                            From {n + 1}. {chapter.title}
+                          </option>
+                        ))}
+                      </select>
+
+                      <label htmlFor="tie-until"
+                             className="mb-0.5 block text-micro text-text-muted">
+                        Until
+                      </label>
+                      <select
+                        id="tie-until"
+                        value={until}
+                        onChange={e => setUntil(e.target.value)}
+                        aria-label="When this connection ends"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
+                      >
+                        <option value="">It does not end</option>
+                        {chapters.map((chapter, n) => (
+                          <option key={chapter.chapter_id} value={chapter.anchor}>
+                            Until {n + 1}. {chapter.title}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mb-1.5 mt-0.5 text-micro text-faint">
+                        Only for a relationship that ENDS with nothing replacing
+                        it. If it turns into something else, record that as its
+                        own connection from the chapter it changes -- the later
+                        one takes over on its own and you close nothing by hand.
+                      </p>
+
+                      <label htmlFor="tie-frame"
+                             className="mb-0.5 block text-micro text-text-muted">
+                        Whose view is this?
+                      </label>
+                      <select
+                        id="tie-frame"
+                        value={frame}
+                        onChange={e => setFrame(e.target.value)}
+                        aria-label="Whose view this connection is"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
+                      >
+                        <option value="">What is actually true</option>
+                        <option value={thread.entity_id}>
+                          How {nodeLabel(thread)} sees it
+                        </option>
+                        <option value={other.entity_id}>
+                          How {nodeLabel(other)} sees it
+                        </option>
+                      </select>
+                      <p className="mb-1.5 mt-0.5 text-micro text-faint">
+                        A relationship can read differently from each side and
+                        both be right. One person adores someone who does not
+                        know they exist; one thinks they are friends while the
+                        other is using them. A view is only drawn on when you
+                        are writing from that person&apos;s eyes.
+                      </p>
+
+                      <label htmlFor="tie-revealed"
+                             className="mb-0.5 block text-micro text-text-muted">
+                        The reader learns this
+                      </label>
+                      <select
+                        id="tie-revealed"
+                        value={revealedAt}
+                        onChange={e => setRevealedAt(e.target.value)}
+                        aria-label="When the reader learns of this connection"
+                        className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-xs text-text-primary outline-none focus:border-accent-fill"
+                      >
+                        <option value="">As it happens</option>
+                        {chapters.map((chapter, n) => (
+                          <option key={chapter.chapter_id} value={chapter.anchor}>
+                            {n + 1}. {chapter.title}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-0.5 text-micro text-faint">
+                        For a secret. A connection the reader has not been told
+                        about is kept out of AI context and off the map until
+                        the chapter you name here.
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowTiming(true)}
+                      className="mt-2 inline-flex items-center gap-1 text-micro text-text-muted hover:text-text-primary"
+                    >
+                      <Plus size={9} /> This changes during the book, is one
+                      person&apos;s view, or is a secret
                     </button>
                   )}
 

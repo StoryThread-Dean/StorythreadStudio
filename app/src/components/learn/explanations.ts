@@ -844,6 +844,48 @@ export const EXPLAIN: Record<string, Explains> = {
   },
 
   // ── Connections ───────────────────────────────────────────────────────────
+  // WHAT A WRITER IS ACTUALLY BEING ASKED FOR HERE, in their own framing:
+  // "provide the writer a foundation of how this character interacts with this
+  // character from their point of view" and "AI can read and understand that
+  // the relationship maybe mutual or very different depending on how each
+  // character sees the other."
+  //
+  // Both halves have to be taught, because the second one is the part nobody
+  // guesses: a row on THIS page is THIS character's reading, and the other
+  // person's page holds theirs, and the two are allowed to disagree completely.
+  "profile.relationships": {
+    what: "Who this character is to other people, said from this character's "
+      + "side -- what kind of relationship it is, who it is with, and what it "
+      + "actually feels like to them.",
+    why: "A scene runs on how people read each other, and two people rarely "
+      + "read the same relationship the same way. A daughter can be angry at "
+      + "a restrictive, rule-making mother while the mother is loving and "
+      + "frightened and trying to steer a child who keeps making bad "
+      + "decisions. Both are true. Written on each page separately, AI gets "
+      + "the right one for whoever the scene is following -- which is what "
+      + "keeps a character sounding like themselves.",
+    needed: "recommended",
+    cost: FREE,
+    how: [
+      "Pick the kind of relationship from the list, or type your own if "
+        + "nothing fits -- parent of, mentored by, sworn enemy of.",
+      "Name the other person. Choosing one of your characters links them, so "
+        + "the map draws it and they can be opened and given their own "
+        + "version. Any other name is kept here as a note.",
+      "Write the one-line reason. That line goes to AI every time; the longer "
+        + "description travels only when the other person is in the scene.",
+      "Describe it from THIS character's side. Not what is fair or true "
+        + "overall -- what they think, resent, want, or will not admit.",
+      "For a relationship that changes, add a second row for the same person "
+        + "and set the chapter it starts in. Chapters 1-6 cold and "
+        + "distrustful, 7-20 warming, 21-36 fully trusting is three rows. The "
+        + "later one takes over on its own; you never close the earlier one.",
+      "Then open the other person and write their side. Leaving it out is "
+        + "fine too -- someone can matter enormously to a character who barely "
+        + "registers to them, and the absence says that.",
+    ],
+    endpoint: "/api/codex/tie",
+  },
   "tie.reason": {
     what: "One line, in your words, saying why these two are connected.",
     why: "This is what gets sent to AI when you ask for help with a scene. "
