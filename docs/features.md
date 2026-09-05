@@ -19,7 +19,7 @@ Each project is a folder the user owns. The app reads and writes Markdown files 
 
 - `manuscript/` — one chapter per Markdown file; `structure.json` holds acts + reading order once the writer uses acts
 - `notes/` — outline, style guide, themes, plus any free notes the writer adds
-- `profiles/` — character, relationship, location, lore profiles
+- `profiles/` — character, location and lore profiles. A `relationships/` folder is present in projects made before v2.0.5; the kind is retired rather than deleted, so those entries still open, still parse and still save
 - `profiles/arcs/` — for series projects, per-book overrides on canonical profiles
 - `summaries/chapters/` — one summary file per chapter
 - `summaries/scenes/<chapter-stem>/scene-NN.md` — per-scene summaries (with an optional `## Beats` checklist)
@@ -125,7 +125,16 @@ A guided workspace for authoring structured project context.
 
 ### Profile types
 
-Character, Relationship, Location, Lore. Each type has its own section template (Overview, Personality Traits, History, Tone and Atmosphere, Rule or Concept, etc.) defined in code, not user-edited.
+Character, Location, Lore. Each type has its own section template (Overview, Personality Traits, History, Tone and Atmosphere, Rule or Concept, etc.) defined in code, not user-edited.
+
+**Relationship profiles are retired.** They were a separate entry holding one blob of prose about everything a character was to everyone else, and they were the wrong shape for the job: the same names were described twice (once there, once on the character), the prose entered every AI brief whole and was usually pruned before it arrived, almost nothing could legally connect to such an entry, and the app ended up instructing the model to reconcile the two copies at request time.
+
+A relationship now lives on the character, in one of two places depending on whether the other party exists as an entry:
+
+- **It does** -- the relationship is a **connection**, which carries the same description plus what no profile page could hold: the chapter it becomes true, the chapter it ends, whose view it is, and when the reader learns of it. A relationship that changes ("friends in the first half, rivals in the second") is recorded as two connections and the later one takes over on its own.
+- **It does not** -- "Former Partner", "Guild and City Adventurers", a mother who has no entry -- it is a block in the character's own **Relationships** section, carrying the same description and weight, simply not drawn on the map.
+
+Existing relationship profiles are untouched: still readable, still editable, still listed while they hold anything. The app no longer offers to create new ones, and an open one says where the job moved.
 
 ### Trait blocks
 
@@ -199,6 +208,29 @@ A right-side panel for refining a profile in conversation. Five behavior modes: 
 ### Profile import and fork
 
 Import a character profile from another project as a fully independent copy. The fork gets a new profile ID and is editable in the new story; there is no sync back to the source.
+
+### Fix Profile
+
+A profile file can hold a section the page has no place for -- most often a
+heading edited by hand and left slightly wrong ("Physcial Traits"). The page
+now says so at the top and offers a way to put it back rather than showing the
+writer a profile that silently omits their own words.
+
+Two offers, and which one appears depends on the heading. A near miss (within
+two edits of a real section name, and only for headings long enough that a
+short word cannot land on an unrelated one) offers the section it probably
+meant, which keeps trait blocks as trait blocks. Anything else offers to move
+the words into Notes with the original heading kept above them as a label, so
+nothing is thrown away and the writer can see what it used to be called.
+
+Nothing is chosen automatically and nothing reaches the file until the writer
+saves, which is the same rule the rest of the Profile Builder follows.
+
+It does **not** offer to add absent sections. An empty section is not damage:
+sections with nothing in them are not written to the file at all, and they
+already appear as empty fields in the right place on the page. Offering to
+"add" them would write empty headings into every profile in the project and
+repair nothing.
 
 ## Smart Advisor
 

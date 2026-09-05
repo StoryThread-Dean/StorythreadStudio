@@ -18,6 +18,129 @@ entry while working on a feature, append it under Unreleased.
 
 ---
 
+## [2.0.5] - UNRELEASED
+
+### Changed
+
+- **Relationships now live on the character.** A separate Relationship profile
+  meant describing the same people twice -- once on their own page, once in a
+  profile about them -- and the second copy was expensive to keep and rarely
+  even reached the AI. So a relationship is a **connection** on the character
+  now, and it can say far more than a profile page ever could: which chapter it
+  starts in, which chapter it ends, whose view it is, and when the reader finds
+  out. If someone's relationship changes -- friends in the first half, rivals in
+  the second -- you record both and the app knows which one is true at any point
+  in the book. Ask for help with a chapter and it tells the AI the version that
+  is true *there*.
+
+  Every character now has a **Relationships** section, and it is the one place
+  you work on them. Each row asks three things: what kind of relationship it is
+  (chosen from your world's own list, or typed in if nothing fits), who it is
+  with (one of your characters, or any name at all), and what that relationship
+  actually is -- written from *this* character's side.
+
+  That last part is the point. A teenage daughter can be angry at a
+  restrictive, rule-making mother while the mother is loving and frightened and
+  trying to steer a child who keeps making bad decisions. Both are true. You
+  write each on its own page, and when you ask for help with a scene the AI
+  gets whichever one belongs to the character you are following. Leaving the
+  other side blank is a real answer too -- someone can matter enormously to a
+  character who barely registers to them.
+
+  And a relationship can change. Add a second row for the same person and say
+  which chapter it starts in: cold and distrustful for chapters 1-6, warming
+  through 7-20, fully trusting from 21. Each row shows its own stretch of the
+  book, worked out from where the next one begins, and the later one takes over
+  on its own -- you never have to go back and close the earlier one.
+
+  Naming someone who has no profile is fine: it is kept on that character's
+  page as a note. Picking one of your characters links them, which puts the
+  relationship on the map and lets you open that person and write their side.
+
+  The app no longer offers to create Relationship profiles. **The ones you
+  already have are untouched** -- still there, still readable, still editable --
+  and opening one now tells you where the job moved.
+
+### Fixed
+
+- **A mistyped heading in a profile file could destroy what was under it.** If a
+  heading got edited by hand and ended up spelled even slightly wrong -- "Physcial
+  Traits" -- the Profile Builder had nowhere to show it, and on the older profile
+  format the next ordinary save wrote the file back without it. Opening your own
+  profile and pressing Save was enough to lose the traits underneath. Now nothing
+  is dropped, whichever format your project uses, and a heading in the wrong case
+  or with a stray double space finds its real section instead of coming up empty.
+
+- **Fix Profile: content the page could not show you.** When a profile holds a
+  section the page has no place for, it now says so at the top and offers to put
+  it back. If the heading looks like a near miss it offers the section it probably
+  meant, which keeps traits as traits; otherwise it offers to move the words into
+  Notes with the original heading kept as a label. Nothing happens until you pick
+  one, and nothing reaches the file until you save.
+
+  It does **not** offer to add "missing" sections, because a section you have not
+  written in is not missing -- empty sections are simply not stored, and they
+  already appear as empty fields in the right place. Adding them would put empty
+  headings in every profile you own and fix nothing.
+
+- **Connections were never actually sent to the AI.** This is the big one. When
+  you recorded a connection the app insisted you say *why* these two are
+  connected, and told you that sentence was what gets sent to the AI when you
+  ask for help. It was not being sent anywhere. Every reason line anyone has
+  ever written was going into the file and no further. They are sent now.
+
+- **A relationship could not be recorded as changing.** The app has always been
+  able to hold "friends from chapter one, rivals from chapter nineteen"; the
+  screen for recording connections simply had no way to say which chapter
+  anything started in. It does now, along with whose view a relationship is and
+  whether it is a secret the reader learns later.
+
+- **A profile listed every version of a relationship as though all of them were
+  true at once.** If you recorded a friendship that later turned into a
+  rivalry, the page showed both side by side with nothing to say which one
+  holds. The current one comes first now, earlier ones are marked "Earlier"
+  rather than hidden, and a relationship you had marked as ENDED finally says so.
+
+- **A relationship that changed was reported as a mistake.** If you had told the
+  app that two relationship types cannot both be true at once, recording an
+  honest change from one to the other was flagged as a contradiction -- an
+  accusation aimed at exactly the feature that handles it best.
+
+- **A one-sided relationship could not be saved.** One character adoring
+  someone who does not know they exist is two records about the same pair, and
+  the app refused the second as a duplicate. Both save now, and each says whose
+  view it is.
+
+- **Fixing a connection destroyed its history.** There was no way to correct a
+  connection except delete and re-make it, and deleting removed *every* version
+  of that relationship rather than the one you meant. Both are fixed: you can
+  correct one in place, and delete one chapter's version without losing the rest.
+
+- **Recent Projects no longer comes up empty.** Every so often you would open
+  the app and the Recent Projects list would be blank, even with six or eight
+  books sitting right there. Your books were never lost -- the list is built by
+  asking the app's background service, and on startup the dashboard sometimes
+  asked before that service had finished waking up. When the question failed,
+  the screen quietly showed "No recent projects yet", which looks exactly like
+  a brand new install, and it never asked again. It now waits for the service
+  and fills the list in on its own the moment it can. If something really is
+  wrong it says so plainly and gives you a Try again button, instead of
+  claiming you have no books. The project switcher next to your book's title
+  had the same habit and got the same fix.
+
+- **Your Recent Projects list is now much harder to lose.** The list is saved
+  the same careful way your settings already were: written to a side file
+  first, with a spare copy of the previous version kept, and only then swapped
+  into place. That means a crash, a forced close, or an antivirus scanner
+  grabbing the file at the wrong moment can no longer leave it half written.
+  If the list is ever damaged, the app quietly restores it from the spare copy;
+  if both copies are unreadable it keeps them, tells you, and starts a fresh
+  list rather than silently pretending you never had any books. Previously a
+  damaged file was treated as an empty one, and then saved over -- which really
+  could cost you the list.
+
+---
+
 ## [2.0.4] - 2026-09-02
 
 ### Added

@@ -26,7 +26,9 @@ A local-first Markdown writing app for fiction writers. The writer does the draf
 
 Most writing apps store a character as a description: one unchanging paragraph, true from page one to the last page. That is wrong for any story where something happens.
 
-The Weave replaces it. Your world is a set of **Threads** -- fourteen kinds ship (characters, relationships, locations, lore, factions, religions, ruling authorities, deities, creatures, cultures, objects, concepts, events, languages) and any kind you invent behaves exactly like the ones we ship. Everything lives as Markdown in a `codex/` folder you can read, edit, and back up without the app.
+The Weave replaces it. Your world is a set of **Threads** -- thirteen kinds are offered (characters, locations, lore, factions, religions, ruling authorities, deities, creatures, cultures, objects, concepts, events, languages) and any kind you invent behaves exactly like the ones we ship. Everything lives as Markdown in a `codex/` folder you can read, edit, and back up without the app.
+
+Relationships are not one of them, and deliberately so: who a character is to everyone else lives **on that character**, in their own Relationships section, written from their side. Two people rarely read the same relationship the same way, and each page holds its own version.
 
 Three things make it more than a folder of profiles:
 

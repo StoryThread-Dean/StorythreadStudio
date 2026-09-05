@@ -61,6 +61,23 @@ interface Tie {
   /** Whose file holds it. */
   recorded_on?: string;
   at_label: string;
+  /** When the writer declared it OVER, with nothing replacing it. */
+  until_label?: string;
+  /**
+   * Whether this is the state that holds, and if not, why not.
+   *
+   * THE BUG THIS FIELD EXISTS FOR. This list used to show every stored state
+   * as a peer, because the route it reads applied no resolution at all. A
+   * character whose relationship had changed -- friends in the first half,
+   * rivals in the second, which is the case the whole axis model was built
+   * for -- read as though both were true at once.
+   */
+  state?: "in_force" | "superseded" | "unplaced" | "ambiguous";
+  in_force?: boolean;
+  /** The paragraph, where the writer wrote one. */
+  description?: string;
+  /** Whose reading this is, by name. Empty when it is simply the truth. */
+  frame_name?: string;
 }
 
 interface ProfileConnectionsProps {
@@ -183,7 +200,16 @@ export function ProfileConnections({
           {/* ── Expanded: what each one actually IS ───────────────────── */}
           {expanded && (
             <ul className="space-y-1.5" data-testid="connection-details">
-              {ties.map(tie => {
+              {/* WHAT HOLDS, FIRST. Reading order is the answer to "what is
+                  true now?", so a current state cannot sit in the middle of a
+                  list of old ones. Superseded states are kept rather than
+                  hidden -- "friends, and before that acquaintances" is worth
+                  seeing, and a state that vanished would look like lost work --
+                  but they are marked and they come after. */}
+              {[...ties].sort((a, b) => {
+                const rank = (t: Tie) => (t.in_force === false ? 1 : 0);
+                return rank(a) - rank(b);
+              }).map(tie => {
                 const kind = threadTypeEntry(tie.other_type);
                 const KindIcon = kind.Icon;
                 // The label and the name are different facts. Only shown
@@ -192,12 +218,21 @@ export function ProfileConnections({
                 const full = tie.other_full_name && tie.other_full_name !== tie.other_name
                   ? ` (${tie.other_full_name})` : "";
                 const elsewhere = tie.recorded_on && tie.recorded_on !== entityId;
+                const past = tie.in_force === false;
                 return (
-                  <li key={`${tie.src_id}|${tie.rel}|${tie.dst_id}`}
-                      className="flex items-start gap-2 text-mini">
+                  <li key={`${tie.src_id}|${tie.rel}|${tie.dst_id}|${tie.frame_name ?? ""}|${tie.at_label}`}
+                      className={`flex items-start gap-2 text-mini${past ? " opacity-60" : ""}`}>
                     <KindIcon size={11}
                               className={`mt-0.5 shrink-0 ${TONE_CLASSES[kind.tone].text}`} />
                     <span className="min-w-0 flex-1">
+                      {/* SAID BEFORE THE ROW IS READ, not after. A superseded
+                          state read as current for its whole first sentence
+                          would be worse than not showing it. */}
+                      {past && (
+                        <span className="mr-1 rounded bg-bg-raised px-1 text-micro uppercase tracking-label text-text-muted">
+                          Earlier
+                        </span>
+                      )}
                       <span className="text-text-primary">
                         {tie.other_name}{full}
                       </span>
@@ -209,6 +244,24 @@ export function ProfileConnections({
                       )}
                       {tie.at_label && (
                         <span className="text-faint"> (from {tie.at_label})</span>
+                      )}
+                      {/* Fetched by this component since it was written and
+                          rendered by nothing, so a relationship the writer had
+                          explicitly ENDED read as ongoing. */}
+                      {tie.until_label && (
+                        <span className="text-faint"> until {tie.until_label}</span>
+                      )}
+                      {/* WHOSE READING. Two records of one pair can both be
+                          true -- the truth of it, and what one of them
+                          believes -- and shown flatly they read as a
+                          contradiction in the writer's own notes. */}
+                      {tie.frame_name && (
+                        <span className="text-weave"> -- as {tie.frame_name} sees it</span>
+                      )}
+                      {tie.description && (
+                        <p className="mt-0.5 text-micro leading-relaxed text-text-muted">
+                          {tie.description}
+                        </p>
                       )}
                       {elsewhere && (
                         <span className="block text-micro text-faint">

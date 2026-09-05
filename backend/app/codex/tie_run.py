@@ -96,6 +96,12 @@ class TieState:
     # a writer can see that "friends" REPLACED "acquaintances" rather than
     # wondering why the earlier one vanished.
     supersedes_earlier: bool = False
+    # The normalized tie this state came from, carried through so a caller can
+    # get back to the whole record rather than only the fields a state has room
+    # for. `check_ties` needs it: it reports on the writer's own connections and
+    # reads keys (`intentional`, `rel_inverse`) that mean nothing to resolution.
+    # Kept out of the equality-relevant fields above by being last and defaulted.
+    record: dict = field(default_factory=dict)
 
     @property
     def always(self) -> bool:
@@ -117,6 +123,15 @@ class TieResolution:
     # A connection whose anchor was WRITTEN and no longer resolves -- a deleted
     # chapter. Distinct from an undated one, which is fine.
     unplaced: list[TieState] = field(default_factory=list)
+    # The states behind `ambiguities`, as states rather than as ids.
+    #
+    # None of these is in force -- two claims on one pair at one anchor with
+    # nothing to order them are not silently ordered, which is the right answer
+    # for a brief and for a map. But a CONTRADICTION check wants them: two
+    # mutually exclusive connections asserted at the same moment is precisely
+    # when they clash. Offered here so `check_ties` does not have to know that
+    # tie ids are `tie-<position>` to find them again.
+    ambiguous: list[TieState] = field(default_factory=list)
 
     def for_target(self, target: str) -> TieState | None:
         for state in self.states:
@@ -166,6 +181,7 @@ def _as_state(fact: dict, superseded: bool = False) -> TieState:
         revealed_at=tie.get("revealed_at"),
         ai_scope=str(tie.get("ai_scope") or "always"),
         supersedes_earlier=superseded,
+        record=dict(tie),
     )
 
 
@@ -235,6 +251,11 @@ def resolve_ties(
         # spoiler must not leak its earlier wording through the history list.
         if out.for_target(state.target) is not None:
             out.history.append(state)
+
+    ambiguous_ids = {fid for amb in resolution.ambiguities
+                     for fid in amb.fact_ids}
+    out.ambiguous = [_as_state(f) for f in as_facts
+                     if f["id"] in ambiguous_ids]
 
     out.states.sort(key=lambda s: (s.target, s.frame))
     return out

@@ -244,6 +244,12 @@ function sectionsFromThread(thread: WeaveThread,
     out[key] = {
       content: section.content ?? "",
       ai_summary: section.ai_summary ?? "",
+      // Only meaningful for a section the registry does not know about, which
+      // renders nowhere on the page -- Fix Profile names it back to the writer
+      // in their own wording. Carried for all of them because singling out the
+      // unknown ones here would mean this loader keeping its own copy of the
+      // registry.
+      ...(section.heading ? { heading: section.heading } : {}),
       trait_blocks: (section.trait_blocks ?? []).map(block => ({
         id: uuidv4(),
         trait: String(block.trait ?? ""),

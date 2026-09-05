@@ -67,6 +67,19 @@ function mockApi(options: {
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     calls.push({ url, method, body });
 
+    // The writer's own chapters, so the timing controls have their book to
+    // offer. Checked before /ties because this editor asks for both on mount.
+    if (url.includes("/anchors")) {
+      return {
+        ok: true,
+        json: async () => ({
+          chapters: [
+            { chapter_id: "f-one", anchor: "c-one", title: "Chapter One" },
+            { chapter_id: "f-two", anchor: "c-two", title: "Chapter Two" },
+          ],
+        }),
+      } as Response;
+    }
     if (url.includes("/ties")) {
       if (options.failTiesRead) {
         return {
@@ -564,7 +577,11 @@ describe("naming the other half", () => {
     await chooseOther("Pathicus");
     await pickRelation("__own__");
     expect(screen.getByLabelText("The other way round")).toBeTruthy();
-    expect(screen.getByText("optional")).toBeTruthy();
+    // Scoped to this field's own label. More than one thing on the screen is
+    // optional now -- the longer version is too -- so a bare text query for
+    // the word matches several and says nothing about which.
+    expect(screen.getByText(/And from .* back\?/).textContent)
+      .toMatch(/optional/);
   });
 
   it("says what happens without it", async () => {
@@ -1378,5 +1395,250 @@ describe("the reason line is shown back", () => {
     await open();
     expect(await screen.findByText(/they believe he walks among them/))
       .toBeTruthy();
+  });
+});
+
+
+// ── When it is true, whose view it is, and the long version ──────────────────
+//
+// THE GAP THESE CLOSE WAS AN EDITOR GAP, NOT A MODEL ONE. A Tie has carried
+// `at`, `until`, `frame` and `revealed_at` since it was written -- the store
+// keeps them, the resolver honours them, the map draws them, and there are
+// tests for all of it. This screen sent NONE of them, so the thing the writer
+// actually asked for --
+//
+//     "a relationship can change from Friends in the first half, then rivals
+//      the second half"
+//
+// -- was expressible in the file and unreachable from the app. Six fields
+// existed on the wire and four had no control anywhere.
+//
+// Same shape as the v2.0.2 line-height bug and the v2.0.4 editor font size: a
+// capability built, correct, connected to nothing, raising no error because a
+// control that is absent looks like a decision.
+
+async function openTiming() {
+  await userEvent.click(
+    screen.getByRole("button", { name: /This changes during the book/ }));
+}
+
+describe("when a connection is true", () => {
+  beforeEach(() => mockApi());
+
+  it("does not ask about timing until the writer says it matters", async () => {
+    // Most connections are simply true of the whole book. Opening on four
+    // empty chapter pickers would make the ordinary case look like the hard
+    // one -- and asking a writer to date "Lara is Lord Benjamin's daughter"
+    // is asking them to date the premise.
+    await open();
+    await chooseOther("Pathicus");
+    expect(screen.queryByLabelText("From when this connection is true")).toBeNull();
+    expect(screen.getByRole("button",
+                            { name: /This changes during the book/ })).toBeTruthy();
+  });
+
+  it("offers the writer's own chapters", async () => {
+    await open();
+    await chooseOther("Pathicus");
+    await openTiming();
+    const select = screen.getByLabelText("From when this connection is true");
+    expect(within(select).getByRole("option",
+                                    { name: /Chapter One/ })).toBeTruthy();
+    expect(within(select).getByRole("option",
+                                    { name: /Chapter Two/ })).toBeTruthy();
+  });
+
+  it("defaults to true all the way through", async () => {
+    // An undated connection is in force from before page one, which is the one
+    // place connections differ from facts. It is also every connection that
+    // already exists, so the default has to mean what they already mean.
+    await open();
+    await chooseOther("Pathicus");
+    await openTiming();
+    await recordIt();
+    expect(posted("/tie")[0].body.at).toBeNull();
+  });
+
+  it("sends the chapter a connection starts in", async () => {
+    await open();
+    await chooseOther("Pathicus");
+    await openTiming();
+    await userEvent.selectOptions(
+      screen.getByLabelText("From when this connection is true"), "c-two");
+    await recordIt();
+    expect(posted("/tie")[0].body.at).toBe("c-two");
+  });
+
+  it("sends an ending when a relationship simply stops", async () => {
+    // `until` is for a connection that ends with NOTHING replacing it. They
+    // stopped being friends and became nothing is a different statement from
+    // they became enemies -- replacement is derived, ending is declared.
+    await open();
+    await chooseOther("Pathicus");
+    await openTiming();
+    await userEvent.selectOptions(
+      screen.getByLabelText("When this connection ends"), "c-two");
+    await recordIt();
+    expect(posted("/tie")[0].body.until).toBe("c-two");
+  });
+
+  it("says how to record a change rather than an ending", async () => {
+    // The mistake this wording exists to prevent: closing the old connection
+    // by hand and making a new one, when the later state supersedes on its own.
+    await open();
+    await chooseOther("Pathicus");
+    await openTiming();
+    expect(screen.getByText(/close nothing by hand/)).toBeTruthy();
+  });
+});
+
+
+describe("whose view a connection is", () => {
+  beforeEach(() => mockApi());
+
+  it("defaults to what is actually true", async () => {
+    // NOT to the page owner's view, and the alternative is broken rather than
+    // merely different: a view is only drawn on when writing from that
+    // person's eyes, so defaulting to it would make "her stepfather" vanish
+    // from every scene written from anyone else's.
+    await open();
+    await chooseOther("Pathicus");
+    await openTiming();
+    await recordIt();
+    expect(posted("/tie")[0].body.frame).toBeNull();
+  });
+
+  it("offers each end as a view, by name", async () => {
+    await open();
+    await chooseOther("Pathicus");
+    await openTiming();
+    const select = screen.getByLabelText("Whose view this connection is");
+    expect(within(select).getByRole("option",
+                                    { name: /Daughters of Pathicus sees it/ })).toBeTruthy();
+    expect(within(select).getByRole("option",
+                                    { name: /How Pathicus sees it/ })).toBeTruthy();
+  });
+
+  it("records one side's view of the pair", async () => {
+    // The writer's example: one person adores someone who does not know they
+    // exist. Recorded on the adorer, framed as theirs, and nothing at all is
+    // written on the other end -- the absence IS the other side's truth.
+    await open();
+    await chooseOther("Pathicus");
+    await openTiming();
+    await userEvent.selectOptions(
+      screen.getByLabelText("Whose view this connection is"), "e-daughters");
+    await recordIt();
+    expect(posted("/tie")[0].body.frame).toBe("e-daughters");
+  });
+
+  it("explains that both sides can be right", async () => {
+    await open();
+    await chooseOther("Pathicus");
+    await openTiming();
+    expect(screen.getByText(/does not know they exist/)).toBeTruthy();
+  });
+});
+
+
+describe("a secret connection", () => {
+  beforeEach(() => mockApi());
+
+  it("can be kept from the reader until a chapter", async () => {
+    await open();
+    await chooseOther("Pathicus");
+    await openTiming();
+    await userEvent.selectOptions(
+      screen.getByLabelText("When the reader learns of this connection"), "c-two");
+    await recordIt();
+    expect(posted("/tie")[0].body.revealed_at).toBe("c-two");
+  });
+
+  it("defaults to reaching the reader as it happens", async () => {
+    await open();
+    await chooseOther("Pathicus");
+    await openTiming();
+    await recordIt();
+    expect(posted("/tie")[0].body.revealed_at).toBeNull();
+  });
+});
+
+
+describe("the longer version", () => {
+  beforeEach(() => mockApi());
+
+  const PARAGRAPH =
+    "The Daughters read Pathicus as a promise rather than a god, which is why "
+    + "they will forgive him anything and why the Faith will not.";
+
+  it("is offered without being demanded", async () => {
+    await open();
+    await chooseOther("Pathicus");
+    expect(screen.getByLabelText(
+      "The longer version of this connection")).toBeTruthy();
+  });
+
+  it("is sent with the connection", async () => {
+    await open();
+    await chooseOther("Pathicus");
+    await userEvent.type(
+      screen.getByLabelText("The longer version of this connection"), PARAGRAPH);
+    await recordIt();
+    expect(posted("/tie")[0].body.description).toBe(PARAGRAPH);
+  });
+
+  it("does not stand in for the required line", async () => {
+    // The paragraph is optional and the line is not. A writer who typed only
+    // the paragraph must still be told what is missing, or the one field the
+    // brief spends its budget on becomes the one they skip.
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Connect this to something/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Pathicus/ }));
+    await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
+    await userEvent.type(
+      screen.getByLabelText("The longer version of this connection"), PARAGRAPH);
+    expect(screen.getByText(/Write that line and the buttons below wake up/))
+      .toBeTruthy();
+  });
+
+  it("says when it will actually be sent", async () => {
+    // The economy is the reason it is allowed to be long, so the screen says
+    // so rather than leaving the writer to assume it is free.
+    await open();
+    await chooseOther("Pathicus");
+    expect(screen.getByText(/also in the scene you are working on/)).toBeTruthy();
+  });
+
+  it("is not lost to a stray Escape", async () => {
+    // The longest thing on this screen and the only one a writer might have
+    // spent real time on. Left out of the dirty check it would be the one
+    // field the accidental-close guard did not cover -- Escape would just
+    // take it.
+    const { onClose } = await open();
+    await chooseOther("Pathicus");
+    await userEvent.type(
+      screen.getByLabelText("The longer version of this connection"), PARAGRAPH);
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("is cleared for the next connection", async () => {
+    // A paragraph left in the box would be recorded against the wrong pair.
+    await open();
+    await chooseOther("Pathicus");
+    await userEvent.type(
+      screen.getByLabelText("The longer version of this connection"), PARAGRAPH);
+    await recordIt();
+    // The walk proposes the next step rather than dropping the writer back on
+    // an empty form, so the way to another connection is the offer it makes.
+    await userEvent.click(
+      screen.getByRole("button", { name: /make another connection/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^The Faith/ }));
+    await waitFor(() => expect(screen.getByTestId("relation-prompt")).toBeTruthy());
+    const box = screen.getByLabelText(
+      "The longer version of this connection") as HTMLTextAreaElement;
+    expect(box.value).toBe("");
   });
 });

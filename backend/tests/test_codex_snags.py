@@ -381,3 +381,61 @@ def test_a_snag_keeps_its_identity_across_runs():
     first = check_facts("e-x", run, INDEX)[0].key()
     second = check_facts("e-x", list(reversed(run)), INDEX)[0].key()
     assert first == second
+
+
+# ── The false Snag on a relationship that CHANGED ────────────────────────────
+#
+# `tie_run.py` made the pair an axis so a relationship can change: friends at
+# chapter 1, rivals at chapter 19, with nothing closed by hand. `until` is only
+# for a connection that ENDED with nothing replacing it -- replacement is
+# derived, ending is declared.
+#
+# check_ties' active-window filter reads `at` and `until` and knows nothing
+# about that supersession, so at chapter 25 BOTH states look live: friends
+# started and never ended, rivals started. Put the two relations in an
+# exclusive group and the writer is told their correctly recorded arc is a
+# contradiction -- an accusation, aimed at the one feature that took most
+# effort to get right.
+
+def _arc_registry():
+    return {"types": [], "relations": [
+        {"id": "friend_of", "label": "friend of", "cardinality": "many",
+         "exclusive_group": "standing", "inverse": None, "symmetric": True,
+         "source_types": [], "target_types": []},
+        {"id": "rivals", "label": "rivals", "cardinality": "many",
+         "exclusive_group": "standing", "inverse": None, "symmetric": True,
+         "source_types": [], "target_types": []},
+    ]}
+
+
+def test_a_relationship_that_changed_is_not_a_contradiction():
+    # The writer's own case: "a relationship can change from Friends in the
+    # first half, then rivals the second half."
+    ties = [{"rel": "friend_of", "target": "e-a", "at": "c-1"},
+            {"rel": "rivals", "target": "e-a", "at": "c-3"}]
+    assert check_ties("e-x", ties, _arc_registry(), INDEX, at="c-3") == []
+
+
+def test_the_superseded_state_is_gone_at_every_later_point():
+    ties = [{"rel": "friend_of", "target": "e-a", "at": "c-1"},
+            {"rel": "rivals", "target": "e-a", "at": "c-3"}]
+    for anchor in (None, "c-3"):
+        assert check_ties("e-x", ties, _arc_registry(), INDEX, at=anchor) == []
+
+
+def test_two_exclusive_states_on_DIFFERENT_pairs_still_clash():
+    # The fix must not silence the real check. Supersession groups by the pair,
+    # so serving one faction and betraying another at the same moment is still
+    # the contradiction it always was.
+    ties = [{"rel": "friend_of", "target": "e-a", "at": "c-1"},
+            {"rel": "rivals", "target": "e-b", "at": "c-1"}]
+    assert _kinds(check_ties("e-x", ties, _arc_registry(), INDEX)) == [SNAG_EXCLUSIVE]
+
+
+def test_two_exclusive_states_on_one_pair_at_ONE_anchor_still_clash():
+    # Same pair, same anchor, no ordering between them: this is not a
+    # relationship changing, it is two claims with nothing to say which is
+    # later. It stays a Snag.
+    ties = [{"rel": "friend_of", "target": "e-a", "at": "c-1"},
+            {"rel": "rivals", "target": "e-a", "at": "c-1"}]
+    assert _kinds(check_ties("e-x", ties, _arc_registry(), INDEX)) == [SNAG_EXCLUSIVE]

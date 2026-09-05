@@ -36,6 +36,7 @@ from pydantic import BaseModel
 from app.codex.normalize import (
     INFLUENCE_MEANT_SECRET, INFLUENCE_TO_IMPORTANCE, normalize_trait_window,
 )
+from app.codex.threads import RUN_HEADING, _section_id
 from app.codex.types_registry import DEFAULT_TYPES
 from app.progress_store import record_save_event
 from app.settings_store import get_rollover_hour
@@ -211,6 +212,13 @@ class ProfileSection(BaseModel):
     content: str = ""                 # Plain text (for non-trait-block sections)
     trait_blocks: list[TraitBlock] = []  # Trait entries (for trait-block sections)
     ai_summary: str = ""              # Content under ## AI Summary: heading
+    # The heading EXACTLY as the file spells it, carried only for a section
+    # this template does not know about -- a hand-edited "# Physcial Traits",
+    # say. The slug is lossy, so without the original wording a save could not
+    # write the section back as the writer typed it, and a repair could not
+    # offer it to them by name. Empty for every configured section, whose
+    # heading comes from the config.
+    heading: str = ""
 
 
 class ProfileListItem(BaseModel):
@@ -607,20 +615,40 @@ def _parse_profile_markdown(raw: str, filename: str, profile_type: str) -> Profi
     #    Result pattern: [pre, heading1, content1, heading2, content2, ...]
     raw_parts = re.split(r'^# (.+)$', body, flags=re.MULTILINE)
 
-    heading_content: dict[str, str] = {}
+    # A LIST, NOT A DICT KEYED BY HEADING TEXT. Two identical headings -- two
+    # "# Notes" after a bad merge -- collided in the dict this used to be, so
+    # the first was overwritten by the second and its content was gone before
+    # anything downstream could see it. Every heading in the file gets an entry
+    # here, and what to do about duplicates is decided further down.
+    found: list[tuple[str, str]] = []
     i = 1
     while i + 1 < len(raw_parts):
-        heading = raw_parts[i].strip()
-        content = raw_parts[i + 1]
-        heading_content[heading] = content
+        found.append((raw_parts[i].strip(), raw_parts[i + 1]))
         i += 2
 
     # 4. Parse each section according to its config
     configs = SECTION_CONFIGS.get(profile_type, [])
     sections: dict[str, ProfileSection] = {}
 
+    # ── FILED BY SLUG, NOT BY EXACT HEADING TEXT ────────────────────────
+    #
+    # This used to be `heading_content.get(cfg.heading)`, an exact string
+    # match, so "# physical traits" or "# Physical  Traits" found NOTHING --
+    # the section read as empty and the writer's traits were dropped on the
+    # next save. The codex dialect has always been tolerant here
+    # (`_section_id` in threads.py, which this reuses rather than copies), so
+    # the two disagreed about whether capitalisation costs you your work.
+    #
+    # A LIST PER SLUG, because two headings can share one ("# Notes" twice
+    # after a bad merge). The config takes the first and the rest are kept
+    # below under suffixed keys -- nothing is dropped for being a duplicate.
+    by_slug: dict[str, list[tuple[str, str]]] = {}
+    for heading, content in found:
+        by_slug.setdefault(_section_id(heading), []).append((heading, content))
+
     for cfg in configs:
-        raw_section = heading_content.get(cfg.heading, "")
+        matched = by_slug.get(cfg.key) or []
+        raw_section = matched.pop(0)[1] if matched else ""
         main_content, ai_summary = _split_ai_summary(raw_section)
 
         if cfg.has_trait_blocks:
@@ -644,8 +672,60 @@ def _parse_profile_markdown(raw: str, filename: str, profile_type: str) -> Profi
                 ai_summary=ai_summary,
             )
 
+    # ── 4b. A HEADING THIS TEMPLATE DOES NOT KNOW ABOUT ─────────────────
+    #
+    # THE DATA LOSS THIS CLOSES. The loop above walks the CONFIGS, so any
+    # other heading in the file was read and then
+    # dropped on the floor. The editor saves what it loaded, so the next
+    # ordinary save wrote the file back WITHOUT it -- and the likeliest cause
+    # is a one-letter slip in a hand-edited heading:
+    #
+    #     # Physcial Traits          <- reads as nothing this template knows
+    #     - trait: Hazel Eyes           and is destroyed on the next save
+    #
+    # Nothing raised anything, because a section the parser never mentions
+    # looks exactly like a section the writer never wrote. The codex dialect
+    # kept these all along (`threads.py` files them by slug); this one did not,
+    # so the two dialects disagreed about whether a typo costs you your work.
+    #
+    # Kept as CONTENT rather than parsed as trait blocks even when it looks
+    # like a trait list, because we do not know what this section is. Fix
+    # Profile is where a writer decides -- rename it to the section they meant,
+    # which restores the structure, or fold it into Notes. Guessing here would
+    # take that decision away and could file a trait list under the wrong
+    # heading.
+    reserved = {_section_id("Full AI Summary"), _section_id(RUN_HEADING)}
+    for slug, leftovers in by_slug.items():
+        if slug in reserved or not slug:
+            continue
+        for heading, raw_section in leftovers:
+            main_content, ai_summary = _split_ai_summary(raw_section)
+            if not main_content.strip() and not ai_summary.strip():
+                continue
+            # A DUPLICATE SLUG GETS ITS OWN KEY rather than overwriting what is
+            # already there. Two "# Notes" headings after a bad merge is a real
+            # file, and picking one would delete the other.
+            key = slug
+            suffix = 2
+            while key in sections:
+                key = f"{slug}_{suffix}"
+                suffix += 1
+            sections[key] = ProfileSection(
+                content=main_content,
+                trait_blocks=[],
+                ai_summary=ai_summary,
+                # The heading EXACTLY as the writer typed it, so a repair can
+                # offer it back by name and the save can write it unchanged.
+                # The slug is lossy: "Physcial Traits" and "physcial  traits"
+                # share one.
+                heading=heading,
+            )
+
     # 5. Full AI Summary section (not in the per-section configs)
-    full_ai_summary = heading_content.get("Full AI Summary", "").strip()
+    summary_slug = _section_id("Full AI Summary")
+    full_ai_summary = "".join(
+        content for heading, content in found
+        if _section_id(heading) == summary_slug).strip()
     # Strip the placeholder text so the field reads as empty
     if full_ai_summary == "_Generated on demand. Editable by writer._":
         full_ai_summary = ""
@@ -796,6 +876,32 @@ def _generate_profile_markdown(profile: Profile, profile_type: str) -> str:
             lines += [f"## AI Summary: {cfg.heading}"]
             lines += [section.ai_summary if section.ai_summary else "_Generated on demand. Editable by writer._"]
             lines += [""]
+
+    # --- Sections this template does not know about ---
+    #
+    # The other half of the data loss. The loop above writes the CONFIGS, so a
+    # heading the template does not recognise -- a hand-edited "# Physcial
+    # Traits" and everything under it -- was written back as nothing. The
+    # parser now keeps them (see 4b); this puts them back on disk.
+    #
+    # AFTER the configured sections and BEFORE Full AI Summary, so the file
+    # keeps its template shape and the odd one out is somewhere a person will
+    # notice it rather than buried mid-template. Its heading is written EXACTLY
+    # as the writer typed it: re-spelling it would be the app quietly deciding
+    # what they meant, which is Fix Profile's job to ASK.
+    known_keys = {cfg.key for cfg in configs}
+    for key, section in profile.sections.items():
+        if key in known_keys:
+            continue
+        if not section.content.strip() and not section.ai_summary.strip():
+            continue
+        lines += [f"# {section.heading or key.replace('_', ' ').title()}"]
+        if section.content:
+            lines += [section.content]
+        lines += [""]
+        if section.ai_summary:
+            lines += [f"## AI Summary: {section.heading or key}"]
+            lines += [section.ai_summary, ""]
 
     # --- Full AI Summary ---
     lines += ["# Full AI Summary"]

@@ -122,21 +122,30 @@ they read in the update banner and on the GitHub Release page. `release.ps1`
 picks it up automatically for `latest.json`.
 
 **Keep it short and keep it human.** The v2.0.0 notes ran to nine thousand
-characters and the update banner showed all of it. Nobody reads that.
+characters and the update banner showed all of it. Nobody reads that. v2.0.4
+got it down to eighteen hundred, which was better and still four times longer
+than anyone reads in a banner.
 
-- **Aim for a page.** If it is longer than the reader's patience, the important
-  part is the part they did not reach.
+- **A paragraph. One.** Not a page, not a bulleted list of everything that
+  changed -- a heading and a paragraph a person reads in one go. This tightened
+  from "aim for a page" in v2.0.5, after a draft with four headings and
+  twenty-odd bullets: the CHANGELOG already holds the full account, and a
+  banner that repeats it just moves the wall of text somewhere with less room.
+- **Lead with the one thing that matters**, in the first sentence. If a reader
+  stops after that sentence they should still know what this release is.
+- **Sweep the rest into a clause.** "Also fixed: X, Y and Z" is a complete and
+  honest way to carry three repairs. A fix does not need its own heading to
+  count.
 - **Plain language, around a fifth-grade reading level.** "Your hero is small in
   chapter one and stronger later" beats "trait validity windows scoped by
   anchor". The writer is a novelist, not an engineer.
 - **Personable, casual but professional.** Write like a person telling somebody
   what changed, not like a compliance document.
-- **Lead with what they GET**, then how to reach it. Skip the reasoning, the
-  internals, the file names and the task ids -- those live in the commit
-  message and the spec, where somebody looking for them will find them.
-- **One short paragraph per thing**, with a heading they can skim.
-- Fixes can be one line each. "It never worked. Now it does." is a complete
-  and honest entry.
+- **Lead with what they GET.** Skip the reasoning, the internals, the file names
+  and the task ids -- those live in the commit message and the spec, where
+  somebody looking for them will find them.
+- **End with what they do NOT have to do**, when there is one. "Your existing
+  profiles are untouched" is the sentence that stops somebody worrying.
 - `--`, never an em dash, same as everywhere else in this project.
 
 ### 2. Export your signing key

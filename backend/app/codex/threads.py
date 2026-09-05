@@ -68,14 +68,22 @@ FULL_SUMMARY_HEADING = "Full AI Summary"
 FACT_KEYS = ("id", "at", "axis", "value", "frame", "revealed_at", "ai_scope",
              "supersedes", "intentional")
 TIE_KEYS = ("rel", "rel_inverse", "target", "reason", "reason_inverse",
-            "at", "until", "frame", "revealed_at", "ai_scope")
+            "description", "at", "until", "frame", "revealed_at", "ai_scope",
+            "intentional")
 # `subtext` is disclosure -- may this be said out loud -- and is separate
 # from `ai_scope`, which is availability. Conflating them is what made a
 # secret unimportant: see the note on TraitBlock in routers/profiles.py.
 # `true_in` is WHEN -- the chapters a trait holds in, absent meaning always.
 # See normalize_trait_window for why absent and empty must stay different.
+# `rel` is WHAT KIND, and it exists for one shape only: a relationship whose
+# other end is not an entry and never will be. "The Barksdale Family", a
+# deceased lover from before the book, a guild -- real to the character,
+# spoken about, never a profile. A Tie cannot hold one (it needs two ends that
+# exist), so it lives here as a trait-shaped block on the character's own page
+# and keeps the relation the writer chose. Written only when set, so no
+# ordinary trait gains a line.
 TRAIT_KEYS = ("trait", "description", "importance", "ai_scope", "subtext",
-              "true_in")
+              "true_in", "rel")
 
 _SECTION_SPLIT_RE = re.compile(r"^# (.+)$", re.MULTILINE)
 _AI_SUMMARY_RE = re.compile(r"^## AI Summary:.*$", re.MULTILINE)
@@ -648,6 +656,13 @@ def render_thread(
                 lines.append(f'    reason: {_quote(tie["reason"])}')
             if tie.get("reason_inverse"):
                 lines.append(f'    reason_inverse: {_quote(tie["reason_inverse"])}')
+            # THE DEPTH, beside the line rather than instead of it. `reason` is
+            # capped at 140 characters because every connection's line goes
+            # into every brief; a relationship the writer has actually thought
+            # about runs several hundred. So the line is the summary and this
+            # is the paragraph, sent only when the other end is in scope.
+            if tie.get("description"):
+                lines.append(f'    description: {_quote(tie["description"])}')
             if tie.get("rel_inverse"):
                 # A writer can name their own reverse reading, so this is theirs
                 # to put a colon in.
@@ -665,6 +680,13 @@ def render_thread(
                              f"{_comment_for(tie['frame'], label_for)}")
             if tie.get("ai_scope") and tie["ai_scope"] != "always":
                 lines.append(f"    ai_scope: {tie['ai_scope']}")
+            # "YES, I MEANT THAT." check_ties has read this since it was
+            # written, but it was in neither TIE_KEYS nor here -- so a writer
+            # who silenced a deliberate contradiction on a CONNECTION had the
+            # mark thrown away on their next save and the Snag returned with
+            # nothing to explain it. Facts have carried it correctly all along.
+            if tie.get("intentional"):
+                lines.append("    intentional: true")
 
     # Quoted, so YAML hands them back as the strings they were written as
     # rather than as datetimes -- see _stamp.
@@ -695,6 +717,10 @@ def render_thread(
             # other trait, and is instructed never to name it.
             if block.get("subtext"):
                 lines.append("  subtext: true")
+            # WHAT KIND OF RELATIONSHIP, for a Relationships block whose other
+            # end has no entry. Never present on an ordinary trait.
+            if block.get("rel"):
+                lines.append(f"  rel: {_scalar(block.get('rel'))}")
             # WHEN IT IS TRUE, written only when the writer has said. An empty
             # window is written as `[]` and MEANS something -- true nowhere --
             # so it is not the same as leaving the key out, and the reader

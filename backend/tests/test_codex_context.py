@@ -389,3 +389,308 @@ def test_an_unplaced_entry_writes_nothing_to_its_file():
               + "---" + chr(10) + chr(10) + "# Overview" + chr(10) + "A." + chr(10))
     rendered = render_thread(parse_thread(source, registry), registry)
     assert "appears_in" not in rendered
+
+
+# ── Connections in the brief ─────────────────────────────────────────────────
+# THE BUG THESE TESTS EXIST FOR. render_thread_brief never read `ties`, so a
+# connection's reason line -- the ONE field post_tie refuses to save without,
+# capped at 140 characters BECAUSE of brief budget -- reached no model on any
+# path. The refusal even told the writer "this is what gets sent to AI when you
+# ask for help", which was not true. A writer who spent twenty minutes
+# recording six connections got nothing for it.
+#
+# Same shape as R8.1 and withheld_not_present: computed, correct, connected to
+# nothing, and raising no error because an absent line looks like an ordinary
+# brief.
+
+
+def test_a_connection_reaches_the_model():
+    elara = _thread("e-1", "Elara", ties=[
+        {"rel": "mentored_by", "target": "e-2",
+         "reason": "he taught her everything she knows"},
+    ])
+    brief = assemble([elara, _thread("e-2", "Garrick")], INDEX, at="c-1",
+                     budget=_budget())
+    text = next(p.text for p in brief.pieces if p.name == "Elara")
+    assert "he taught her everything she knows" in text
+
+
+def test_a_connection_names_the_other_end_and_the_relation():
+    # A bare reason is not enough: "he taught her everything" without a name is
+    # a sentence about nobody. The relation reads as words rather than an id,
+    # because `mentored_by` is not English.
+    elara = _thread("e-1", "Elara", ties=[
+        {"rel": "mentored_by", "target": "e-2", "reason": "he taught her"},
+    ])
+    brief = assemble([elara, _thread("e-2", "Garrick")], INDEX, at="c-1",
+                     budget=_budget())
+    text = next(p.text for p in brief.pieces if p.name == "Elara")
+    assert "Garrick" in text
+    assert "mentored by" in text
+    assert "mentored_by" not in text
+
+
+def test_a_one_sided_relationship_reaches_only_its_own_pov():
+    # THE ASYMMETRIC CASE, and the whole reason `frame` is the mechanism for
+    # it. The writer's example: "Character A is infatuated with Character B,
+    # adores them, buys them gifts, pays their bills... From Character B's
+    # perspective, they don't even know Character A exists because character A
+    # is stalking them."
+    #
+    # Two records on A, none on B. The truth of B's side is the ABSENCE, which
+    # is why this cannot be expressed as one connection with a description for
+    # each direction: an empty reverse description means "the same, backwards",
+    # not "she has never heard of him".
+    aldous = _thread("e-1", "Aldous", ties=[
+        {"rel": "obsessed_with", "target": "e-2", "frame": "truth",
+         "reason": "stalks her; pays her bills anonymously"},
+        {"rel": "lover_of", "target": "e-2", "frame": "e-1",
+         "reason": "believes they are together"},
+    ])
+    beatrix = _thread("e-2", "Beatrix")
+    threads = [aldous, beatrix]
+
+    # Writing from HIS eyes: the delusion is in force, and marked as a belief
+    # so a model cannot report it as the world's truth.
+    his = assemble(threads, INDEX, at="c-1", budget=_budget(), pov="e-1")
+    his_text = next(p.text for p in his.pieces if p.name == "Aldous")
+    assert "(believed)" in his_text
+    assert "believes they are together" in his_text
+    assert "pays her bills anonymously" in his_text
+
+    # Writing from anyone else's: his belief is not a fact of the world and
+    # must not be handed over as one.
+    plain = assemble(threads, INDEX, at="c-1", budget=_budget())
+    plain_text = next(p.text for p in plain.pieces if p.name == "Aldous")
+    assert "believes they are together" not in plain_text
+    assert "pays her bills anonymously" in plain_text
+
+    # And HER page says nothing about him, from any POV, because she has
+    # nothing recorded about him. This is the part no shared description could
+    # express.
+    for brief in (his, plain):
+        hers = next(p.text for p in brief.pieces if p.name == "Beatrix")
+        assert "Aldous" not in hers
+
+
+def test_the_state_in_force_wins_and_the_earlier_one_is_not_sent():
+    # The pair IS the axis (tie_run.py). Friends at c-1, rivals at c-3: read at
+    # c-3 the model must be told rivals ONCE, not handed both and left to
+    # decide which of the writer's own records to believe.
+    kip = _thread("e-1", "Kipling", ties=[
+        {"rel": "friend_of", "target": "e-2", "reason": "they trust each other",
+         "at": "c-1"},
+        {"rel": "rivals", "target": "e-2", "reason": "she cannot forgive him",
+         "at": "c-3"},
+    ])
+    threads = [kip, _thread("e-2", "Milton")]
+
+    early = assemble(threads, INDEX, at="c-1", budget=_budget())
+    early_text = next(p.text for p in early.pieces if p.name == "Kipling")
+    assert "they trust each other" in early_text
+    assert "she cannot forgive him" not in early_text
+
+    late = assemble(threads, INDEX, at="c-3", budget=_budget())
+    late_text = next(p.text for p in late.pieces if p.name == "Kipling")
+    assert "she cannot forgive him" in late_text
+    assert "they trust each other" not in late_text
+
+
+def test_a_connection_not_yet_true_is_not_sent():
+    # The c-1 connection is here for a reason: thread_visibility derives a
+    # Thread's INTRODUCTION from the earliest anchor across its facts AND its
+    # ties, so a character whose only dated item is a c-3 tie is hidden
+    # wholesale at c-1 -- and an UNDATED tie does not rescue her, because it
+    # contributes no ordinal. See test_dating_a_connection_can_hide_its_own_owner.
+    kip = _thread("e-1", "Kipling", ties=[
+        {"rel": "friend_of", "target": "e-3", "reason": "her oldest friend",
+         "at": "c-1"},
+        {"rel": "rivals", "target": "e-2", "reason": "she cannot forgive him",
+         "at": "c-3"},
+    ])
+    brief = assemble([kip, _thread("e-2", "Milton"), _thread("e-3", "Carina")],
+                     INDEX, at="c-1", budget=_budget())
+    text = next(p.text for p in brief.pieces if p.name == "Kipling")
+    assert "her oldest friend" in text
+    assert "cannot forgive" not in text
+
+
+def test_dating_a_connection_can_hide_its_own_owner():
+    # PINNING EXISTING BEHAVIOUR, because it is surprising and it is about to
+    # matter. thread_visibility (visibility.py:163-165) reads tie anchors when
+    # deriving when a Thread is introduced. So a character whose ONLY dated
+    # item is a relationship that starts in chapter 3 is treated as not yet
+    # introduced in chapter 1 -- and vanishes from the brief entirely rather
+    # than merely losing that one connection.
+    #
+    # That is defensible for a map and questionable for a brief: "they became
+    # rivals in chapter 3" is a statement about the relationship, not about
+    # when she first walks on. Recorded here rather than changed, because
+    # changing it moves what every existing project sends. Flagged for the
+    # editor work that will let writers date these for the first time.
+    kip = _thread("e-1", "Kipling", ties=[
+        {"rel": "rivals", "target": "e-2", "reason": "she cannot forgive him",
+         "at": "c-3"},
+    ])
+    threads = [kip, _thread("e-2", "Milton")]
+
+    assert "Kipling" not in _names(
+        assemble(threads, INDEX, at="c-1", budget=_budget()))
+    assert "Kipling" in _names(
+        assemble(threads, INDEX, at="c-3", budget=_budget()))
+
+
+def test_a_secret_connection_is_withheld_until_the_reader_learns_it():
+    # revealed_at is the reader's clock. A connection the reader does not know
+    # about must not reach a model that is drafting the chapter before it.
+    spouse = _thread("e-1", "Elara", ties=[
+        {"rel": "married_to", "target": "e-2", "reason": "married in secret",
+         "at": "c-1", "revealed_at": "c-3"},
+    ])
+    brief = assemble([spouse, _thread("e-2", "Garrick")], INDEX, at="c-1",
+                     budget=_budget())
+    text = next(p.text for p in brief.pieces if p.name == "Elara")
+    assert "married in secret" not in text
+
+
+def test_a_connection_to_someone_not_yet_introduced_is_withheld():
+    # visibility.py's rule, which the graph route already keeps: a connection is
+    # only as visible as the least visible thing it touches. Sending it here
+    # would announce a character the reader has not met, through the back door
+    # of somebody else's connection list.
+    elara = _thread("e-1", "Elara", ties=[
+        {"rel": "mentored_by", "target": "e-2", "reason": "he taught her"},
+    ])
+    # Not yet INTRODUCED, which is a different thing from not being in this
+    # chapter: his earliest anchored fact is in c-3, so at c-1 the reader has
+    # not met him. (`appears_in` would NOT do this -- that scopes the brief to
+    # who is in the chapter, and a connection to someone offstage is still
+    # worth telling a model about.)
+    garrick = _thread("e-2", "Garrick",
+                      run=[{"id": "f-1", "axis": "arrival", "at": "c-3",
+                            "value": "arrives in the valley"}])
+    brief = assemble([elara, garrick], INDEX, at="c-1", budget=_budget())
+    text = next(p.text for p in brief.pieces if p.name == "Elara")
+    assert "he taught her" not in text
+    assert "Garrick" not in text
+
+
+def test_a_connection_costs_budget_and_is_counted():
+    # The reason the 140-character cap exists. If ties reach the brief they must
+    # reach the token count too, or the budget the cap was derived from is a
+    # number nobody is keeping.
+    plain = _thread("e-1", "Elara")
+    tied = _thread("e-1", "Elara", ties=[
+        {"rel": "mentored_by", "target": "e-2", "reason": "he taught her"},
+    ])
+    others = [_thread("e-2", "Garrick")]
+
+    without = assemble([plain] + others, INDEX, at="c-1", budget=_budget())
+    with_tie = assemble([tied] + others, INDEX, at="c-1", budget=_budget())
+
+    a = next(p for p in without.pieces if p.name == "Elara")
+    b = next(p for p in with_tie.pieces if p.name == "Elara")
+    assert b.tokens > a.tokens
+    assert b.tokens == estimate_tokens(b.text)
+
+
+def test_an_entry_with_only_connections_still_reaches_the_model():
+    # A Quick Create entry has a name, a kind and nothing written in it. Before
+    # ties were sent, such an entry rendered to almost nothing and was skipped
+    # as empty -- so the connections the writer made FROM the walk were the one
+    # thing that could not travel.
+    bare = {
+        "entity_id": "e-1", "name": "Kipling", "type": "character",
+        "aliases": [], "run": [],
+        "sections": {"overview": {"heading": "Overview", "content": "",
+                                  "trait_blocks": []}},
+        "ties": [{"rel": "mentored_by", "target": "e-2",
+                  "reason": "he taught her everything"}],
+    }
+    brief = assemble([bare, _thread("e-2", "Garrick")], INDEX, at="c-1",
+                     budget=_budget())
+    assert "Kipling" in _names(brief)
+    text = next(p.text for p in brief.pieces if p.name == "Kipling")
+    assert "he taught her everything" in text
+
+
+# ── The paragraph, and when it travels ───────────────────────────────────────
+#
+# THE ECONOMY THAT MAKES THE WHOLE THING AFFORDABLE. `reason` is capped at 140
+# characters because every connection's line is sent every time. A relationship
+# the writer has actually thought about runs several hundred -- their own
+# paragraphs are 700-900 -- so the paragraph cannot ride along on every brief:
+# eleven of them for one character is the 920-word blob this feature exists to
+# replace.
+#
+# So the line always goes, and the paragraph goes when the OTHER END is
+# something the writer is actively working with -- named in the text they are
+# writing, or pinned by hand.
+#
+# Note why it is not "both ends are in the brief": nothing in this writer's
+# 56-entry world sets `appears_in`, so every entry is a candidate in every
+# brief and that rule would include every paragraph always, saving nothing.
+# Being named is the signal that actually tracks what the writer is doing.
+
+def _tied_pair(description="She has trusted him since the northern gate fell."):
+    kip = _thread("e-1", "Kipling", ties=[
+        {"rel": "mentored_by", "target": "e-2",
+         "reason": "father-like mentor; she chafes at his control",
+         "description": description},
+    ])
+    return [kip, _thread("e-2", "Milton")]
+
+
+def test_the_line_always_travels():
+    brief = assemble(_tied_pair(), INDEX, at="c-1", budget=_budget())
+    text = next(p.text for p in brief.pieces if p.name == "Kipling")
+    assert "father-like mentor" in text
+
+
+def test_the_paragraph_stays_home_when_the_other_end_is_not_in_play():
+    brief = assemble(_tied_pair(), INDEX, at="c-1", budget=_budget())
+    text = next(p.text for p in brief.pieces if p.name == "Kipling")
+    assert "northern gate" not in text
+
+
+def test_the_paragraph_travels_when_the_other_end_is_named():
+    brief = assemble(_tied_pair(), INDEX, at="c-1", budget=_budget(),
+                     mentioned={"e-2"})
+    text = next(p.text for p in brief.pieces if p.name == "Kipling")
+    assert "northern gate" in text
+    assert "father-like mentor" in text
+
+
+def test_the_paragraph_travels_when_the_other_end_is_pinned():
+    # The writer attaching Milton by hand is the same instruction as naming
+    # him, said more deliberately.
+    brief = assemble(_tied_pair(), INDEX, at="c-1", budget=_budget(),
+                     pinned={"e-2"})
+    text = next(p.text for p in brief.pieces if p.name == "Kipling")
+    assert "northern gate" in text
+
+
+def test_the_paragraph_costs_what_it_costs():
+    without = assemble(_tied_pair(), INDEX, at="c-1", budget=_budget())
+    with_it = assemble(_tied_pair(), INDEX, at="c-1", budget=_budget(),
+                       mentioned={"e-2"})
+    a = next(p for p in without.pieces if p.name == "Kipling")
+    b = next(p for p in with_it.pieces if p.name == "Kipling")
+    assert b.tokens > a.tokens
+    assert b.tokens == estimate_tokens(b.text)
+
+
+def test_a_withheld_connection_does_not_leak_its_paragraph():
+    # The paragraph is the richest thing on a connection, so it is the worst
+    # thing to leak. A secret marriage the reader learns of in chapter 3 must
+    # not arrive in chapter 1 by way of being pinned.
+    elara = _thread("e-1", "Elara", ties=[
+        {"rel": "married_to", "target": "e-2", "at": "c-1", "revealed_at": "c-3",
+         "reason": "married in secret",
+         "description": "They were wed by a hedge priest before the siege."},
+    ])
+    brief = assemble([elara, _thread("e-2", "Garrick")], INDEX, at="c-1",
+                     budget=_budget(), pinned={"e-2"})
+    text = next(p.text for p in brief.pieces if p.name == "Elara")
+    assert "hedge priest" not in text
+    assert "married in secret" not in text

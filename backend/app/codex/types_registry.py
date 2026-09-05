@@ -151,6 +151,40 @@ DEFAULT_TYPES: list[dict] = [
             # something the writer wrote.
             {"id": "relationships_overview", "heading": "Relationships Overview",
              "trait_blocks": False, "retired": True},
+            # AND THE THIRD PLACE BECAME THE ONLY PLACE. The comment above
+            # retired this job because two other homes held it; the writer's
+            # report is that two was still one too many:
+            #
+            #     "Every profile has to have a separate Relationship profile.
+            #      This is both cumbersome, not efficent, creates another tag
+            #      in The Weave connection."
+            #
+            # So relationships come home to the character, and the separate
+            # `relationship` KIND retires instead. A relationship with an entry
+            # on the other end is a Connection -- it needs a second end to
+            # resolve against, to hide behind the least-visible-endpoint rule,
+            # and to draw on the map. This section is for the other half: the
+            # ones with nobody on the other end.
+            #
+            #     Milton's own notes: "Former Partner", "His Expedition Party",
+            #     "Guild and City Adventurers", "Mother and Stepfather" -- four
+            #     of his eight relationships, none of them an entry, all of them
+            #     real.
+            #
+            # Trait blocks rather than prose, because a relationship IS
+            # trait-shaped: a name, a description, a weight, and a window it
+            # holds in. Reusing that machinery gets importance, subtext and
+            # `true_in` for free rather than inventing a fourth shape.
+            #
+            # A NEW ID rather than un-retiring the one above, deliberately. The
+            # old heading is already written into every character file on disk;
+            # renaming it would orphan whatever prose a writer had put under it,
+            # and flipping a prose section to trait blocks is the invisible-prose
+            # bug this repo has already paid for once. Adding is the safe
+            # direction -- the retired section keeps round-tripping and the form
+            # keeps hiding it unless it holds something.
+            {"id": "relationships", "heading": "Relationships",
+             "trait_blocks": True},
             {"id": "notes", "heading": "Notes", "trait_blocks": False},
         ],
         "required_fields": ["overview"],
@@ -169,8 +203,45 @@ DEFAULT_TYPES: list[dict] = [
     # The Profile Builder's sets win because they are what the writer has
     # actually been filling in. Deciding the other way would have meant asking
     # them to accept a thinner page for the same job.
+    # RETIRED, NOT DELETED, and this is the fix for the problem the writer
+    # reported rather than a tidy-up after it:
+    #
+    #     "Every profile has to have a separate Relationship profile. This is
+    #      both cumbersome, not efficent, creates another tag in The Weave
+    #      connection. All to create a profile to address how a character is
+    #      connected to another character... Its badly designed, not thought
+    #      out, not an efficent use of tokens if send to ai for draft or
+    #      context checking."
+    #
+    # Every one of those is true, and the mechanisms are worse than
+    # inefficiency. Its five prose sections enter the brief WHOLE at every
+    # anchor, unwindowed, while ranking lowest and getting pruned first --
+    # prose never says the words "Kipling's Relationships" -- so the writer
+    # maintains hundreds of words that frequently never arrive. The kind is
+    # `is_active` False, so the connection walk never asks how it relates to
+    # anything, and NO relation in DEFAULT_RELATIONS accepts `relationship` at
+    # either end, so the only thing that can attach to it is the universal
+    # "connected to". A node with almost nothing legal to connect to. And
+    # `ai/prompts.py` pays a model at inference time to reconcile it against
+    # the character's own page.
+    #
+    # A relationship now lives on the character: one with an entry on the other
+    # end is a Connection (which resolves, carries a chapter and a view, and is
+    # drawn on the map), and one without is a block in the character's own
+    # Relationships section.
+    #
+    # WHY RETIRED RATHER THAN REMOVED. Deleting the entry would drop
+    # `relationship` out of VALID_TYPES and make every existing
+    # profiles/relationships/*.md unopenable -- and `profiles.py` parses and
+    # writes by CONFIG, so a kind missing from this list is a kind whose files
+    # cannot be read at all. Existing entries stay readable and editable. The
+    # sidebar and the Profile Builder tab already hide it unless it holds
+    # something (`default_section: False`), so a project that never used it
+    # never sees it; what `retired` adds is that a NEW one can no longer be
+    # created, which is what stops the same hole being dug again.
     {"id": "relationship", "label": "Relationships", "folder": "relationships",
      "icon": "Heart", "group": "profiles", "default_section": False,
+     "retired": True,
      "sections": _sections("overview", "history", "current_dynamic",
                            "hidden_tensions", "emotional_direction", "notes"),
      "required_fields": ["overview"], "custom_fields": []},
@@ -786,6 +857,9 @@ def load_registry(folder_path: str) -> tuple[dict, bool]:
 
     validate_registry(data)
     _heal_renamed_defaults(data)
+    # Sections and flags the app has gained since this project was seeded.
+    # In memory: the file stays exactly as the writer left it.
+    _adopt_new_shipped_sections(data)
     return data, True
 
 
@@ -812,6 +886,65 @@ def _heal_renamed_defaults(data: dict) -> None:
         rename = _RENAMED_LABELS.get(str(type_entry.get("id") or ""))
         if rename and str(type_entry.get("label") or "") == rename[0]:
             type_entry["label"] = rename[1]
+
+
+def _adopt_new_shipped_sections(data: dict) -> None:
+    """
+    Give a project's registry the sections the app has gained since it was
+    seeded. IN MEMORY ONLY -- the file on disk is never touched.
+
+    THE BUG THIS CLOSES, and it is the one this module's own rules make easy to
+    walk into. `types.json` is seeded per project at first use and is never
+    rewritten, because the moment a writer adds a kind or a relation of their
+    own it stops being config and becomes THEIR DATA. Correct. But it means a
+    section added to `DEFAULT_TYPES` reaches new projects only: every existing
+    project goes on rendering the list it was seeded with, and the app has no
+    way to say so.
+    """
+    shipped = {entry["id"]: entry for entry in DEFAULT_TYPES}
+
+    for type_entry in data.get("types") or []:
+        model = shipped.get(str(type_entry.get("id") or ""))
+        if model is None:
+            # A kind the writer invented. Nothing shipped to reconcile, and
+            # nothing here may touch it.
+            continue
+
+        # A flag the app has since set on a SHIPPED kind -- `retired` is the
+        # first. Not the writer's decision to make or unmake, and not carried
+        # for a kind they invented.
+        if model.get("retired") and not type_entry.get("retired"):
+            type_entry["retired"] = True
+
+        existing = type_entry.get("sections")
+        if not isinstance(existing, list):
+            continue
+        have = {str(s.get("id") or "") for s in existing if isinstance(s, dict)}
+
+        for position, section in enumerate(model.get("sections") or []):
+            section_id = str(section.get("id") or "")
+            if not section_id or section_id in have:
+                continue
+
+            # WHERE IT GOES. Placed relative to the shipped section it follows,
+            # so Relationships lands between Relationships Overview and Notes
+            # rather than at the end after the writer's own additions.
+            #
+            # The FILE's order is preserved: this inserts, and never reorders
+            # what is already there. A writer who moved their sections around
+            # keeps them where they put them.
+            after = [str(s.get("id") or "")
+                     for s in (model.get("sections") or [])[:position]]
+            index = len(existing)
+            for earlier in reversed(after):
+                at = next((i for i, s in enumerate(existing)
+                           if str(s.get("id") or "") == earlier), None)
+                if at is not None:
+                    index = at + 1
+                    break
+
+            existing.insert(index, dict(section))
+            have.add(section_id)
 
 
 def seed_registry(folder_path: str) -> dict:

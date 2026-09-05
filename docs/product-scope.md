@@ -54,9 +54,12 @@ Brainstorming, writer's block help, next-beat suggestions, dialogue authenticity
 Character consistency, relationship continuity, location consistency, lore consistency, timeline continuity, scene-goal alignment.
 
 ### Project memory
-**The Weave** is the project's memory: a set of Threads (fourteen kinds shipped,
+**The Weave** is the project's memory: a set of Threads (thirteen kinds offered,
 plus any kind the writer invents) linked by connections that must state WHY they
-exist, each Thread holding facts anchored to points in the story. What the app
+exist, each Thread holding facts anchored to points in the story. A fourteenth,
+`relationship`, is retired as of v2.0.5 -- existing entries still open and still
+save, and no new ones are made, because who a character is to everyone else
+belongs on that character rather than in a profile beside them. What the app
 tells an AI is therefore true AS OF the chapter being written, rather than true
 of the finished book.
 

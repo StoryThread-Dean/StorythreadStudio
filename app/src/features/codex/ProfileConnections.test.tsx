@@ -189,3 +189,121 @@ describe("where it is used", () => {
     expect(builder).toMatch(/home === "codex" && profile\.entity_id/);
   });
 });
+
+
+// ── A relationship that changed, on the page the writer works on ─────────────
+//
+// THE BUG THESE CLOSE. This list showed every stored state as a peer, because
+// the route it reads applied no resolution at all. A character whose
+// relationship had changed -- friends in the first half, rivals in the second,
+// which is the case the whole axis model exists for -- read as though both
+// were true at once and the app had lost track of its own answer.
+//
+// The states are not hidden, and that is deliberate: "friends, and before that
+// acquaintances" is worth being able to see. What was missing was any mark
+// saying which one HOLDS.
+
+const ARC = [
+  tie({ rel: "rivals", reads_as: "rival of", why: "she cannot forgive him",
+        at_label: "3. The Fall", state: "in_force", in_force: true }),
+  tie({ rel: "connected_to", reads_as: "connected to",
+        why: "father-like mentor", at_label: "1. The Village",
+        state: "superseded", in_force: false }),
+];
+
+describe("a relationship that changed", () => {
+  beforeEach(() => mockApi(ARC));
+
+  it("shows which state is true now", async () => {
+    render(<ProfileConnections projectPath={PROJECT} entityId="e-lara"
+                               type="character" name="Lara Croft"
+                               startExpanded />);
+    await waitFor(() => expect(screen.getByText(/she cannot forgive him/)).toBeTruthy());
+    const current = screen.getByText(/she cannot forgive him/).closest("li");
+    expect(current).toBeTruthy();
+    expect(current!.textContent).not.toMatch(/Earlier/i);
+  });
+
+  it("keeps the earlier state, marked as earlier", async () => {
+    // Not dropped. A writer scanning a profile wants the arc, not only the
+    // endpoint -- and a state that vanished would look like lost work.
+    render(<ProfileConnections projectPath={PROJECT} entityId="e-lara"
+                               type="character" name="Lara Croft"
+                               startExpanded />);
+    await waitFor(() => expect(screen.getByText(/father-like mentor/)).toBeTruthy());
+    const earlier = screen.getByText(/father-like mentor/).closest("li");
+    expect(earlier!.textContent).toMatch(/Earlier/i);
+  });
+
+  it("puts the state in force first", async () => {
+    // Reading order is the answer to "what is true now?", so the current
+    // state cannot be somewhere in the middle of a list of old ones.
+    render(<ProfileConnections projectPath={PROJECT} entityId="e-lara"
+                               type="character" name="Lara Croft"
+                               startExpanded />);
+    await waitFor(() => expect(screen.getByText(/she cannot forgive him/)).toBeTruthy());
+    const rows = screen.getAllByRole("listitem").map(li => li.textContent ?? "");
+    expect(rows[0]).toMatch(/she cannot forgive him/);
+  });
+
+  it("says when a relationship has ended rather than changed", async () => {
+    // `until` was fetched by this component and rendered by nothing, so a
+    // relationship the writer had explicitly ended read as ongoing.
+    mockApi([tie({ why: "they stopped speaking", at_label: "1. The Village",
+                   until_label: "4. The Parting", state: "in_force",
+                   in_force: true })]);
+    render(<ProfileConnections projectPath={PROJECT} entityId="e-lara"
+                               type="character" name="Lara Croft"
+                               startExpanded />);
+    await waitFor(() => expect(screen.getByText(/they stopped speaking/)).toBeTruthy());
+    expect(screen.getByText(/4\. The Parting/)).toBeTruthy();
+  });
+});
+
+
+describe("one side's view of a relationship", () => {
+  it("says whose view it is", async () => {
+    // Two records of one pair can both be true -- the truth of it, and what
+    // one of them believes. Shown flatly they would read as a contradiction
+    // in the writer's own notes.
+    mockApi([
+      tie({ why: "he will always choose the party", state: "in_force",
+            in_force: true }),
+      tie({ why: "she believes he is a father to her", frame_name: "Lara Croft",
+            state: "in_force", in_force: true }),
+    ]);
+    render(<ProfileConnections projectPath={PROJECT} entityId="e-lara"
+                               type="character" name="Lara Croft"
+                               startExpanded />);
+    await waitFor(() =>
+      expect(screen.getByText(/she believes he is a father/)).toBeTruthy());
+    const belief = screen.getByText(/she believes he is a father/).closest("li");
+    expect(belief!.textContent).toMatch(/as Lara Croft sees it/i);
+  });
+});
+
+
+describe("the longer version, on the profile", () => {
+  it("is shown when there is one", async () => {
+    const paragraph = "Kipling initially sees Milton as an experienced "
+      + "expedition leader whose rules often frustrate her.";
+    mockApi([tie({ why: "father-like mentor", description: paragraph,
+                   state: "in_force", in_force: true })]);
+    render(<ProfileConnections projectPath={PROJECT} entityId="e-lara"
+                               type="character" name="Lara Croft"
+                               startExpanded />);
+    await waitFor(() => expect(screen.getByText(/father-like mentor/)).toBeTruthy());
+    expect(screen.getByText(new RegExp("expedition leader"))).toBeTruthy();
+  });
+
+  it("does not leave an empty gap when there is none", async () => {
+    mockApi([tie({ why: "father-like mentor", state: "in_force",
+                   in_force: true })]);
+    render(<ProfileConnections projectPath={PROJECT} entityId="e-lara"
+                               type="character" name="Lara Croft"
+                               startExpanded />);
+    await waitFor(() => expect(screen.getByText(/father-like mentor/)).toBeTruthy());
+    const row = screen.getByText(/father-like mentor/).closest("li");
+    expect(row!.querySelectorAll("p").length).toBe(0);
+  });
+});
