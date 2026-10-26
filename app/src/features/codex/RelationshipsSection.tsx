@@ -85,6 +85,17 @@ interface Row {
   /** The anchor it was saved under, which is part of its address. */
   savedAt: string;
   savedRel: string;
+  /**
+   * The other end it was saved with -- the rest of its address.
+   *
+   * `targetId` is the LIVE value and changes with every keystroke in the name
+   * box, so it cannot also be the address. Using it as one broke two things:
+   * clearing the name to type a new one closed the card under the writer's
+   * cursor (the open/closed key moved), and a recorded row pointed at a
+   * different person or at a hand-typed name had no way to find, let alone
+   * remove, the connection it used to be.
+   */
+  savedTargetId: string;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -150,7 +161,7 @@ export function RelationshipsSection({
    * delete use.
    */
   const rowKey = (row: Row) => (row.saved
-    ? `${row.targetId}|${row.savedRel}|${row.savedAt}`
+    ? `${row.savedTargetId}|${row.savedRel}|${row.savedAt}`
     : row.uid);
 
   const toggleRow = (key: string) => setOpenRows(current => {
@@ -188,6 +199,7 @@ export function RelationshipsSection({
           saved: true,
           savedAt: String(t.at ?? ""),
           savedRel: String(t.rel ?? ""),
+          savedTargetId: String(t.other_id ?? ""),
         }));
 
       // ANYTHING HALF-TYPED SURVIVES THE RELOAD. Recording one relationship
@@ -363,7 +375,7 @@ export function RelationshipsSection({
     targetId: "", otherName: block.trait, otherType: "",
     rel: "", relLabel: block.rel ?? "",
     description: block.description, reason: "", at: "",
-    unlisted: true, saved: true, savedAt: "", savedRel: "",
+    unlisted: true, saved: true, savedAt: "", savedRel: "", savedTargetId: "",
   })), [blocks]);
 
   const patchBlock = (index: number, updates: Partial<Row>) => {
@@ -390,7 +402,7 @@ export function RelationshipsSection({
   const addRow = () => setRows(current => [...(current ?? []), {
     uid: uid(), targetId: "", otherName: "", otherType: "character",
     rel: "", relLabel: "", description: "", reason: "", at: "",
-    unlisted: false, saved: false, savedAt: "", savedRel: "",
+    unlisted: false, saved: false, savedAt: "", savedRel: "", savedTargetId: "",
   }]);
 
   /**
@@ -430,6 +442,35 @@ export function RelationshipsSection({
     return String(body.id ?? "connected_to");
   };
 
+  /**
+   * Remove the connection a recorded row USED TO BE, by its saved address.
+   *
+   * Needed when the writer points a recorded row somewhere else. PATCH cannot
+   * do that: the other end is part of the address it looks the connection up
+   * by, so asking it to change the other end asks it to find a connection that
+   * does not exist yet. And a row turned into a hand-typed name is not a
+   * connection at all any more -- leaving the old one on disk meant it
+   * vanished from the screen and came back on the next reload, sitting beside
+   * its own replacement.
+   *
+   * Throws on a refusal, so the caller can stop before writing the new version
+   * and leave the writer with one copy rather than two or none.
+   */
+  const forgetSaved = async (row: Row) => {
+    const params = new URLSearchParams({
+      project_path: projectPath, src_id: entityId,
+      rel: row.savedRel, dst_id: row.savedTargetId,
+    });
+    if (row.savedAt) params.set("at", row.savedAt);
+    const response = await fetch(`${API_BASE}/api/codex/tie?${params}`,
+                                 { method: "DELETE" });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body?.detail?.message
+                      ?? "The old connection could not be removed.");
+    }
+  };
+
   /** Record or update one row. Ties are shared, so each is written on its own. */
   const recordRow = async (row: Row) => {
     // A NAME WITH NO ENTRY IS A REAL ANSWER, and this used to refuse it
@@ -446,6 +487,22 @@ export function RelationshipsSection({
                  + "entries, or type any name.");
         return;
       }
+      // A RECORDED CONNECTION BEING TURNED INTO A HAND-TYPED NAME. The
+      // connection goes first, or it survives on disk and returns on the next
+      // reload beside the name that replaced it. If removing it is refused,
+      // stop: the writer keeps the row as it is and sees why.
+      if (row.saved) {
+        setBusy(row.uid);
+        try {
+          await forgetSaved(row);
+        } catch (e) {
+          setError(e instanceof Error ? e.message
+                   : "The old connection could not be removed.");
+          return;
+        } finally {
+          setBusy(null);
+        }
+      }
       onBlocksChange([...blocks, {
         trait: row.otherName.trim(),
         description: row.description,
@@ -454,6 +511,13 @@ export function RelationshipsSection({
       }]);
       setRows(current => (current ?? []).filter(r => r.uid !== row.uid));
       setError(null);
+      // Removing the connection wrote this entry's own file, so the page has
+      // to take the new state of it -- or its next Update is refused as a
+      // conflict, which is the same failure resyncWeave exists for.
+      if (row.saved) {
+        await load();
+        onChanged?.();
+      }
       return;
     }
     if (!row.reason.trim()) {
@@ -470,7 +534,12 @@ export function RelationshipsSection({
         project_path: projectPath, src_id: entityId, dst_id: row.targetId,
         reason: row.reason.trim(), description: row.description,
       };
-      const response = row.saved
+      // Same other end: correct it in place. A DIFFERENT other end is a new
+      // connection, recorded first and the old one removed after it -- so a
+      // failure part-way leaves a duplicate the writer can see and delete,
+      // never a relationship that is simply gone.
+      const retargeted = row.saved && row.targetId !== row.savedTargetId;
+      const response = row.saved && !retargeted
         ? await fetch(`${API_BASE}/api/codex/tie`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -489,6 +558,16 @@ export function RelationshipsSection({
         throw new Error(body?.detail?.message ?? body?.detail
                         ?? "That could not be recorded.");
       }
+      // The new one is on disk now, so a refused removal must not stop the
+      // reload below -- the writer needs to SEE both copies to delete one.
+      let leftBehind: string | null = null;
+      if (retargeted) {
+        try {
+          await forgetSaved(row);
+        } catch (e) {
+          leftBehind = e instanceof Error ? e.message : "it was refused";
+        }
+      }
       // THE TRANSACTION IS OVER, so the card that started it goes.
       //
       // Without this the writer saw the same relationship twice: the real one
@@ -502,6 +581,11 @@ export function RelationshipsSection({
       setRows(current => (current ?? []).filter(r => r.uid !== row.uid));
       await load();
       onChanged?.();
+      // After load(), which clears the error on success.
+      if (leftBehind) {
+        setError(`Recorded with ${row.otherName}, but the old connection is `
+                 + `still there (${leftBehind}). Remove it from the list.`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "That could not be recorded.");
     } finally {
@@ -523,7 +607,8 @@ export function RelationshipsSection({
     try {
       const params = new URLSearchParams({
         project_path: projectPath, src_id: entityId,
-        rel: row.savedRel, dst_id: row.targetId,
+        // The SAVED other end: the name box may have been edited since.
+        rel: row.savedRel, dst_id: row.savedTargetId,
       });
       // The anchor is part of the address: without it, removing one stage of a
       // relationship removes every stage of it.

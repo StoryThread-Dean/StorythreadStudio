@@ -18,7 +18,7 @@ entry while working on a feature, append it under Unreleased.
 
 ---
 
-## [Unreleased]
+## [2.0.6] - UNRELEASED
 
 ### Added
 
@@ -43,7 +43,6 @@ entry while working on a feature, append it under Unreleased.
     off mid-sentence.
   - **Author Notes is the opposite file** and sits beside it: still never read
     by the app on its own initiative, still yours to attach by hand.
-
 - **Your conversations are kept, and you can go back to one.** Both chats now
   save as you have them, and a **Past chats** button lists them newest first --
   "4 days ago -- how should this land?".
@@ -61,7 +60,6 @@ entry while working on a feature, append it under Unreleased.
   - The recap is worked out once and kept. Coming back to the same conversation
     again does not pay for it twice.
   - Deleting a conversation asks first.
-
 - **Requests that would not fit now shrink sensibly instead of failing.** When
   what you are sending is too big for the model you picked, the app drops the
   least important part rather than refusing outright — and **tells you what it
@@ -73,78 +71,6 @@ entry while working on a feature, append it under Unreleased.
     essentials will not fit, the request is refused before anything is spent,
     and says how to get under the limit.
   - A request that fits says nothing at all.
-
-### Changed
-
-- **The Chapter Outline is a proper editor now, with the AI chat beside it.**
-  - It has the same formatting toolbar as the manuscript: numbered lists,
-    bullets, headings, bold, italic and the rest. An outline is a numbered
-    list more often than it is anything else, and the only way to make one
-    was to type the digits yourself.
-  - The Writing Companion stays open beside it instead of disappearing, so
-    you can argue about what should happen in the chapter while you plan it.
-  - Open chat can now see the plan you are looking at. The context bar shows
-    it, says what it costs, and switches it off.
-  - Opening a chapter's outline also opens that chapter, so the chat and the
-    context bar are about the chapter you are planning -- before, you could
-    be planning chapter 7 while the AI was still reading chapter 3.
-- **Per-section AI Summaries are gone.** Each section of a profile had its own
-  collapsed "AI Summary" tile with its own Generate button -- one AI request
-  each, so six sections meant six requests. They were never sent to any AI:
-  not when you attach the profile to a chat, not by the Profile Chat, not by
-  the Weave, not even as material for the Full AI Summary. You were paying for
-  text only you could read.
-  - Anything already written stays in your files and still exports. The button
-    and the cost are what went.
-- **Attaching a profile now sends its traits, not its Full AI Summary.**
-  - A trait reaches the AI carrying three things the summary cannot: how much
-    weight to give it, whether it is a secret to be known and never said out
-    loud, and which chapters it is true in. The summary is written FROM your
-    traits and none of that survives into it -- so sending both paid twice for
-    the same facts, and put your secrets on the wire looking like ordinary
-    sentences.
-  - The Full AI Summary is still generated, still on the profile page, and
-    still in your exports. It just is not attached any more, which also makes
-    every attachment cheaper.
-
-### Fixed
-
-- **A Creature's Appearance vanished after you saved it.** It was never lost:
-  the app was quietly filing it under a Location's "Physical Description",
-  a heading Creatures do not have, so the box came back empty while your
-  words sat safely on disk under the wrong name. Objects (Appearance and
-  Significance) and Concepts (Details) had the same problem.
-  - **Entries already affected repair themselves when you open them**, and
-    the file is put right the next time you press Save. Nothing to run.
-- **Creatures, Cultures, Factions, Religions, Ruling Authorities, Deities,
-  Objects and Languages now open in the same editor as Characters,
-  Locations and Lore** -- the same layout, the same controls, and the
-  Profile Chat, which they did not have before. They were opening in the
-  Weave's simpler editor because the way in checked a list of four kinds
-  written by hand, even though the full editor could already draw them.
-
-- **The Weave measured your world context against the wrong number.** It
-  assumed every model held 32,000 tokens, whatever model you had actually
-  chosen, so "this does not fit" and the breakdown of where the room went were
-  both computed against a figure nobody picked. It now asks the real model, and
-  says which one it measured — or says plainly that the limit is a guess when
-  the model does not publish one.
-- **A local model could never be told its request was too big.** Because local
-  models do not publish a size limit, the app read "unknown" as "unlimited" and
-  waved everything through — and most local servers quietly trim an oversize
-  prompt and answer anyway, so the reply looked fine and was built on half your
-  book. Unknown is now treated as unknown, and said out loud.
-- **Two places quietly cut text and did not say so.** A relationship snippet and
-  a chapter sent to the outline builder were trimmed silently, which reads to
-  the AI as a sentence that just stops. They now say they were trimmed.
-- **Your chat followed you into another book.** Opening a second project left
-  the first one's conversation in the panel, with its profiles still attached
-  and the next message quietly grounded in the wrong novel.
-- **Four of your six notes could not be attached to an AI chat at all.** The
-  chat's Notes tab listed Outline and Style Guide from a hardcoded pair, while
-  the sidebar offered six -- so Themes, Research and Brainstorming could be
-  written and never used. The tab now asks the app what notes exist.
-
 - **A prologue and an epilogue.** Next to New Chapter there are now
   **+ Prologue** and **+ Epilogue** buttons, offered while your book does not
   already have one.
@@ -157,7 +83,6 @@ entry while working on a feature, append it under Unreleased.
     summaries, renaming, exporting, and the Weave, so a fact can be pinned to
     something that happens in your prologue.
   - Fixed on the way: a chapter created after them used to skip a number.
-
 - **Chapter Outlines.** A plan for each chapter, in a Chapter Outline row in
   the sidebar next to Chapter Summary. Write the key events that move the
   chapter along, in the order they happen. It is the one per-chapter document
@@ -187,9 +112,37 @@ entry while working on a feature, append it under Unreleased.
     it came from. An entry now also shows which chapters PLAN to use it, beside
     the chapters you said it appears in. That one is worked out fresh every
     time, so editing an outline changes it straight away.
+  - It has the same formatting toolbar as the manuscript: numbered lists,
+    bullets, headings, bold, italic and the rest. An outline is a numbered
+    list more often than it is anything else, and the only way to make one
+    was to type the digits yourself.
+  - The Writing Companion stays open beside it instead of disappearing, so
+    you can argue about what should happen in the chapter while you plan it.
+  - Open chat can see the plan you are looking at. The context bar shows
+    it, says what it costs, and switches it off.
+  - Opening a chapter's outline also opens that chapter, so the chat and the
+    context bar are about the chapter you are planning.
 
 ### Changed
 
+- **Per-section AI Summaries are gone.** Each section of a profile had its own
+  collapsed "AI Summary" tile with its own Generate button -- one AI request
+  each, so six sections meant six requests. They were never sent to any AI:
+  not when you attach the profile to a chat, not by the Profile Chat, not by
+  the Weave, not even as material for the Full AI Summary. You were paying for
+  text only you could read.
+  - Anything already written stays in your files and still exports. The button
+    and the cost are what went.
+- **Attaching a profile now sends its traits, not its Full AI Summary.**
+  - A trait reaches the AI carrying three things the summary cannot: how much
+    weight to give it, whether it is a secret to be known and never said out
+    loud, and which chapters it is true in. The summary is written FROM your
+    traits and none of that survives into it -- so sending both paid twice for
+    the same facts, and put your secrets on the wire looking like ordinary
+    sentences.
+  - The Full AI Summary is still generated, still on the profile page, and
+    still in your exports. It just is not attached any more, which also makes
+    every attachment cheaper.
 - **The Weave map is readable again.** Every line used to carry the whole
   sentence you wrote about the connection, so a world of any size became forty
   overlapping paragraphs with the dots lost underneath. A line now says what
@@ -231,6 +184,40 @@ entry while working on a feature, append it under Unreleased.
 
 ### Fixed
 
+- **A Creature's Appearance vanished after you saved it.** It was never lost:
+  the app was quietly filing it under a Location's "Physical Description",
+  a heading Creatures do not have, so the box came back empty while your
+  words sat safely on disk under the wrong name. Objects (Appearance and
+  Significance) and Concepts (Details) had the same problem.
+  - **Entries already affected repair themselves when you open them**, and
+    the file is put right the next time you press Save. Nothing to run.
+- **Creatures, Cultures, Factions, Religions, Ruling Authorities, Deities,
+  Objects and Languages now open in the same editor as Characters,
+  Locations and Lore** -- the same layout, the same controls, and the
+  Profile Chat, which they did not have before. They were opening in the
+  Weave's simpler editor because the way in checked a list of four kinds
+  written by hand, even though the full editor could already draw them.
+- **The Weave measured your world context against the wrong number.** It
+  assumed every model held 32,000 tokens, whatever model you had actually
+  chosen, so "this does not fit" and the breakdown of where the room went were
+  both computed against a figure nobody picked. It now asks the real model, and
+  says which one it measured — or says plainly that the limit is a guess when
+  the model does not publish one.
+- **A local model could never be told its request was too big.** Because local
+  models do not publish a size limit, the app read "unknown" as "unlimited" and
+  waved everything through — and most local servers quietly trim an oversize
+  prompt and answer anyway, so the reply looked fine and was built on half your
+  book. Unknown is now treated as unknown, and said out loud.
+- **Two places quietly cut text and did not say so.** A relationship snippet and
+  a chapter sent to the outline builder were trimmed silently, which reads to
+  the AI as a sentence that just stops. They now say they were trimmed.
+- **Your chat followed you into another book.** Opening a second project left
+  the first one's conversation in the panel, with its profiles still attached
+  and the next message quietly grounded in the wrong novel.
+- **Four of your six notes could not be attached to an AI chat at all.** The
+  chat's Notes tab listed Outline and Style Guide from a hardcoded pair, while
+  the sidebar offered six -- so Themes, Research and Brainstorming could be
+  written and never used. The tab now asks the app what notes exist.
 - **The Weave opens on a new project.** Its tab used to show "there is nothing
   to convert" with no way past it, so a brand-new book could not reach its own
   map at all. It now opens on the map, empty and ready.
@@ -244,7 +231,6 @@ entry while working on a feature, append it under Unreleased.
   Profiles breakdown read the old folder no matter what, so any book that had
   moved into the Weave was told "no entry" in every category however much was
   in it.
-
 - **A relationship with somebody who has no profile can be saved.** Recording a
   relationship with a character who HAS an entry writes that connection to disk
   straight away -- it is a shared record, so it cannot wait for the page's
@@ -268,6 +254,17 @@ entry while working on a feature, append it under Unreleased.
 - **The window opens the size you left it.** Size, position and whether it was
   maximised are remembered between launches. The 1536x864 in the app's config
   is a first-run default now rather than something re-applied on every start.
+- **Changing who a relationship is with no longer breaks it.** Open a
+  relationship linked to one of your characters and start typing a different
+  name -- someone with no profile -- and the card closed itself on the first
+  keystroke. Whatever you typed after that went nowhere, and pressing Update
+  said "Say who this relationship is with". The card stays open now.
+- **...and the old connection goes away when you do.** Turning a linked
+  relationship into a typed name used to leave the original connection behind:
+  it disappeared from the screen and came back the next time the list loaded,
+  sitting next to the one that replaced it. Pointing it at a different
+  character was refused outright. Both work now, and if the old connection
+  cannot be removed you are told why and nothing is duplicated.
 
 ---
 
