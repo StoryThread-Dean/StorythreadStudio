@@ -192,7 +192,10 @@ ROLE_INFO: dict[str, dict] = {
                   "nothing -- this is the one role where deliberately choosing a "
                   "small, fast, cheap model is the RIGHT answer rather than a "
                   "compromise. It also runs often, so the saving adds up.",
-        "features": ["Usage previews", "Generate Overview", "Section summaries"],
+        # "Section summaries" left this list with the per-section summary
+        # route in v2.0.6. The Model Roles screen renders this list, so a
+        # stale entry tells the writer a deleted feature uses this model.
+        "features": ["Usage previews", "Generate Overview"],
         "reserved": False,
     },
 }

@@ -374,8 +374,11 @@ export function WeaveContextBar({
               <>
                 Sending{" "}
                 <span className="text-text-primary">this chapter&rsquo;s outline</span>
-                , about {outlineTokens.toLocaleString()} tokens, with Draft and
-                Enhance
+                {/* All three that read it (routers/ai.py). This said "Draft
+                    and Enhance" after open chat began receiving it too, so the
+                    bar that exists to show what is sent under-reported it. */}
+                , about {outlineTokens.toLocaleString()} tokens, with chat,
+                Draft and Enhance
               </>
             )}
           </span>

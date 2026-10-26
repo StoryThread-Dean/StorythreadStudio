@@ -355,7 +355,14 @@ export const EXPLAIN: Record<string, Explains> = {
       + "ended and the next began. Coming back to a thread of thought two "
       + "days later meant rebuilding all of it from memory.",
     needed: "optional",
-    cost: FREE,
+    // NOT FREE, though saving and listing are. Reopening a LONG conversation
+    // buys a recap of its older half from the Long-context model, once, the
+    // first time -- this said FREE while that request was being charged.
+    cost: spends("Saving and reopening cost nothing. A long conversation (ten "
+      + "messages or more) buys one short recap of its older messages the "
+      + "first time you reopen it, from your Long-context model. The recap "
+      + "is kept, so reopening it again does not pay twice."),
+    endpoint: "/api/ai/chat-recap",
     how: [
       "Pick a conversation from the list to reopen it. It comes back with "
         + "everything on screen and the attachments it had.",
