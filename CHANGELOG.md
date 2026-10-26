@@ -18,7 +18,7 @@ entry while working on a feature, append it under Unreleased.
 
 ---
 
-## [2.0.6] - UNRELEASED
+## [2.0.6] - 2026-10-26
 
 ### Added
 
