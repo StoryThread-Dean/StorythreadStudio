@@ -21,6 +21,8 @@
 import { useEffect, useState } from "react";
 import { ListOrdered, Loader } from "lucide-react";
 
+import { Explain } from "../../components/learn/Explain";
+
 const API_BASE = "http://localhost:8000";
 
 interface PlannedChapter {
@@ -82,6 +84,10 @@ export function PlannedIn({ projectPath, entityId, name, refreshKey = 0 }: Props
             {c.chapter_title}
           </span>
         ))}
+        {/* Beside the chips rather than under the note: this row sits right
+            below "Appears in", which IS editable, and the question a writer
+            has is "why can't I change this one" -- asked while looking here. */}
+        <Explain of="weave.planned-in" compact />
       </p>
       {/* SAID OUT LOUD, because the row above it says the opposite kind of
           thing. Without this line the two read as one list the writer half

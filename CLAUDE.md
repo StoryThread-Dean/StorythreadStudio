@@ -208,10 +208,22 @@ fixed: the "Past chats" explanation said FREE while a long conversation's first
 reopen buys a recap (it now names `/api/ai/chat-recap`, so
 `test_explain_costs.py` watches it), and the context bar said the chapter
 outline went with "Draft and Enhance" when open chat receives it too. Model
-Roles also listed "Section summaries", a deleted feature. CHANGELOG heading is `[2.0.6] - UNRELEASED`
-until the cut stamps the date; release notes are
-`release-artifacts/v2.0.6-notes.md`. Branch health at prep (2026-10-26): 2593
-backend tests, 2122 frontend across 93 files, ruff and tsc clean.
+Roles also listed "Section summaries", a deleted feature.
+
+**Three new controls shipped to the branch with no "What's this?"** -- the map
+legend (which became a FILTER and looks like a key), the map zoom, + Prologue /
++ Epilogue, and the Planned in row (derived, beside the editable Appears in).
+Added before the cut. `Explain` gained `opens="above"`: the zoom cluster sits in
+the corner of a box with `overflow-hidden`, so a panel dropping downward was
+cut off after one line. Explain.test.tsx pins each one PER KEY rather than per
+file, because WeaveMap already explained the scrubber -- and note that
+`map.scrubber` / `map.spoilers` exist in the registry with NO call site (the
+scrubber uses the older inline `WhatsThis`). Smoke 38 is the visual half.
+
+CHANGELOG heading is `[2.0.6] - UNRELEASED` until the cut stamps the date;
+release notes are `release-artifacts/v2.0.6-notes.md`. Branch health at prep
+(2026-10-26): 2593 backend tests, 2129 frontend across 93 files, ruff and tsc
+clean.
 
 **The Profile Extractor, for reference.** Reads the manuscript
 and proposes what each entry should say. Its ten decisions and the reasoning

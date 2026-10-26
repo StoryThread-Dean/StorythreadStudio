@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { WhatsThis } from "../../components/learn/WhatsThis";
+import { Explain } from "../../components/learn/Explain";
 import {
   CONCEPTS, TONE_CLASSES, threadTypeEntry, type Tone,
 } from "./lexicon";
@@ -618,6 +619,11 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                   data-testid="map-zoom-level">
               {Math.round(zoom * 100)}%
             </span>
+            {/* Icon-only: this cluster is a floating toolbar. Opens UPWARD,
+                because the map's box clips its overflow and a panel dropping
+                down from this corner would be cut off after one line. */}
+            <Explain of="map.zoom" compact align="right" opens="above"
+                     label="What do these buttons do?" />
           </div>
         )}
         {view && view.nodes.length === 0 ? (
@@ -920,6 +926,12 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
           "what could I have". */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-border bg-bg-primary px-3 py-2"
            data-testid="weave-legend">
+        {/* FIRST in the row, so it is there whatever the world holds -- a
+            legend whose kinds are all faded still needs saying what it does.
+            Opens upward over the map: the legend is the last thing on the
+            screen, and a panel dropping below it lands off the bottom. */}
+        <Explain of="map.legend" compact opens="above"
+                 label="What does the legend do?" />
         {(registry?.types ?? []).map(type => {
           const entry = threadTypeEntry(type.id, type.label, type.icon);
           const Icon = entry.Icon;

@@ -39,6 +39,7 @@ import { ChatSessions } from "./components/chat/ChatSessions";
 import { SummaryView }    from "./components/SummaryView";
 import { SceneSummaryView } from "./components/SceneSummaryView";
 import { ChapterOutlineView } from "./components/ChapterOutlineView";
+import { Explain } from "./components/learn/Explain";
 import { SceneSummaryPreviewModal } from "./components/SceneSummaryPreviewModal";
 import { RightPanelResizer, useRightPanelWidth, RIGHT_PANEL_CLASS } from "./components/RightPanelResizer";
 import { Settings } from "./screens/Settings";
@@ -3178,6 +3179,13 @@ function App() {
               >
                 + Epilogue
               </button>
+            )}
+            {/* ONE explanation for the pair, shown while either button is.
+                Icon-only because this is the title bar, where every word
+                competes with the chapter name. */}
+            {(!hasPrologue || !hasEpilogue) && (
+              <Explain of="manuscript.front-back" compact align="right"
+                       label="What are a prologue and an epilogue here?" />
             )}
             {isDirty ? (
               <span className="flex items-center gap-1.5 text-xs text-warn-muted"

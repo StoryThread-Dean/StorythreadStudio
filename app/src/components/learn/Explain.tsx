@@ -53,9 +53,20 @@ interface ExplainProps {
   compact?: boolean;
   /** Open the panel to the right of the trigger instead of the left. */
   align?: "left" | "right";
+  /**
+   * Open the panel ABOVE the trigger instead of below it.
+   *
+   * For a trigger at the bottom of something that clips its overflow -- the
+   * map's zoom controls sit in the corner of a box with `overflow-hidden`, so
+   * a panel dropping downward from there would be cut off after one line.
+   * Opening upward lays it over the map instead, which is what the writer is
+   * asking about anyway.
+   */
+  opens?: "below" | "above";
 }
 
-export function Explain({ of, entry, label, compact, align = "left" }: ExplainProps) {
+export function Explain({ of, entry, label, compact, align = "left",
+                          opens = "below" }: ExplainProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
   const info = entry ?? (of ? EXPLAIN[of] : undefined);
@@ -113,7 +124,9 @@ export function Explain({ of, entry, label, compact, align = "left" }: ExplainPr
           // offset so the anchoring below stays the thing that decides where
           // the panel sits, and this only corrects it.
           style={fitStyle}
-          className={`absolute top-full z-50 mt-1.5 w-[min(30rem,80vw)] overflow-hidden rounded-lg border border-border-strong bg-bg-panel text-micro leading-relaxed text-text-muted shadow-e3 ${
+          className={`absolute z-50 w-[min(30rem,80vw)] overflow-hidden rounded-lg border border-border-strong bg-bg-panel text-micro leading-relaxed text-text-muted shadow-e3 ${
+            opens === "above" ? "bottom-full mb-1.5" : "top-full mt-1.5"
+          } ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >

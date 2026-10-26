@@ -1845,6 +1845,32 @@ Expected:
 
 ---
 
+## 38. The three new controls explain themselves
+
+**Touches:** the "What's this?" panels added at the v2.0.6 cut for the map
+legend, the map zoom, + Prologue / + Epilogue and Planned in. The tests prove
+each one is wired; only a person can see whether its panel is READABLE where
+it opens, which is the part that goes wrong.
+
+Steps:
+1. On the Weave map, press the **?** at the start of the legend row, then the
+   **?** at the end of the zoom buttons in the map's bottom-right corner.
+   - [ ] Each panel opens UPWARD over the map and is readable top to bottom.
+         Nothing is cut off by the edge of the map box or the window.
+2. On a book with no prologue, press the **?** beside + Prologue / + Epilogue
+   in the editor's title bar.
+   - [ ] The panel stays on screen (it slides back in from the right edge).
+   - [ ] Add a prologue AND an epilogue: the **?** goes away with the buttons.
+3. Open an entry whose name appears in at least one chapter outline, and press
+   the **?** on its **Planned in** row.
+   - [ ] It says the row is worked out from your outlines and is not set here.
+
+Expected:
+- Every control added in this release says what it does, and its explanation
+  can be read where it opens.
+
+---
+
 ## What this checklist does NOT cover
 
 - **Auto-updater** -- verified separately by bumping a version and

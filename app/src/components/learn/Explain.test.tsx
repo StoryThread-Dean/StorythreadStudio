@@ -221,6 +221,22 @@ describe("what the writer sees", () => {
     expect(screen.getByTestId("explain-panel").className).toMatch(/\babsolute\b/);
   });
 
+  it("opens below by default, and above when the trigger sits on a clipped edge", async () => {
+    // The map's zoom controls sit in the bottom corner of a box that clips its
+    // overflow, so a panel dropping downward from there was cut off after one
+    // line. `opens="above"` lays it over the map instead.
+    render(<Explain entry={LOCAL} />);
+    await userEvent.click(screen.getByRole("button", { name: /What's this/ }));
+    expect(screen.getByTestId("explain-panel").className).toMatch(/\btop-full\b/);
+    cleanup();
+
+    render(<Explain entry={LOCAL} opens="above" />);
+    await userEvent.click(screen.getByRole("button", { name: /What's this/ }));
+    const panel = screen.getByTestId("explain-panel").className;
+    expect(panel).toMatch(/\bbottom-full\b/);
+    expect(panel).not.toMatch(/\btop-full\b/);
+  });
+
   it("shrinks to an icon where a row is crowded", async () => {
     // Words are the better affordance, so this is for places they will not fit,
     // not a default to reach for. It still has to be findable by name.
@@ -268,7 +284,7 @@ describe("the rule is applied, not merely available", () => {
 
   const SOURCES = import.meta.glob(
     ["../../features/codex/*.tsx", "../../components/editor/*.tsx",
-     "../../components/profiles/*.tsx"],
+     "../../components/profiles/*.tsx", "../../App.tsx"],
     { query: "?raw", import: "default", eager: true },
   ) as Record<string, string>;
 
@@ -292,11 +308,29 @@ describe("the rule is applied, not merely available", () => {
     "QuickBuildPanel.tsx",     // reads like AI, is not, and has adult tiers
     "NameGeneratorPanel.tsx",  // partial picks are valid and nobody guesses that
     "SpinePickers.tsx",        // the dropdown clearing itself looks broken
+    "WeaveMap.tsx",            // a legend that is secretly a row of switches
+    "PlannedIn.tsx",           // looks editable beside "Appears in", is derived
   ];
 
   for (const name of MUST_EXPLAIN) {
     it(`${name} offers an explanation`, () => {
       expect(source(name)).toMatch(/<Explain\s/);
+    });
+  }
+
+  // v2.0.6 shipped three controls with no explanation, against the rule this
+  // block exists for. Pinned per KEY rather than per file, because WeaveMap
+  // already had a What's this? (the scrubber) -- a file-level check would have
+  // stayed green with the legend and the zoom unexplained.
+  const PINNED: [string, string][] = [
+    ["WeaveMap.tsx", "map.legend"],
+    ["WeaveMap.tsx", "map.zoom"],
+    ["PlannedIn.tsx", "weave.planned-in"],
+    ["App.tsx", "manuscript.front-back"],
+  ];
+  for (const [name, key] of PINNED) {
+    it(`${name} explains ${key}`, () => {
+      expect(source(name)).toContain(`<Explain of="${key}"`);
     });
   }
 

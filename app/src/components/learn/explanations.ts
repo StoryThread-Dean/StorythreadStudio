@@ -404,6 +404,24 @@ export const EXPLAIN: Record<string, Explains> = {
         + "in it is ever sent to an AI unless you attach it yourself.",
     ],
   },
+  "manuscript.front-back": {
+    what: "A prologue that always comes first and an epilogue that always "
+      + "comes last.",
+    why: "A prologue is not chapter zero. Filed as a chapter it would take a "
+      + "number, count towards your chapter target, and could be moved into "
+      + "the middle of an act. These sit outside the numbering wherever your "
+      + "acts go, and every word in them still counts towards your total.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Press + Prologue or + Epilogue and give it a title. The usual name is "
+        + "filled in for you.",
+      "It opens in the editor like any chapter. Summaries, outlines, renaming, "
+        + "export and the Weave all work on it.",
+      "Each button disappears once the book has one, because a book only has "
+        + "one of each.",
+    ],
+  },
   "chapter-outline.what": {
     what: "A list of the key events in one chapter, in the order they happen.",
     why: "Your chapter and scene summaries are written AFTER the prose and "
@@ -1152,6 +1170,62 @@ export const EXPLAIN: Record<string, Explains> = {
       + "people is a reveal on its own.",
     needed: "optional",
     cost: FREE,
+  },
+  // The legend became a FILTER in v2.0.6 and shipped with nothing on screen
+  // saying so. A legend reads as a key you look at, not a row of switches,
+  // so the one thing a writer would not guess is the thing it now does.
+  "map.legend": {
+    what: "The key to the map, and a switch for each kind of entry on it.",
+    why: "A busy world turns the map into a clump of dots. Hiding the kinds "
+      + "you are not thinking about right now lets you see the ones you are, "
+      + "and their connections go with them, so nothing is left pointing at "
+      + "empty space.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Click a kind, such as Lore, to hide every entry of that kind and its "
+        + "connections.",
+      "Click it again to bring them back. The number beside each kind is how "
+        + "many you have.",
+      "A faded kind has no entries yet, so there is nothing to hide.",
+      "What you hide is remembered for this book only, and the map says how "
+        + "much it is holding back. Press Show every kind to bring them all "
+        + "back at once.",
+    ],
+  },
+  "map.zoom": {
+    what: "Zoom in and out of the map, and get back to the whole of it.",
+    why: "In a big world the dots crowd together and long names run off the "
+      + "edge. Zooming in pulls a clump apart; zooming out shows the space "
+      + "past the edges, so a name that ran off the side can be read and an "
+      + "entry sitting out there can be reached.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Press the plus or minus to zoom. The number beside them is how far in "
+        + "you are.",
+      "Drag the background to move around while you are zoomed.",
+      "Press the four-corners button to go back to the whole map, centred. It "
+        + "is greyed out when you are already there.",
+    ],
+  },
+  // "Planned in" sits directly under "Appears in", which IS editable, and
+  // looks like the same kind of list. It is not: it is worked out, and there
+  // is nothing on this row to change.
+  "weave.planned-in": {
+    what: "The chapters whose outlines mention this entry by name.",
+    why: "So you can see where you meant to use something before you have "
+      + "written it, next to where it actually appears. It is worked out from "
+      + "your chapter outlines every time you look, so it is never out of "
+      + "date.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Nothing to set here. To change this list, edit a chapter's outline: add "
+        + "the name to plan it in, take the name out to unplan it.",
+      "It only appears when at least one outline names this entry.",
+    ],
+    endpoint: "/api/codex/planned-in",
   },
   // ── The Profile Extractor (v2.0.1) ──────────────────────────────────────
   //
