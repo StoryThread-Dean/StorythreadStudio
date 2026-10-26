@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## CURRENT STATE: v2.0.5 SHIPPED 2026-09-04 -- v2.0.6 IN PREP on `release/v2.0.6`
+## CURRENT STATE: v2.0.6 SHIPPED 2026-10-26
 
 **v2.0.0 shipped 2026-08-14** (115 commits, tag v2.0.0, installer live). The
 recovery plan is 93 of 107 with the rest deferred by scope or blocked on a
@@ -185,9 +185,10 @@ any AI** -- the screen insisted on it and it went into the file and no further.
 Also Fix Profile, for a hand-mistyped heading that the older profile format
 would drop on the next ordinary save.
 
-**v2.0.6 -- IN PREP, branch `release/v2.0.6`.** Everything dated 2026-09-05 to
-2026-09-07 below is v2.0.6, plus the relationship retarget fix (PR #30, merged
-into the release branch): a recorded row's open/closed key and its delete
+**v2.0.6 shipped 2026-10-26** (tag v2.0.6, release PR #32, installer live,
+updater endpoint verified serving 2.0.6 with the 1,085-character notes, and the
+update confirmed from two machines). Everything dated 2026-09-05 to 2026-09-07
+below is v2.0.6, plus the relationship retarget fix (PR #30): a recorded row's open/closed key and its delete
 address used the LIVE `targetId`, so retyping the other end closed the card on
 the first keystroke, and turning a connection into a typed name never removed
 the connection -- it returned on the next reload beside its replacement.
@@ -220,8 +221,15 @@ file, because WeaveMap already explained the scrubber -- and note that
 `map.scrubber` / `map.spoilers` exist in the registry with NO call site (the
 scrubber uses the older inline `WhatsThis`). Smoke 38 is the visual half.
 
-CHANGELOG heading is `[2.0.6] - UNRELEASED` until the cut stamps the date;
-release notes are `release-artifacts/v2.0.6-notes.md`. Branch health at prep
+**A cut-day near miss worth knowing:** a wrapped `git add` line ran the sidecar
+exe as a COMMAND, and a windowed PyInstaller exe launched with no console has
+`sys.stdout = None`, so uvicorn's log formatter crashed on `.isatty()`. Not a
+release bug -- Tauri spawns the sidecar with PIPED stdio and drains it, so the
+app never hits it (verified by running the built exe with pipes) -- but the
+backend cannot survive a direct launch, which is a cheap hardening for later.
+Give release commands one short line at a time.
+
+Branch health at the cut
 (2026-10-26): 2593 backend tests, 2129 frontend across 93 files, ruff and tsc
 clean.
 
@@ -881,7 +889,7 @@ ledger below is kept as the shipped record.
 
 ## Project Status
 
-**Status: shipped.** The current release is **v2.0.5** (2026-09-04), with v2.0.6 in prep -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
+**Status: shipped.** The current release is **v2.0.6** (2026-10-26) -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
 
 **Versioning is a three-tier rule, not semver.** Tier 3 (`v1.1.x`) = enhancements to existing features. Tier 2 (`v1.x.0`) = additions, like the Audiobook Converter. Tier 1 (`vX.0.0`) = major restructuring -- a change needing its own dashboard, or one that alters multiple existing features at once. Judge the tier by what the RELEASE delivers, not by the size of the programme it belongs to.
 
