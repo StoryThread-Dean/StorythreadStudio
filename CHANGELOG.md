@@ -18,6 +18,27 @@ entry while working on a feature, append it under Unreleased.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Changing who a relationship is with no longer breaks it.** Open a
+  relationship linked to one of your characters and start typing a different
+  name -- someone with no profile -- and the card closed itself on the first
+  keystroke. Whatever you typed after that went nowhere, and pressing Update
+  said "Say who this relationship is with". The card stays open now.
+- **...and the old connection goes away when you do.** Turning a linked
+  relationship into a typed name used to leave the original connection behind:
+  it disappeared from the screen and came back the next time the list loaded,
+  sitting next to the one that replaced it. Pointing it at a different
+  character was refused outright. Both work now, and if the old connection
+  cannot be removed you are told why and nothing is duplicated.
+- **Update after recording a relationship is no longer refused.** Recording a
+  linked relationship writes to the character's file straight away, and the
+  page did not notice -- so its next Update was refused with "this entry
+  changed on disk since you opened it", for a change you had just made on the
+  same screen.
+
 ## [2.0.5] - 2026-09-04
 
 ### Changed

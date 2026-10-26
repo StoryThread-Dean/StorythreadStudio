@@ -94,8 +94,8 @@ import { findUnshownSections, foldIntoNotes, renameSection } from "./profileRepa
 import { RunEditor } from "../features/codex/RunEditor";
 import { AppearsIn } from "../features/codex/AppearsIn";
 import { TraitWindow } from "../components/profiles/TraitWindow";
-import { fetchAnchors, fetchThreads, type ChapterAnchor } from "../features/codex/api";
-import type { EntriesHome, ProfileSource } from "./profileSource";
+import { fetchAnchors, fetchThread, fetchThreads, type ChapterAnchor } from "../features/codex/api";
+import type { EntriesHome, ProfileSource, WeaveThread } from "./profileSource";
 
 const API_BASE = "http://localhost:8000";
 
@@ -759,6 +759,63 @@ export function ProfileBuilder({
       setEditorLoading(false);
     }
   }, [source]);
+
+  /**
+   * RE-READ WHAT THE RELATIONSHIPS SECTION JUST WROTE TO THIS ENTRY'S OWN FILE.
+   *
+   * Nearly everything on this page waits for Update. A relationship with an
+   * entry on the other end does NOT -- it is a shared record, so pressing
+   * Record writes a connection into this character's Markdown then and there.
+   * That leaves the open page holding two things that are now out of date, and
+   * both of them fail silently in their own way:
+   *
+   *   1. `revision`, which is the fingerprint the save is checked against. The
+   *      file moved, so the writer's next Update is refused as a conflict --
+   *      "This entry changed on disk since you opened it" -- for a change they
+   *      made themselves, thirty seconds earlier, on this screen. That is the
+   *      reported bug: record a linked relationship, type a second one that has
+   *      no profile to link to, press Update, and the typed one cannot be saved
+   *      at all. It lives in the page buffer, and a refused save never writes
+   *      the buffer, so leaving the profile loses it with nothing to recover.
+   *
+   *   2. `weave`, the whole Thread carried through a load so a save can hand
+   *      back everything this form does not display (see profileSource.ts).
+   *      Its `ties` list is the one from BEFORE the record. Get past the
+   *      conflict without refreshing it and the next ordinary save quietly
+   *      deletes the connection the writer just made -- the failure the
+   *      conflict check exists to prevent, arriving by the other door.
+   *
+   * So both are taken again from disk, and NOTHING ELSE is: the sections, the
+   * name, the Run and every other field stay exactly as the writer has them in
+   * the buffer. This is a resync of the parts the page does not own, not a
+   * reload of the page.
+   */
+  const resyncWeave = useCallback(async () => {
+    const p = profileRef.current;
+    if (!p || !source || source.home !== "codex" || !p.entity_id) return;
+    try {
+      // Read as the loose blob it is on the wire. `ThreadDetail` names the few
+      // fields the Weave's own screens read; what this needs is everything the
+      // file holds, `ties` included, and enumerating them here would be a
+      // second list of the format to keep in step. See WeaveThread.
+      const fresh = await fetchThread(project.root_path, p.entity_id) as
+        unknown as WeaveThread & { entity_id?: string; revision?: string };
+      setProfile(prev => {
+        // The writer may have switched entries while this was in flight. A
+        // resync that landed on the wrong profile would give it another
+        // entry's connections.
+        if (!prev || prev.entity_id !== fresh.entity_id) return prev;
+        return {
+          ...prev,
+          revision: fresh.revision ? String(fresh.revision) : prev.revision,
+          weave: { ...(prev.weave ?? {}), ...fresh },
+        };
+      });
+    } catch {
+      // A failed re-read leaves the page exactly as it was. The save may then
+      // be refused, which is the old behaviour -- never worse than it.
+    }
+  }, [source, project.root_path]);
 
   const handleSave = useCallback(async () => {
     const p = profileRef.current;
@@ -2727,6 +2784,13 @@ export function ProfileBuilder({
                             ...(block.rel ? { rel: block.rel } : {}),
                           })) as TraitBlock[],
                         })}
+                        // RECORDING A CONNECTION WRITES THIS ENTRY'S OWN FILE
+                        // while the page is still open. Without this the page
+                        // holds a stale fingerprint and a stale copy of the
+                        // connections, and the writer's next Update is either
+                        // refused for a change they made themselves or, worse,
+                        // accepted and deletes it. See resyncWeave.
+                        onChanged={() => void resyncWeave()}
                       />
                     </div>
                   );
