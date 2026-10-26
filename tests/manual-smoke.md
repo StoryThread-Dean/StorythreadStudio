@@ -73,21 +73,38 @@ Expected -- a native folder-picker dialog opens (NOT a browser file
 input), and the new project folder contains all of:
 - `manuscript/` -- with at least one starter chapter `.md`
 - `notes/` -- containing `outline.md`
-- `profiles/characters/`
-- `profiles/relationships/` -- still scaffolded, and the Relationship KIND is
-  retired: the app no longer offers to create one, so this folder stays empty
-  on a new project. It is kept because an existing project's entries live here
-  and the legacy reader finds them by folder. Do NOT file the empty folder, or
-  the missing "Relationships" option in a create menu, as a bug.
-- `profiles/locations/`
-- `profiles/lore/`
-- `profiles/chapters/` -- legacy dir, still scaffolded; current chapter
-  summaries write to `summaries/chapters/`
-- `profiles/scenes/` -- legacy dir, still scaffolded; current scene
-  summaries write to `summaries/scenes/<chapter-stem>/`
+- `codex/characters/`
+- `codex/locations/`
+- `codex/lore/`
+- `codex/events/`
 - `exports/`
 - `.storythread/` -- cache; `app.db` will appear here after the first
   save event
+
+**THERE IS NO `profiles/` FOLDER, AND THAT IS THE CHANGE.** A project created
+by this version is born in the Weave. If you see one, the scaffold has
+regressed -- file it. An older project still has its `profiles/` folder, still
+opens it, and is still only OFFERED a conversion; scenario 18 covers that side.
+
+**There is no `codex/types.json` either, and that is also correct.** The shipped
+kinds are the fallback; the file appears only once you customise a kind (rename
+one, add your own). Do not file its absence.
+
+The other nine kinds -- factions, religions, governments, deities, creatures,
+cultures, objects, concepts, languages -- have no folder yet. Each is created
+the moment you record your first entry of that kind. Do not file those as
+missing. (Relationships are a retired kind: a new project never gets a folder
+for them, and the app does not offer to create one.)
+
+- [ ] Open **project.json** in a text editor. It contains `"codex_native": true`.
+      That line is what stops a stray Markdown file dropped into a `profiles/`
+      folder from silently moving your whole world to the legacy home.
+
+- [ ] Open the **Weave** tab on this brand-new project. You get the map (empty,
+      with the list toggle beside it) -- NOT a screen saying "this project has
+      not been brought into the Weave yet" or "there is nothing to convert".
+      Before this change every new project met that screen, and it has no
+      button on it, so there was no way through to your own map.
 
 `notes/outline.md` is the ten-line worksheet and NOTHING else -- no YAML,
 no `# OUTLINE TRACKING DATA`, and no `---` anywhere in the file. It reads:
@@ -114,6 +131,47 @@ Every other line is a bare label. If you see the old tracking block here, the
 project was made by a pre-2.0.2 build -- check the version before filing.
 
 The app navigates into the new project.
+
+---
+
+## 2b. A prologue and an epilogue
+
+**Touches:** the structure manifest's reading order, chapter numbering, the
+sidebar, the progress gauge and the Weave's anchors. Needs a project with at
+least two chapters.
+
+Steps:
+1. In the chapter list header, next to **+ New Chapter**, press **+ Prologue**
+   and accept the suggested title.
+   - [ ] On disk it is `manuscript/prologue.md` -- no `01-` style number.
+   - [ ] It appears at the TOP of the chapter list, under a Prologue label.
+2. Press **+ Epilogue**.
+   - [ ] It appears at the BOTTOM, under an Epilogue label.
+   - [ ] Both buttons are now gone. One of each is all a book has.
+3. Press **+ New Chapter**.
+   - [ ] It is numbered as the NEXT chapter, not two along. With a prologue,
+         an epilogue and two chapters on disk, the new one is `03-`. A skipped
+         number here is the bug this step exists to catch.
+4. Make an act and drag both chapters into it, or reorder the acts.
+   - [ ] The prologue is STILL at the top and the epilogue STILL at the
+         bottom. Neither has fallen into Unassigned. This is the failure most
+         worth catching: the acts tree does not know about them, so a reorder
+         is exactly when they would be lost.
+5. Rename the prologue from its row menu.
+   - [ ] It keeps its place at the top, and its file keeps a bare name with
+         no number added.
+6. Open the Writing Progress gauge.
+   - [ ] The chapter count does NOT include the prologue or the epilogue.
+   - [ ] The word total DOES include their words. You wrote them.
+7. Open the Weave and drag the story scrubber to the far left.
+   - [ ] The first stop is the prologue, by its title. Things happen in a
+         prologue, so you must be able to anchor a fact to them.
+8. Give the prologue a chapter summary and a chapter outline from its sidebar
+   rows, then rename it again.
+   - [ ] Both follow it, exactly as they do for a chapter.
+
+Expected: a prologue behaves like a chapter everywhere except the two places
+where it is not one -- it has no number, and it is not counted as a chapter.
 
 ---
 
@@ -154,12 +212,148 @@ Steps:
 Expected:
 - The new character appears in the left panel under Profiles →
   Characters.
-- A file exists on disk at `profiles/characters/<slug>-<short-id>.md`
-  with YAML frontmatter (`id`, `name`, `type: character`, `importance`,
-  `updated_at`).
+- A file exists on disk at **`codex/characters/<slug>-<short-id>.md`** with
+  YAML frontmatter (`entity_id`, `name`, `type: character`, `updated_at`).
+  On an OLDER project that has not been converted it lands in
+  `profiles/characters/` instead, in the legacy dialect -- both are correct,
+  and which one you get depends on the project, not on this screen.
 - Click the Writing Progress gauge -- today's task list shows the new
   profile file with reason "save". (Per-file-per-day credit idempotency
   is covered by `test_progress_store.py` -- no need to re-save here.)
+
+---
+
+## 4b. The chapter outline -- the plan, not the summary
+
+**Touches:** a new per-chapter document, the sidebar tree, the rename and
+delete cascade, the context picker, global search and export. Needs a project
+with at least two chapters.
+
+Steps:
+1. Expand a chapter in the left panel. Under it, above Chapter Summary, there
+   is a **Chapter Outline** row. Open it.
+   - [ ] The empty state shows a four-line example of the shape, with the
+         editor underneath it ready to type into.
+   - [ ] **The formatting toolbar is there**, with Numbered List and Bullet
+         List -- the same toolbar the manuscript has. Put the cursor on a
+         line and press Numbered List; it becomes `1. `.
+   - [ ] **The Writing Companion is still open on the right.** It used to
+         disappear when you opened an outline.
+   - [ ] The chapter you are planning is the one now open in the editor
+         behind this view -- check the context bar names it, not whatever
+         chapter you were in before.
+2. With the outline on screen, ask the chat something about the plan
+   ("does this hold together?") in plain chat -- no Draft, no Enhance.
+   - [ ] The answer shows it has READ the plan.
+   - [ ] The context bar shows a Chapter outline row with a token count.
+         Switch it off and ask again: the answer no longer reflects it.
+   - [ ] Run a Readability pass from the Smart Advisor. The plan is NOT
+         sent to it -- a review of prose has no use for a plan.
+3. Type four numbered lines of your own and press Ctrl+S.
+   - [ ] The pill goes from Unsaved to Saved.
+   - [ ] On disk: `outlines/chapters/<chapter-stem>.md` holds exactly what you
+         typed. There is NO frontmatter and no numbering the app added.
+   - [ ] The sidebar row now carries a small dot.
+4. Type something in a completely different shape -- a paragraph, or dashes
+   instead of numbers -- save, leave the view and come back.
+   - [ ] It comes back exactly as you typed it. Nothing reformats it, nothing
+         turns it into checkboxes. It is never parsed. Do not file the absence
+         of tick-boxes as a bug; scene Beats are the checkbox feature and they
+         live one level down, on a scene summary.
+5. Rename that chapter from the sidebar.
+   - [ ] The outline is still there under the new name, with its content.
+   - [ ] No warning about a failed cascade step.
+6. Rename a chapter that has NO outline.
+   - [ ] Still no warning. "Nothing to move" is success, not a failure.
+7. Delete a different chapter that has an outline.
+   - [ ] Its outline is gone from `outlines/chapters/`.
+   - [ ] Every OTHER chapter's outline is untouched.
+8. In the editor, open the context picker and choose the **Chapter Outline**
+   tab.
+   - [ ] Chapters you have planned are listed, in reading order, by title.
+   - [ ] Attaching one makes a chip named "<Chapter Title> (Outline)". It can
+         sit alongside that same chapter's "(Summary)" chip without either
+         replacing the other.
+9. Global search for a word you used only in an outline.
+   - [ ] It is found, under `outlines/chapters/`.
+10. Export the full manuscript as Markdown with **Chapter outlines** ticked, and
+   again with it unticked.
+   - [ ] Ticked: a `# Chapter Outlines` section at the end.
+   - [ ] Unticked: no such section. It is a separate tick from the summaries on
+         purpose -- they are opposite documents.
+
+**And what the AI does with it:**
+
+11. With that chapter open in the editor, look at the world-context bar under
+    the attachment chips.
+    - [ ] There is a **Chapter outline** row, saying it is being sent, roughly
+          what it costs in tokens, and that it goes with chat, Draft and
+          Enhance.
+    - [ ] It is ON without you having done anything.
+12. Turn Draft on and ask for something. Then untick the outline row and ask
+    again.
+    - [ ] The two replies differ: the first follows your plan.
+13. Switch the outline row off, close the app, reopen, and come back to that
+    chapter.
+    - [ ] Still off. Open a DIFFERENT book: it is on there. The decision
+          belongs to the book.
+14. Switch the WORLD context off with its own button.
+    - [ ] The outline row keeps its own state. These are two decisions, not
+          one.
+15. Open a chapter with NO outline.
+    - [ ] There is no outline row at all. A switch for a document that does
+          not exist would do nothing.
+16. Run a Smart Advisor **Readability** pass on a chapter that has an outline.
+    - [ ] The bar already told you the reviewing passes do not read your
+          outline. They do not, and you are not charged for it. Do not file
+          this as the outline being ignored.
+
+**Build with AI -- THIS ONE SPENDS MONEY:**
+
+17. Open a Chapter Outline and press **Build with AI**. Describe what the
+    chapter has to do, in your own words, and press Build.
+    - [ ] A proposal appears in the panel. Nothing has changed in the editor.
+    - [ ] On disk: `outlines/chapters/<stem>.md` is unchanged, or still absent
+          if you had none. **The AI does not write this file.** If it does,
+          stop and file it -- that is a locked product rule.
+18. Press **Insert**.
+    - [ ] The text goes into the editor and the pill says Unsaved.
+    - [ ] The status line says "Inserted. Not saved yet."
+    - [ ] Leave the view WITHOUT saving, come back: your old outline is there.
+          Nothing reached disk.
+19. Insert again and press Save this time.
+    - [ ] Now the file matches what you inserted.
+20. Ask it to revise: press Build with AI again and say "add two beats after
+    the second one".
+    - [ ] What comes back is the WHOLE outline, renumbered, not two loose
+          lines. Insert replaces rather than appends, and the panel says so
+          before you press it.
+21. Read what it produced for invented names.
+    - [ ] It should use only names you already have, and describe anything
+          else ("the older guard", "the northern settlement"). A name it made
+          up is a real bug worth filing: the Weave reads outlines, so an
+          invented faction comes back to you later as your own plan.
+22. Press **Discard** on a proposal.
+    - [ ] It disappears and nothing changed anywhere.
+
+**What the Weave does with an outline:**
+
+23. Put a name in a chapter outline that appears NOWHERE else -- not in the
+    prose, not in an entry. Save it. Run Weaving.
+    - [ ] It is raised as a planned name, and the stop says which chapter's
+          outline it came from ("chapter 7's outline"), not "your notes".
+24. Open an entry named in two or three chapter outlines.
+    - [ ] Under **Appears in** there is a **Planned in** row listing those
+          chapters, with a line saying it is worked out from your outlines and
+          is not something you set there.
+    - [ ] Edit one of those outlines to remove the name and save. Reopen the
+          entry: the list is one shorter. No reindex, no Weave re-run. If it
+          is stale, file it -- being derived fresh is the whole point.
+    - [ ] An entry named in NO outline shows no Planned in row at all.
+
+Expected: the outline is the writer's own file throughout, and nothing about
+it is sent until you start an AI action yourself. The only thing that ever
+writes an outline file is your own Save.
 
 ---
 
@@ -812,7 +1006,50 @@ Steps:
 7. Switch to the list view. Expect a peer view of the same world, not a degraded
    one, and the same spoiler behaviour.
 
-Expected: no dialogs, no writes. This scenario should be entirely read-only.
+**Reading it, on a world with more than a handful in it:**
+
+8. Look at the LINES. Each is labelled with the kind of connection -- "parent
+   of", "rival of", "feuding with" -- not with the sentence you wrote about it.
+   - [ ] Hover one. Its tooltip gives the kind AND your own reason line. The
+         reason is not gone; it is just not painted across the map.
+   - [ ] If you see long sentences on the lines, that is the pre-2026-09-05
+         behaviour and it is what made a 42-entry world unreadable.
+   - [ ] Find a pair you have written from BOTH ends -- Kipling and Milton, if
+         you have them: "mentored by" one way, "mentors" the other. The two
+         labels sit apart on the line, one nearer each character, not printed
+         through each other. Roughly the 40% and 60% marks.
+   - [ ] A pair written from only ONE end keeps its label in the middle.
+9. The LEGEND along the bottom is a filter. Every kind shows a count.
+   - [ ] Click a kind that has entries. Its dots disappear AND so do every
+         line touching them. Click again and both come back.
+   - [ ] A kind with 0 entries is faded and does not respond to a click.
+         Switching off nothing would do nothing. Do not file it.
+   - [ ] With something switched off, the "Not shown" line says how many
+         entries the legend is holding back.
+   - [ ] "Show every kind" appears only while something is off.
+   - [ ] **The memory is per book.** Switch a kind off, close the app, reopen,
+         and go back to the Weave: it is still off. Open a DIFFERENT book and
+         that kind is on -- the choice belongs to the world, not the machine.
+   - [ ] Hiding a kind must not move or resize the dots that stay.
+10. The ZOOM controls sit at the BOTTOM right of the map.
+   - [ ] Click a dot to focus it. The entry toolbar (Connections, Fix or
+         remove) opens at the TOP right, clear of the zoom. They shared that
+         corner briefly and the zoom covered the toolbar.
+   - [ ] **+** shows less of the board, keeping the middle under your eye.
+   - [ ] **-** shows MORE than the board: dots dragged past the edge become
+         reachable. This is the point of it.
+   - [ ] The percentage next to them reads 100% at rest.
+   - [ ] The reset button is greyed until something has moved, and returns
+         you to the whole board, centred.
+   - [ ] Drag the background: the map pans. Drag a DOT: the dot moves, and the
+         map does not.
+   - [ ] Zoom in, then drag a dot. It stays under the cursor -- it must not
+         travel further than your hand.
+   - [ ] The mouse wheel scrolls the PAGE, and does not zoom. That is
+         deliberate; do not file it.
+
+Expected: no dialogs, and the only writes are the remembered filter and any
+dot you drag.
 
 ---
 
@@ -1130,9 +1367,14 @@ button that has become invisible against the surface behind it.
    - [ ] At **Maximum** (24px root), open Settings, Book Details and a Weave
          panel. Nothing is clipped by the window, no button wraps mid-word,
          no table runs off its card.
-   - [ ] At Maximum, type into a chat box and a profile description. The
+   - [ ] At Maximum, type into a chat box and a scene summary. The
          text-entry surfaces reach 28px there; if either one cramps or wraps
          badly, say so -- the fix is to hold all three new steps at 24.
+   - [ ] Open a character profile at ANY size and look down it. Notes, the
+         section boxes, the trait descriptions and the Full AI Summary are
+         all ONE size. (Per-section AI summaries were retired in v2.0.6 -- do
+         not look for them.) The AI boxes were a step larger
+         until 2026-09-04, which is what this line is here to catch coming back.
    - [ ] **Icons stay their old size and that is KNOWN.** Lucide icons take a
          pixel `size=` prop and do not scale. At Maximum they look a size
          small beside the text. Do not file this; it is on the roadmap.
@@ -1284,6 +1526,348 @@ Expected:
   character's point of view.
 - The reason line reaches AI. If the context inspector shows no connections at
   all, that is the bug this scenario exists to catch.
+
+---
+
+## 31. A relationship with somebody who has no profile
+
+**Touches:** the seam where a profile page is not one page. A connection is a
+shared record and writes this entry's Markdown the moment you press Record; a
+relationship with a name that will never be a profile is a block on the page
+and waits for Update. Both are in the same list on purpose. Needs a project
+with at least two characters.
+
+**Why this is here.** The two used to be unable to coexist. Recording the
+linked one moved the file's fingerprint, so the page's next Update was refused
+as a conflict -- for a change the writer had made themselves, on that screen,
+seconds earlier -- and the hand-typed one lived only in the page buffer, so a
+refused save lost it with nothing to recover.
+
+Steps:
+1. Open a character. In **Relationships**, add a relationship, pick another
+   character from "Pick from your world...", fill in the one-line reason, and
+   press **Record**.
+   - [ ] It files itself below the button and says it is linked.
+2. Add a second relationship. This time TYPE a name that has no entry -- a
+   sister, a parent, someone dead before page one -- choose or type what kind
+   of relationship it is, write the description, and press **Record**.
+   - [ ] The row says it is kept on this page and saved with the rest of it.
+3. Press the page's **Update**.
+   - [ ] It SAVES. No "This entry changed on disk since you opened it".
+4. Leave the profile, open another one, come back.
+   - [ ] BOTH relationships are there: the linked one and the typed one.
+   - [ ] The typed one still shows the kind of relationship you chose, not
+         just the name and the description.
+5. Open the other character's page.
+   - [ ] The linked connection is there. The typed one is NOT -- it belongs to
+         one character and has no second end to appear on.
+6. Back on the first character, open the LINKED relationship, change its
+   one-line reason and press **Update**. Then clear the name box and type a
+   name that has no profile, and press **Update** again.
+   - [ ] The card stays OPEN while you type the new name. (It used to snap
+         shut on the first keystroke, and Update then said "Say who this
+         relationship is with".)
+   - [ ] The row moves to "kept on this page". Leave the profile and come
+         back: the OLD linked connection is gone, not sitting beside the new
+         one. Press the page's **Update** -- it saves.
+7. Record a linked relationship, then pick a DIFFERENT character for it from
+   "Pick from your world..." and press **Update**.
+   - [ ] It saves, now pointing at the new character. The old one is gone
+         from both pages.
+8. **One stage, not all of them.** For one other character, record a
+   relationship left at **All the way through**, then a second of the SAME
+   kind with the SAME person starting **From** a later chapter. Remove the
+   undated one with the bin icon.
+   - [ ] Only that one goes. The later stage is still there after leaving the
+         profile and coming back. (Removing the undated stage used to take
+         every stage of that relationship with it.)
+
+Expected:
+- Recording a connection never costs the writer their unsaved page.
+- A hand-typed relationship survives leaving the profile and coming back,
+  wording included.
+- Changing who a relationship is with replaces it rather than duplicating it,
+  and removing one stage never removes another.
+
+---
+
+## 32. The window opens the size you left it
+
+**Touches:** the Tauri shell only. Nothing in the web UI is involved, so no
+automated test can reach it.
+
+Steps:
+1. Open the app. Drag the window to a clearly different size and move it to a
+   different part of the screen.
+2. Close the app completely and open it again.
+   - [ ] It comes back the size you left it, in the place you left it.
+3. Maximise it, close, reopen.
+   - [ ] It comes back maximised.
+4. On a machine that has never run this version, or after deleting the saved
+   state, open it fresh.
+   - [ ] It opens at the default 1536x864, centred. The config size is a
+         first-run default, not something the saved state has to beat.
+
+Expected:
+- The writer sets the window size once, not every launch.
+
+---
+
+## 33. AI Notes -- standing guidance, and the file it must never become
+
+**Touches:** notes/ai-notes.md, the context bar, the Save composer, and the
+privacy promise on its neighbour. Steps 6 and 7 are the ones that matter most:
+a switch that does nothing, and a write that happens without being confirmed,
+both look fine from the outside.
+
+Steps:
+1. In the sidebar, Notes > + Add New > **AI Notes**. Write two lines, e.g.
+   "- Vance is the traitor now, changed in ch 12." and "- Do not soften
+   Milton." Save with Ctrl+S.
+   - [ ] `notes/ai-notes.md` exists on disk with exactly that text.
+2. Open a chapter. Look at the context bar above the chat.
+   - [ ] There is an AI Notes row saying it is being sent, with a token count,
+         and it says **with every request** rather than naming one mode.
+   - [ ] Its **What's this?** says Author Notes is the opposite file.
+3. Ask the chat anything about the story.
+   - [ ] The reply is consistent with what you wrote. (Ask something the notes
+         settle, e.g. "who betrays them?")
+4. Turn Draft on and draft a few lines, then run the Smart Advisor.
+   - [ ] Both behave as though they have read the notes. The Advisor is the
+         useful test: add "- The sentence fragments are deliberate." and it
+         should stop reporting them.
+5. Open the Profile Builder on any character.
+   - [ ] The chat header shows **AI Notes on**. Ask a question; the answer
+         respects the notes.
+6. **THE SWITCH.** Back in the editor, click **On** in the AI Notes row.
+   - [ ] The row now says your AI Notes are NOT being sent, and stays visible
+         (that is how you turn them back on).
+   - [ ] Ask the same question as step 3. The answer no longer reflects them.
+   - [ ] Close and reopen the book. It is still off.
+   - [ ] Open a DIFFERENT book. It is on there -- the answer is per book.
+   - Turn it back on before continuing.
+7. **THE WRITE BOUNDARY.** Under any AI reply, press **Save to AI Notes**.
+   - [ ] A box opens with the reply in it. Nothing has been saved yet --
+         check the file on disk if you want to be sure.
+   - [ ] Cut it to one sentence and press **Add to AI Notes**. It is appended
+         with today's date, and everything already in the file is still there.
+   - [ ] Do it again and press **Cancel**. The file is unchanged.
+   - [ ] The very next chat message reflects the note you just added, without
+         restarting the app.
+8. **THE NEIGHBOUR.** Write something distinctive in Author Notes, e.g.
+   "The Kestrel Syndicate is my working name for the villains."
+   - [ ] Run Weaving. "Kestrel Syndicate" is NOT raised as a planned name.
+   - [ ] Nothing you did in this scenario sent Author Notes anywhere.
+9. Open the chat's context-chip picker and choose the **Notes** tab.
+   - [ ] Every note the sidebar offers is listed -- not just Outline and Style
+         Guide. (Themes, Research and Brainstorming were missing before
+         v2.0.6.)
+
+Expected:
+- One file the writer controls, sent everywhere, switchable per book.
+- Its neighbour keeps the opposite promise, unchanged.
+
+---
+
+## 34. Conversations you can come back to
+
+**Touches:** `.storythread/chats/`, the Past chats picker, and the recap. Steps
+4 and 7 are the ones that matter: a resumed conversation must not replay a
+chapter as it was days ago, and a book's chat must not follow you into another
+book. Both look completely normal from the outside.
+
+Steps:
+1. Open a chapter and have a short conversation in the Writing Companion --
+   three or four exchanges. Attach a character profile partway through.
+   - [ ] `.storythread/chats/` now holds a `chat-*.json` file.
+   - [ ] Open it in a text editor: your messages are there, and the block
+         holding the chapter text is NOT -- there is a small `materials` entry
+         naming what was attached instead. The file should be a few KB, not a
+         copy of your chapter.
+2. Press **Past chats**.
+   - [ ] The conversation is listed as "today -- <your first message>".
+   - [ ] It is marked as the one on screen and clicking it does nothing.
+3. Press **Start fresh**, then ask something else.
+   - [ ] The panel empties and the chips detach.
+   - [ ] Past chats now lists two, newest first.
+4. **THE STALE-CHAPTER TEST.** Reopen the first conversation, then edit the
+   chapter -- add a sentence and save.
+   - [ ] Ask a question about the chapter. The reply reflects the sentence you
+         just added, not the chapter as it was when the conversation started.
+   - [ ] The attached profile is back on the chip bar.
+5. Close the app completely and reopen it, then open the same book.
+   - [ ] Past chats still lists both conversations.
+   - [ ] Reopening one brings back every message.
+6. Hover a row and press the bin icon.
+   - [ ] It asks first, and says it cannot be undone.
+   - [ ] **Keep** leaves it alone; **Delete** removes it from the list and
+         deletes the file.
+7. **THE WRONG-BOOK TEST.** With a conversation on screen, open a different
+   project.
+   - [ ] The panel is empty, the chips are gone, and Past chats shows the new
+         book's conversations -- not the previous book's.
+8. Open the Profile Builder on a character and have a conversation.
+   - [ ] Past chats there lists it by name: "today -- <Character> -- <your
+         first message>".
+   - [ ] Switch to a different character. The old conversation is still LISTED,
+         but says "open <the first character> to carry on" and will not open.
+   - [ ] Go back to the first character and it opens normally.
+
+Expected:
+- Nothing you paid for is thrown away by closing the app.
+- A resumed conversation is grounded in today's manuscript, not a snapshot.
+
+---
+
+## 35. The recap on a long conversation -- THIS ONE SPENDS MONEY
+
+**Touches:** `POST /api/ai/chat-recap` and the Long-context model role. It costs
+one AI request the first time a long conversation is reopened, and nothing
+thereafter. That "and nothing thereafter" is step 4, and it is the whole point.
+
+Steps:
+1. Have a genuinely long conversation -- **at least ten messages**, so five or
+   more exchanges. Make a clear decision partway through and say it plainly
+   ("the sister lives"), and reject something clearly ("no, not a flashback").
+2. Press **Start fresh**, then reopen that conversation from Past chats.
+   - [ ] Every message is on screen -- nothing has been removed from the view.
+   - [ ] A line above the conversation says older messages are being sent as a
+         summary.
+   - [ ] **Read the summary** shows it. It should mention the decision you made
+         AND the thing you rejected.
+3. Ask a follow-up that depends on the older part ("so who did we say lives?").
+   - [ ] The answer respects the decision, without the older messages having
+         been resent.
+   - [ ] It does not re-suggest the thing you rejected.
+4. **THE ONE THAT SAVES MONEY.** Start fresh and reopen the same conversation
+   again, without adding anything to it.
+   - [ ] The summary line appears immediately, with no pause and no second
+         request. The recap was worked out once and kept.
+5. Press **Send everything instead**.
+   - [ ] The summary line disappears.
+   - [ ] The next message you send behaves as though the whole conversation
+         were in front of the model.
+6. Add several more exchanges to that conversation, then start fresh and reopen
+   it once more.
+   - [ ] The summary now covers the newer material too, and still remembers the
+         original decision.
+7. Reopen a SHORT conversation (three or four messages).
+   - [ ] No summary line at all, and no pause -- nothing was bought.
+8. In Settings > Model Roles, look at **Long-context analysis**.
+   - [ ] It lists "Recapping a saved conversation" among the features that use
+         it.
+
+Expected:
+- One request, the first time a long conversation is reopened, and never again
+  for the same messages.
+- The writer can always see what the summary says and always opt out of it.
+
+---
+
+## 36. When a request will not fit
+
+**Touches:** the materials budget, the real context window, and the local-model
+case. Steps 2 and 6 are the ones that matter -- an ordinary request must be
+completely unchanged, and a local model must not be quietly waved through.
+
+You will need a model with a SMALL published window assigned to **Prose** (the
+role Draft and Enhance use; plain chat uses Brainstorming) for steps 3 to 5. Something in the 8k-16k range. Put your usual
+model back afterwards.
+
+Steps:
+1. On a normal-sized chapter with your usual model, ask the Companion anything.
+   - [ ] The reply arrives as always.
+   - [ ] **No note appears above it.** A request that fits says nothing, and
+         this is the case that happens a thousand times to every other one.
+2. Open the Weave context bar, press Inspect, and expand **Where the room went**.
+   - [ ] It says "Measured against <your model>" underneath the numbers.
+   - [ ] The limit shown is your model's real window, not 32,000. (Before
+         v2.0.6 it was always 32,000 whatever you had chosen.)
+3. Assign a small model to **Prose** in Settings > Model Roles. Turn on Draft on a
+   long chapter with a big world context and ask for a few lines.
+   - [ ] The reply still arrives.
+   - [ ] A note above it says it did not all fit and names what was left out --
+         your world context first.
+4. Generate a chapter summary for that chapter, then Draft on it again with the
+   whole chapter attached.
+   - [ ] The note says it sent the summary instead of the full text.
+   - [ ] The reply is consistent with the chapter, not with nothing.
+5. Write something very long into AI Notes (a few thousand words) and try again.
+   - [ ] The request is REFUSED with a message giving both numbers and telling
+         you what to do. Nothing was spent -- no reply appears and no tokens
+         are used.
+   - [ ] Trim the notes back and it works again.
+6. **THE LOCAL CASE.** Assign a local model (Ollama or similar) to **Prose**.
+   - [ ] Everything behaves exactly as it did before this release -- no notes,
+         no swaps. The app does not guess at a limit it cannot look up.
+   - [ ] In the context bar's **Where the room went**, it says the model does
+         not publish how much it holds and the limit is an assumption.
+7. In the Profile Extractor, pick that same local model and select a very large
+   part of the manuscript.
+   - [ ] It refuses before spending anything, and explains that a local server
+         will usually trim the prompt and answer anyway -- so the result would
+         look fine and be built on half your book.
+8. Put your usual model back.
+   - [ ] Notes stop appearing on ordinary requests.
+
+Expected:
+- Ordinary requests are untouched and silent.
+- Anything the app leaves out or swaps, it says.
+- Nothing is ever quietly cut in half.
+
+---
+
+## 37. Every kind in one editor
+
+**Touches:** Profile Builder routing for the eight kinds that used to open in
+the Weave's simpler editor, and the section-name healing that was keyed by
+section id alone. Needs a project in the Weave.
+
+**Why this is here.** Creatures, Cultures, Factions, Religions, Ruling
+Authorities, Deities, Objects and Languages opened in a different editor with
+no Profile Chat. And a Creature's Appearance was filed under a Location's
+heading on save, so the box came back empty while the words sat on disk under
+the wrong name -- reported as "Appearance doesn't appear after saved and
+coming back".
+
+Steps:
+1. Create a Creature. Write something in **Appearance** and save.
+   - [ ] It opens in the same editor as a Character, with the Profile Chat.
+2. Open another entry, then come back to the Creature.
+   - [ ] Appearance still shows what you wrote.
+3. Repeat steps 1-2 with an Object (Appearance, Significance) and a Concept
+   (Details).
+   - [ ] Each keeps its words after leaving and coming back.
+
+Expected:
+- Every kind opens in one editor with one look and one chat.
+- A section a kind owns is never filed under another kind's heading.
+
+---
+
+## 38. The three new controls explain themselves
+
+**Touches:** the "What's this?" panels added at the v2.0.6 cut for the map
+legend, the map zoom, + Prologue / + Epilogue and Planned in. The tests prove
+each one is wired; only a person can see whether its panel is READABLE where
+it opens, which is the part that goes wrong.
+
+Steps:
+1. On the Weave map, press the **?** at the start of the legend row, then the
+   **?** at the end of the zoom buttons in the map's bottom-right corner.
+   - [ ] Each panel opens UPWARD over the map and is readable top to bottom.
+         Nothing is cut off by the edge of the map box or the window.
+2. On a book with no prologue, press the **?** beside + Prologue / + Epilogue
+   in the editor's title bar.
+   - [ ] The panel stays on screen (it slides back in from the right edge).
+   - [ ] Add a prologue AND an epilogue: the **?** goes away with the buttons.
+3. Open an entry whose name appears in at least one chapter outline, and press
+   the **?** on its **Planned in** row.
+   - [ ] It says the row is worked out from your outlines and is not set here.
+
+Expected:
+- Every control added in this release says what it does, and its explanation
+  can be read where it opens.
 
 ---
 

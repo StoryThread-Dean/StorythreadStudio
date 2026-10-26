@@ -60,6 +60,17 @@ const THREAD = {
       ],
       ai_summary: "",
     },
+    // A RELATIONSHIP WITH NOBODY ON THE OTHER END. Her father has no entry and
+    // never will, so it cannot be a connection: it is a block on her own page,
+    // and `rel` is the writer's word for what he is to her.
+    relationships: {
+      heading: "Relationships", content: "",
+      trait_blocks: [
+        { trait: "Her father", description: "She believes he died in the raid.",
+          importance: "present", rel: "child of" },
+      ],
+      ai_summary: "",
+    },
   },
 };
 
@@ -75,6 +86,7 @@ const SECTIONS: Record<string, { key: string; heading: string; hasTraitBlocks: b
     { key: "overview", heading: "Overview", hasTraitBlocks: false },
     { key: "physical_traits", heading: "Physical Traits", hasTraitBlocks: true },
     { key: "voice_notes", heading: "Voice Notes", hasTraitBlocks: true },
+    { key: "relationships", heading: "Relationships", hasTraitBlocks: true },
   ],
   location: [{ key: "overview", heading: "Overview", hasTraitBlocks: false }],
 };
@@ -151,6 +163,20 @@ describe("which folder this project uses", () => {
     expect((await fetchEntriesHome("/p")).migrationState).toBe("done");
   });
 
+  it("tells a project BORN in the Weave apart from a converted one", async () => {
+    // The fourth state, and the one that keeps a new project out of the
+    // conversion screen. "done" means a conversion ran -- there is a backup on
+    // disk and a report to open. "native" means there was never anything to
+    // convert. Collapsing them would put a "what did the conversion do?"
+    // button in front of a writer with nothing behind it.
+    mockFetch(() => ({
+      entries_home: "codex", elsewhere: 0, migration_state: "native",
+    }));
+    const report = await fetchEntriesHome("/p");
+    expect(report.migrationState).toBe("native");
+    expect(report.home).toBe("codex");
+  });
+
   it("assumes nothing is in flight when the backend says nothing", async () => {
     // An older backend, or a field that goes missing. The safe reading is that
     // no conversion is half-done, because claiming one would send the writer
@@ -162,6 +188,21 @@ describe("which folder this project uses", () => {
   it("assumes nothing is in flight when the backend cannot answer at all", async () => {
     mockFetch(() => new Response("nope", { status: 500 }));
     expect((await fetchEntriesHome("/p")).migrationState).toBe("none");
+  });
+
+  it("still guesses profiles/ when it cannot ask, and that is deliberate", async () => {
+    // This looks wrong now that a new project has no profiles/ folder at all,
+    // so the reasoning is pinned rather than left to be "tidied" later.
+    //
+    // The fallback only fires when /health is unreachable or erroring, and in
+    // that state /api/profiles/list fails identically -- so it picks which
+    // ERROR the writer sees, not which world they get. Guessing "codex"
+    // instead would show an unconverted writer an empty Profile Builder, and
+    // an empty list is indistinguishable from having lost everything.
+    // Guessing "profiles" on a project born in the Weave shows a 404 naming
+    // the folder, which is a question rather than a fright.
+    mockFetch(() => new Response("nope", { status: 500 }));
+    expect((await fetchEntriesHome("/p")).home).toBe("profiles");
   });
 
   it("sends each home to its own endpoints", async () => {
@@ -226,6 +267,18 @@ describe("opening an entry", () => {
     expect(blocks[0].trait).toBe("scarred hands");
   });
 
+  it("reads back what kind of relationship an unlinked one is", async () => {
+    // The other half of the round trip. Reading it and not writing it, or the
+    // reverse, both look like the writer's choice never took.
+    mockFetch(() => THREAD);
+    const profile = await codexSource("/p", sectionsFor).load(
+      { entity_id: "e-lexa", filename: "lexa.md", name: "x",
+        type: "character", role: "", status: "active" });
+
+    expect(profile.sections.relationships.trait_blocks[0].rel).toBe("child of");
+    expect(profile.sections.physical_traits.trait_blocks[0].rel).toBeUndefined();
+  });
+
   it("carries the revision it opened at", async () => {
     mockFetch(() => THREAD);
     const profile = await codexSource("/p", sectionsFor).load(
@@ -280,6 +333,31 @@ describe("saving an entry", () => {
     expect(blocks[1].ai_scope).toBe("on-request");
     // And no React key leaks into the writer's Markdown.
     expect(blocks[0]).not.toHaveProperty("id");
+  });
+
+  it("keeps what kind of relationship an unlinked one is", async () => {
+    // The writer's report: "in the character profile for Raul Ortiz-Reyes, I
+    // added his Injured Sister as well as Miguel. Two character without a
+    // profile to link too. I hit save on both, neither can be found."
+    //
+    // Both parsers in Python carry `rel` and the section editor writes it; this
+    // layer read it on the way in and dropped it on the way out, so the wording
+    // was gone on the next open with the name and the description still there.
+    // A lost string looks exactly like one never set, so nothing raised
+    // anything -- the same shape as the `subtext` switch two tests up.
+    const thread = await saveAfterEditing(p => p);
+    const blocks = (thread.sections as Record<string, {
+      trait_blocks: Record<string, unknown>[] }>).relationships.trait_blocks;
+    expect(blocks[0].rel).toBe("child of");
+  });
+
+  it("puts no rel on an ordinary trait", async () => {
+    // It means something only on a Relationships block. Writing it everywhere
+    // would put a key in the writer's Markdown that answers nothing.
+    const thread = await saveAfterEditing(p => p);
+    const blocks = (thread.sections as Record<string, {
+      trait_blocks: Record<string, unknown>[] }>).physical_traits.trait_blocks;
+    expect(blocks[0]).not.toHaveProperty("rel");
   });
 
   it("keeps the heading the file already used", async () => {

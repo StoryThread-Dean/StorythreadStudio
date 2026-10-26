@@ -90,10 +90,20 @@ interface ProfileConnectionsProps {
   name: string;
   /** Open expanded. A profile page has room; a sidebar does not. */
   startExpanded?: boolean;
+  /**
+   * Something here wrote this entry's own file.
+   *
+   * A connection is a shared record, so making one does not wait for the
+   * page's Save -- it writes the Markdown immediately. A page holding that
+   * entry open therefore needs to hear about it, or its next save is checked
+   * against a fingerprint that has moved and is refused for a change the
+   * writer made themselves. See resyncWeave in ProfileBuilder.
+   */
+  onChanged?: () => void;
 }
 
 export function ProfileConnections({
-  projectPath, entityId, type, name, startExpanded = false,
+  projectPath, entityId, type, name, startExpanded = false, onChanged,
 }: ProfileConnectionsProps) {
   const [ties, setTies] = useState<Tie[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +154,7 @@ export function ProfileConnections({
         thread={me}
         candidates={world}
         onClose={() => setConnecting(false)}
-        onChanged={() => void load()}
+        onChanged={() => { void load(); onChanged?.(); }}
       />
     );
   }

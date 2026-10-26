@@ -15,6 +15,7 @@
 //   - shell:   spawn the bundled Python backend as a sidecar (release only)
 //   - updater: check GitHub Releases for new versions on launch
 //   - process: let the JS side trigger app restart after an update installs
+//   - window-state: remember how big the window was, and where
 
 #[cfg(not(debug_assertions))]
 use std::sync::Mutex;
@@ -90,6 +91,28 @@ pub fn run() {
         // process plugin: exposes 'relaunch' to JS so the update flow can
         // restart the app cleanly after the installer replaces the binary.
         .plugin(tauri_plugin_process::init())
+        // ── window-state plugin: the window opens where you left it ──────
+        //
+        // The width and height in tauri.conf.json are a FIRST-RUN default,
+        // not a preference -- Tauri re-applies them on every launch, so a
+        // writer who drags the window bigger gets the same 1536x864 back
+        // the next time they open the app, and the next, forever:
+        //
+        //     "I have to readjust the border size of the application every
+        //      time I restart it. The default is fine, but I want to make
+        //      sure that when I adjust it, it stays that size."
+        //
+        // This plugin saves size, position and the maximised flag when the
+        // app exits and restores them on the next start, in the OS's own
+        // app-data folder. The config values still apply the first time,
+        // because there is nothing saved yet to restore.
+        //
+        // Registered LAST of the plugins so its restore runs after the rest
+        // of the shell is set up, and BEFORE .setup(), which is where the
+        // backend sidecar is spawned -- the two do not interact, and keeping
+        // window work out of the sidecar block keeps that block about one
+        // thing.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|_app| {
             // ── Sidecar spawn (release builds only) ─────────────────────
             // Production builds embed a frozen Python+FastAPI exe (built by

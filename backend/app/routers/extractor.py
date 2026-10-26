@@ -35,6 +35,9 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app import codex_store
+from app.ai.context_window import (VERDICT_TOO_BIG, VERDICT_UNKNOWN,
+                                   context_window, fits,
+                                   forget_cached_windows)
 from app.codex import extract
 from app.codex import extraction_store as store
 from app.codex.errors import CodexError
@@ -160,28 +163,14 @@ async def _resolve_for_display() -> tuple[str, int, str]:
     return model_id, await _context_window(provider, api_key, model_id), ""
 
 
-# Cached per process. This screen is opened repeatedly while a writer decides
-# what to tick, and a network round trip per open would make it feel broken for
-# something that changes about once a month.
-_CONTEXT_CACHE: dict[str, int] = {}
-
-
-async def _context_window(provider, api_key: str, model_id: str) -> int:
-    """How much the model can hold, in tokens. 0 when we cannot find out."""
-    if model_id in _CONTEXT_CACHE:
-        return _CONTEXT_CACHE[model_id]
-    window = 0
-    try:
-        from app.ai.openrouter import list_models
-
-        for entry in await list_models(api_key, provider):
-            if entry.get("id") == model_id:
-                window = int(entry.get("context_length") or 0)
-                break
-    except Exception:                             # noqa: BLE001 - best effort
-        window = 0
-    _CONTEXT_CACHE[model_id] = window
-    return window
+# The window lookup moved to app/ai/context_window.py in v2.0.6, so the
+# chat and Advisor paths could use it too -- it was the only such reasoning
+# in the app and lived in the one router that is not about writing.
+#
+# Two bugs went with the move: a failed lookup was cached FOREVER (one flaky
+# call at startup and that model stayed "unknown" for the life of the
+# process), and 0 was read as unlimited at the only place that checked.
+_context_window = context_window
 
 
 @router.get("/plan")
@@ -362,7 +351,9 @@ async def choose_model(body: ChooseModelBody):
         roles.pop("long_context", None)
     settings["model_roles"] = roles
     save_settings(settings)
-    _CONTEXT_CACHE.clear()
+    # The assigned model just changed, so any window we cached for the old
+    # one is about the wrong model.
+    forget_cached_windows()
     return {"ok": True, "model_id": model_id}
 
 
@@ -524,7 +515,31 @@ async def post_run(body: RunBody):
     # halfway is indistinguishable from a model that could not do the job.
     context_tokens = await _context_window(provider, api_key, model_id)
     estimated = total // 4
-    if context_tokens and estimated > context_tokens * 0.8:
+    verdict = fits(estimated, context_tokens)
+
+    # UNKNOWN IS NOT A PASS. `if context_tokens and ...` used to short-
+    # circuit here, which made a model with no reported window the one
+    # model that could never be refused -- and that is exactly the local
+    # case, where Ollama trims an oversize prompt and answers anyway.
+    #
+    # Not refused either: a writer who deliberately chose a local model
+    # should not be blocked by the app failing to look up a number. What
+    # they get is the truth -- we do not know, here is what it would send,
+    # and here is what happens if it does not fit.
+    if verdict == VERDICT_UNKNOWN and estimated > 30_000:
+        raise CodexError(
+            "extraction_window_unknown",
+            f"That is about {estimated:,} tokens of manuscript, and this "
+            f"app cannot find out how much {model_id} holds -- a local "
+            f"model usually does not say. Nothing has been sent and nothing "
+            f"has been spent. If it does not fit, most local servers trim "
+            f"the prompt and answer anyway, so the result would look fine "
+            f"and be built on half your book. Run it over fewer chapters, "
+            f"or assign a model whose limit is published.",
+            str(estimated),
+        )
+
+    if verdict == VERDICT_TOO_BIG:
         raise CodexError(
             "extraction_too_long",
             f"That is about {estimated:,} tokens of manuscript, and {model_id} "

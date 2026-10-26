@@ -46,6 +46,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
   // are prose-only clean publish formats where notes/profiles don't belong.
   const [includeChapterSummaries, setIncludeChapterSummaries] = useState(false);
   const [includeSceneSummaries,   setIncludeSceneSummaries]   = useState(false);
+  const [includeChapterOutlines,  setIncludeChapterOutlines]  = useState(false);
   const [includeNotes,            setIncludeNotes]            = useState(false);
   const [includeProfiles,         setIncludeProfiles]         = useState(false);
   // THE WEAVE ITSELF, which is a different thing from the entries. Profiles
@@ -134,6 +135,7 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
           format:                    exportType === "full-manuscript" ? exportFormat : "markdown",
           include_chapter_summaries: includeChapterSummaries,
           include_scene_summaries:   includeSceneSummaries,
+          include_chapter_outlines:  includeChapterOutlines,
           include_notes:             includeNotes,
           include_profiles:          includeProfiles,
           include_weave:             includeWeave,
@@ -364,6 +366,20 @@ export function ExportModal({ project, onClose }: ExportModalProps) {
                 />
                 <span>Scene summaries</span>
                 <span className="text-micro text-text-muted">summaries/scenes/</span>
+              </label>
+              {/* The PLANS, a separate tick from the summaries because they
+                  are the opposite document. Someone sending a manuscript to a
+                  reader wants neither; a collaborator may want one. */}
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
+                <input
+                  type="checkbox"
+                  checked={includeChapterOutlines}
+                  onChange={(e) => setIncludeChapterOutlines(e.target.checked)}
+                  disabled={isExporting || !extrasAvailable}
+                  className="accent-accent-fill"
+                />
+                <span>Chapter outlines</span>
+                <span className="text-micro text-text-muted">outlines/chapters/</span>
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-xs text-text-primary">
                 <input

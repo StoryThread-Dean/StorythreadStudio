@@ -111,17 +111,26 @@ findings; release hygiene.
 **Blocked on ONE decision, which is the writer's:** does `profiles/` stop being
 a live home for unconverted projects?
 
-- **Delete `merge_profile_with_arc`** (recovery-plan R1.5b). The ruling
-  sequenced it "when that route goes"; R2.1 then kept `profiles/` as a live
-  home, so the route is still doing real work for exactly the projects the
-  ruling was protecting.
+- ~~**Delete `merge_profile_with_arc`** (recovery-plan R1.5b).~~ **DONE
+  2026-09-05, and the blocker turned out not to apply.** This entry said the
+  route was "still doing real work for exactly the projects the ruling was
+  protecting". It was not doing any work: `GET /merged` had zero callers in
+  `app/src/`, and so did all four `/arc/*` routes, so nothing in the app could
+  ever create the arc file the merge existed to overlay. `docs/weave-spec.md`
+  plan item 3 had already ruled they should go for that exact reason; this
+  entry re-filed a settled decision behind an unrelated one. The whole surface
+  went with the change that stopped scaffolding `profiles/`. What stays is
+  `_absorb_arcs`, which reads arc files during a conversion so a project that
+  has them does not lose them.
+
 - **Delete the second `influence` parser** (the blocked half of R11.3). The
   legacy scale is ported into `codex/normalize.py` and read by both dialects;
   what remains is removing the duplicate, which cannot happen while both
-  dialects are live.
-
-Neither is an oversight and neither is effort. They are one ruling, and both go
-the day it is made.
+  dialects are live. **Still blocked, and genuinely so** -- the 2026-09-05
+  ruling stopped new projects getting a `profiles/` folder but left every
+  unconverted project reading one, so both dialects are still live. This goes
+  the day `profiles/` stops being a home at all, which is a different and
+  larger decision than the one just made.
 
 > **`docs/weave-recovery-plan.md` is RETIRED (2026-08-25).** It was a work
 > ledger with ids R0.1 to R11.7 and every in-scope task shipped in v2.0.0 and
@@ -1065,6 +1074,40 @@ Two open items on the Formatting Walkthrough, both raised by walking a real 22,0
 
 ---
 
+### Chapter Outlines -- SHIPPED 2026-09-06
+
+An item that was never written down here. The writer asked for it as something
+already on the list; it was not, under any name -- which is its own small
+lesson, and the reason `docs/chapter-outline-spec.md` was written before any
+code.
+
+A per-chapter plan at `outlines/chapters/<stem>.md`: the key events that move
+the chapter along, in order. The one per-chapter document that looks FORWARD --
+summaries are written from prose that exists and say what the chapter turned
+out to be.
+
+**Slice 1 (done):** the document, its editor, the sidebar row, the rename and
+delete cascade, export, global search, and a context chip.
+
+**Slice 2 (done):** chapter N's outline goes automatically to Draft and Enhance
+for chapter N, as its own field on the wire, rendered between the writer's chips
+and the Weave brief. Gated to those two passes -- the reviewing passes read
+prose that exists and a plan is not evidence about it. A row in the context bar
+makes it inspectable, removable and switchable off, remembered per book, and its
+tokens join the pinned budget so the Weave's share shrinks honestly. Both prose
+prompts now distinguish the chapter plan from the book outline; they used one
+word for both, which is how a model drafts at the wrong scale.
+
+**Slice 3 (done):** Build Chapter Outline, in the outline editor rather than
+the chat panel because Insert has to reach that editor's buffer. It proposes and
+writes nothing; Insert puts the text in the buffer unsaved, which keeps it
+inside the AI write boundary without a new exception. Its prompt forbids
+inventing proper nouns, because the same slice teaches the Weaving scan to read
+outlines as a planning source -- an invented faction would come back to the
+writer later as their own decision. And "Planned in chapter 7" on an entry,
+computed on read and never cached: it derives from `outlines/`, which the index
+does not fingerprint, so a cache would rebuild R8.5's bug exactly.
+
 ## Proposed
 
 Worth building, prioritization not yet committed.
@@ -1091,6 +1134,47 @@ Worth building, prioritization not yet committed.
 >
 > Verified by reading the code, not this file. Sizings and line numbers below
 > are from that pass.
+
+### Prologue and Epilogue -- SHIPPED 2026-09-06
+
+> This entry sat here truncated mid-sentence, indented as a code block, with
+> its list cut off after one item. Completed and then built.
+
+Adding chapters worked. There was no way to add a Prologue or an Epilogue, and
+they are not chapters -- treating one as a chapter is wrong in ways the writer
+can see:
+
+- **No chapter NUMBER.** Every manuscript file carried a numeric `NN-` prefix,
+  which drives reading order in a project with no manifest and is what
+  "Chapter 2" is read from.
+- **Outside the acts.** An act of one is a lie about the shape of the book, and
+  `unassigned` means "not filed yet" -- the opposite of a piece whose position
+  is the one certain thing about it.
+- **Not one of "thirty chapters".** A writer who targets thirty and writes a
+  prologue plus thirty has written thirty.
+
+**What shipped.** The manifest grows two lists, `front` and `back`, and reading
+order becomes front, acts, unassigned, back. Because
+`ordered_chapter_filenames` is already THE ordering authority, every consumer
+picked it up untouched -- the sidebar, Reader Mode, exports, the progress gauge,
+and the Weave's anchors, so a fact can be pinned to something that happens in
+the prologue. Files are named plainly (`prologue.md`), and creating one forces
+the manifest into existence, because without a manifest reading order is a
+filename sort and "epilogue.md" sorts before "prologue.md".
+
+**Two failures that would have been silent, both now tested.** The PUT rebuilds
+the manifest from its payload, and the acts tree does not know about front
+matter -- so every act reorder would have swept the prologue into `unassigned`.
+`front` and `back` are carried across from storage instead, exactly as
+`chapter_ids` are, and are deliberately absent from the payload so a forgetful
+client cannot drop them. And `next_num` used `max(highest_prefix, FILE COUNT)`,
+so an unnumbered file on disk pushed the sequence along: a prologue plus two
+chapters offered "04" next and skipped 03 with nothing to explain it.
+
+**Deliberately not built:** turning an existing chapter into a prologue, and
+more than one piece of front matter. Both are real asks and neither is needed
+to have a prologue; the lists are plural already, so the second is a UI change
+rather than a data change.
 
 ### Local model providers -- MOSTLY SHIPPED (v1.1.1)
 
@@ -1335,12 +1419,71 @@ classifier needs is already plumbed (`context_length` at `openrouter.py:157`).
 Content-size awareness exists in exactly one place and **refuses rather than
 routes**: `routers/extractor.py:515-536`.
 
-### Long-context handling: priority pinning + summary swap
+### Long-context handling: priority pinning + summary swap -- SHIPPED in v2.0.6
 
-When a request would exceed the model's context window, the materials builder pins Outline + Style Guide first and swaps full chapter prose for chapter summaries before truncating older scene text. Engages automatically; no user toggle.
+**SCOPE CORRECTED AND SLICE 1 SHIPPED IN v2.0.6.** Asked for as one item, this
+turned out to be two features sharing a name. The roadmap entry below is about
+automatic overflow. What the writer described was persistent story memory: a
+CLAUDE.md-like file of standing guidance, plus dated, resumable chat sessions.
+Their own sentence is the bridge -- *"partial purpose is to use tokens to get
+less likelihood of bad return information."*
 
-**PARTLY BUILT, and the built half is a working reference implementation
-(noted 2026-08-23).** Everything this section describes exists for the Weave's
+Both are in scope and the memory half goes first, because it makes every
+request bigger and therefore makes the budget half matter more. Full design in
+`docs/long-context-spec.md`.
+
+**Slices 1-3 shipped in v2.0.6.** AI Notes (`notes/ai-notes.md`, sent with every
+request from four endpoints, inspectable and switchable per book, with a
+Save-to-AI-Notes composer that writes nothing until confirmed); durable chat
+sessions for both chats (`.storythread/chats/`, dated picker, per-profile
+titles); and the recap that stands in for older turns on resume -- which IS the
+summary swap, applied to a conversation rather than to a chapter, and which
+therefore proves out the mechanism before slice 4 applies it to prose.
+
+**Slice 4, the budget itself, shipped too, and the whole item is now DONE.**
+`app/ai/materials_budget.py` fits the Writing Companion's chat, Draft and
+Enhance requests (`editor-chat`) against the model's real window. **The Smart
+Advisor pass (`editor-pass`) is NOT budgeted** -- it still has only its flat
+caps, which refuse an oversize request rather than fitting it. Extending the
+budget to it is open work, not done work. Within `editor-chat`: the world context is dropped first, a chapter
+too big to send goes as its summary, AI Notes and the chapter plan are pinned,
+and hand-attached chips are never dropped. A swap or a drop is reported in
+`materials_note`; a request that fits says nothing; a request whose pinned
+material will not fit is a real 400 before anything is spent.
+
+**What it reuses and what it deliberately does not.** `Budget` is pure
+arithmetic and is shared. `_fit` is NOT: it sorts `Piece`s, and a `Piece`
+requires an `entity_id` and a rung on a ladder about how a Thread relates to a
+scene. A chapter and a style guide have neither and never will. That was the
+open design question in this entry, and the ruling is that documents get their
+own fitter rather than `Piece` growing a variant -- putting two unrelated kinds
+of thing behind one sort order would make the ladder stop meaning what it says.
+
+**Three bugs went with it, all of the kind this entry warned about.** The
+32,000 default described above. `context_length: 0` read as unlimited, which
+made every local model unrefusable while Ollama trims and answers anyway. And
+the window cache kept a failed lookup forever, so one flaky call at startup
+left a model "unknown" until the app was restarted.
+
+*The rest of this entry is the analysis written BEFORE the build, kept for
+the reasoning. Every problem it describes in the present tense was fixed in
+v2.0.6 -- the 32,000 default, the silent truncation, the missing budget -- and
+the original plan to pin the Style Guide was not what shipped (AI Notes and the
+chapter outline are pinned; nothing is truncated).*
+
+~~**One thing found while sizing it, and it is worse than the entry says.**
+`weavingApi.ts` defaults `model_context_limit` to 32000 and **no caller
+anywhere passes it**. So the Weave's budget -- the working reference
+implementation this entry is built on -- has never once measured against the
+model the writer actually selected. Every refusal and every "where the room
+went" breakdown was computed against a fictional window. That plumbing is a
+prerequisite for slice 4, not a side task: a budget against a made-up limit is
+worse than a flat cap, because it looks authoritative.~~ -- fixed in v2.0.6.
+
+~~When a request would exceed the model's context window, the materials builder pins Outline + Style Guide first and swaps full chapter prose for chapter summaries before truncating older scene text. Engages automatically; no user toggle.~~ -- the original plan; see above for what shipped.
+
+**(Pre-build state, 2026-08-23 -- no longer true.)** **PARTLY BUILT, and the
+built half is a working reference implementation.** Everything this section describes exists for the Weave's
 brief and nowhere else: a `Budget` dataclass reserving output / system / user /
 overhead / pinned (`backend/app/codex/context.py:86-120`), a four-rung relevance
 ladder that doubles as prune order (`:60-64`), and `_fit()` splitting required

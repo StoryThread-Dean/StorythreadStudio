@@ -5,11 +5,25 @@
 #   manuscript/structure.json
 #   {
 #     "version": 1,
+#     "front": ["prologue.md"],
 #     "acts": [
 #       { "id": "a-3f9c2e1b", "title": "Act I", "chapters": ["01-chapter-1.md"] }
 #     ],
-#     "unassigned": ["02-loose-idea.md"]
+#     "unassigned": ["02-loose-idea.md"],
+#     "back": ["epilogue.md"]
 #   }
+#
+# FRONT AND BACK MATTER. A prologue is not chapter zero and an epilogue is not
+# the last chapter: they have no chapter number, they sit outside the act
+# structure, and they are not counted when the writer says "thirty chapters".
+# But they ARE manuscript, in a definite place -- always first, always last.
+#
+# Neither `acts` nor `unassigned` can say that. An act of one is a lie about
+# the book's shape, and `unassigned` means "not filed yet", which is the
+# opposite of a piece whose position is the one certain thing about it. So
+# they get their own two lists, and reading order becomes:
+#
+#     front -> acts (in order, chapters in order) -> unassigned -> back
 #
 # Why a manifest instead of renaming/renumbering files: every mature writing
 # tool that supports drag-to-reorder (Scrivener's .scrivx, novelWriter's
@@ -18,9 +32,8 @@
 # move would churn git history and break everything keyed by filename
 # (summaries, progress events, exports).
 #
-# Reading order = acts in listed order, their chapters in listed order,
-# then the unassigned bucket. A project with no acts is just today's flat
-# list.
+# A project with no acts and no front or back matter is just today's flat
+# list, byte-identical to before.
 #
 # Lifecycle rules (important for backward compatibility):
 #   - The file is NOT created at project scaffold time. Projects without it
@@ -94,7 +107,8 @@ def _new_chapter_id() -> str:
 
 
 def _empty_structure() -> dict:
-    return {"version": STRUCTURE_VERSION, "acts": [], "unassigned": [], "chapter_ids": {}}
+    return {"version": STRUCTURE_VERSION, "front": [], "acts": [],
+            "unassigned": [], "back": [], "chapter_ids": {}}
 
 
 def _heal(manifest: dict, disk_files: list[str]) -> tuple[dict, bool]:
@@ -113,18 +127,33 @@ def _heal(manifest: dict, disk_files: list[str]) -> tuple[dict, bool]:
     disk_set = set(disk_files)
     seen: set[str] = set()
 
+    def keep(names) -> list[str]:
+        """Entries whose file still exists, first occurrence only."""
+        nonlocal changed
+        out: list[str] = []
+        for name in names or []:
+            if not isinstance(name, str) or name not in disk_set or name in seen:
+                changed = True
+                continue
+            seen.add(name)
+            out.append(name)
+        return out
+
+    # FRONT AND BACK ARE CLAIMED FIRST, before the acts, and that ordering is
+    # the point rather than tidiness. `seen` is what stops one file being
+    # listed twice, so whichever list is read first wins a duplicate -- and a
+    # prologue that had somehow also been filed into an act must stay a
+    # prologue, or the writer's own hand edit would silently demote it to
+    # chapter one of Act I.
+    healed_front = keep(manifest.get("front"))
+    healed_back = keep(manifest.get("back"))
+
     healed_acts = []
     for act in manifest.get("acts", []):
         if not isinstance(act, dict):
             changed = True
             continue
-        kept: list[str] = []
-        for name in act.get("chapters", []):
-            if not isinstance(name, str) or name not in disk_set or name in seen:
-                changed = True
-                continue
-            seen.add(name)
-            kept.append(name)
+        kept = keep(act.get("chapters"))
         if kept != act.get("chapters", []):
             changed = True
         healed_acts.append({
@@ -133,13 +162,7 @@ def _heal(manifest: dict, disk_files: list[str]) -> tuple[dict, bool]:
             "chapters": kept,
         })
 
-    healed_unassigned: list[str] = []
-    for name in manifest.get("unassigned", []):
-        if not isinstance(name, str) or name not in disk_set or name in seen:
-            changed = True
-            continue
-        seen.add(name)
-        healed_unassigned.append(name)
+    healed_unassigned = keep(manifest.get("unassigned"))
 
     # Rule 3: anything on disk the manifest doesn't know about yet.
     for name in disk_files:
@@ -162,8 +185,10 @@ def _heal(manifest: dict, disk_files: list[str]) -> tuple[dict, bool]:
     return (
         {
             "version": STRUCTURE_VERSION,
+            "front": healed_front,
             "acts": healed_acts,
             "unassigned": healed_unassigned,
+            "back": healed_back,
             "chapter_ids": healed_ids,
         },
         changed,
@@ -254,11 +279,27 @@ def ordered_chapter_filenames(folder_path: str) -> list[str]:
     if not exists:
         return manifest["unassigned"]   # synthesized = filename-sorted
 
-    ordered: list[str] = []
+    ordered: list[str] = list(manifest.get("front") or [])
     for act in manifest["acts"]:
         ordered.extend(act["chapters"])
     ordered.extend(manifest["unassigned"])
+    ordered.extend(manifest.get("back") or [])
     return ordered
+
+
+def front_matter_filenames(folder_path: str) -> list[str]:
+    """
+    Every file that is manuscript but not a CHAPTER -- the prologue, the
+    epilogue -- in reading order.
+
+    For the handful of places that need to count chapters rather than files.
+    The progress gauge is the one that matters: a writer who set a target of
+    thirty and has written a prologue plus thirty chapters has written thirty
+    chapters, and "31 of 30" would be the app arguing with them about their
+    own book. Their WORDS still count, because they wrote them.
+    """
+    manifest, _exists = load_structure(folder_path)
+    return list(manifest.get("front") or []) + list(manifest.get("back") or [])
 
 
 def order_rank(folder_path: str) -> dict[str, int]:
@@ -372,13 +413,47 @@ def sync_add_chapter(folder_path: str, filename: str) -> None:
     manifest = _load_raw(folder_path)
     if manifest is None:
         return
-    already_known = filename in manifest["unassigned"] or any(
-        filename in act.get("chapters", [])
-        for act in manifest["acts"] if isinstance(act, dict)
+    already_known = (
+        filename in manifest["unassigned"]
+        or filename in (manifest.get("front") or [])
+        or filename in (manifest.get("back") or [])
+        or any(filename in act.get("chapters", [])
+               for act in manifest["acts"] if isinstance(act, dict))
     )
     if not already_known:
         manifest["unassigned"].append(filename)
         save_structure(folder_path, manifest)
+
+
+def sync_add_front_matter(folder_path: str, filename: str, where: str) -> None:
+    """
+    A prologue or epilogue was created -- put it in `front` or `back`.
+
+    THIS ONE FORCES THE MANIFEST INTO EXISTENCE, unlike its chapter sibling
+    above, which is a deliberate no-op for a project that has none. It has to:
+    without a manifest, reading order falls back to sorting filenames, and
+    "epilogue.md" sorts before "prologue.md" and both after "01-". The manifest
+    IS the only thing that can say a file goes first or last, so a project
+    gaining its first prologue is a project that now needs one.
+    """
+    manifest, _exists = load_structure(folder_path)
+    key = "front" if where == "front" else "back"
+    other = "back" if key == "front" else "front"
+
+    # Claimed for one list only, and taken out of wherever healing may have
+    # put it -- a file created a moment ago is in `unassigned` already,
+    # because that is where _heal appends anything on disk it did not know.
+    manifest["unassigned"] = [n for n in manifest["unassigned"] if n != filename]
+    manifest[other] = [n for n in (manifest.get(other) or []) if n != filename]
+    for act in manifest["acts"]:
+        if isinstance(act, dict):
+            act["chapters"] = [n for n in act.get("chapters", []) if n != filename]
+
+    existing = list(manifest.get(key) or [])
+    if filename not in existing:
+        existing.append(filename)
+    manifest[key] = existing
+    save_structure(folder_path, manifest)
 
 
 def sync_remove_chapter(folder_path: str, filename: str) -> None:
@@ -390,6 +465,8 @@ def sync_remove_chapter(folder_path: str, filename: str) -> None:
         if isinstance(act, dict):
             act["chapters"] = [n for n in act.get("chapters", []) if n != filename]
     manifest["unassigned"] = [n for n in manifest["unassigned"] if n != filename]
+    for key in ("front", "back"):
+        manifest[key] = [n for n in (manifest.get(key) or []) if n != filename]
     # Drop the id too. Any Weave anchor into it now resolves to None, which
     # reads as "that chapter is gone" rather than silently pointing at
     # whatever file later takes its place.
@@ -420,6 +497,14 @@ def sync_rename_chapter(folder_path: str, old_filename: str, new_filename: str) 
         if name == old_filename:
             manifest["unassigned"][i] = new_filename
             found = True
+    # A prologue renamed must stay a prologue. Swapped IN PLACE like the rest:
+    # dropping it and re-adding would move it to `unassigned`, which is the one
+    # list that cannot say "this goes first".
+    for key in ("front", "back"):
+        for i, name in enumerate(manifest.get(key) or []):
+            if name == old_filename:
+                manifest[key][i] = new_filename
+                found = True
 
     # Carry the chapter id across the rename. This is the whole point of
     # having ids: a rename is an ordinary thing to do, and every Weave anchor

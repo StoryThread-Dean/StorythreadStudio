@@ -514,3 +514,215 @@ describe("WHERE the world actually goes", () => {
     expect(screen.queryByTestId("weave-context-scope")).toBeNull();
   });
 });
+
+
+// ── THE CHAPTER'S OWN PLAN, ON THE SAME BAR ──────────────────────────────────
+//
+// Slice 2 of Chapter Outlines: the plan for the chapter being written goes to
+// Draft and Enhance without the writer attaching it. That makes it automatic
+// context, and the locked product rule for automatic context is not optional:
+// the writer must be able to inspect what will be sent, remove it, and switch
+// it off entirely.
+//
+// It goes on THIS bar rather than a panel of its own, because this bar is
+// already the answer to "what is being sent that I did not attach myself". A
+// second surface saying the same kind of thing would be a second place to
+// look, and the one you did not check is the one that was on.
+
+async function openWithOutline(outline: string, prefs: WeaveContextPrefs = {}) {
+  const onPrefsChange = vi.fn();
+  const onBriefChange = vi.fn();
+  render(
+    <WeaveContextBar
+      projectPath={PROJECT}
+      chapterFilename="04.md"
+      text="Alexandra counted the coins again."
+      pinnedTokens={0}
+      prefs={prefs}
+      onPrefsChange={onPrefsChange}
+      onBriefChange={onBriefChange}
+      chapterOutline={outline}
+    />,
+  );
+  await waitFor(() => expect(onBriefChange).toHaveBeenCalled());
+  return { onPrefsChange, onBriefChange };
+}
+
+const OUTLINE = "1. The column is spotted at dusk.\n2. Vance argues for withdrawal.";
+
+describe("the chapter's plan is inspectable, removable and switchable off", () => {
+  it("says it is being sent, and roughly what it costs", async () => {
+    await openWithOutline(OUTLINE);
+    const row = screen.getByTestId("context-outline-row");
+    expect(row.textContent).toMatch(/Sending/);
+    // Either apostrophe: the bar writes &rsquo; and jsdom renders the
+    // curly character, so a straight one here would fail on the wording
+    // being right.
+    expect(row.textContent).toMatch(/this chapter[’']s outline/i);
+    expect(row.textContent).toMatch(/tokens/);
+  });
+
+  it("says which passes read it", async () => {
+    // A writer running Readability should not be wondering whether they are
+    // paying to send their plan. They are not, and the bar says so.
+    await openWithOutline(OUTLINE);
+    expect(screen.getByTestId("context-outline-row").textContent)
+      .toMatch(/Draft and Enhance/);
+  });
+
+  it("is on without being asked", async () => {
+    // Absent means on. A writer who bothered to write an outline meant it to
+    // be used, and a default of off would make the whole slice invisible.
+    await openWithOutline(OUTLINE);
+    expect(screen.getByRole("button", { name: "Send this chapter's outline" }))
+      .toHaveProperty("ariaPressed", "true");
+  });
+
+  it("can be switched off, and remembers that per book", async () => {
+    const { onPrefsChange } = await openWithOutline(OUTLINE);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send this chapter's outline" }));
+    expect(onPrefsChange).toHaveBeenCalledWith(
+      expect.objectContaining({ chapterOutlineOff: true }));
+  });
+
+  it("says plainly when it is off", async () => {
+    await openWithOutline(OUTLINE, { chapterOutlineOff: true });
+    const row = screen.getByTestId("context-outline-row");
+    expect(row.textContent).toMatch(/not being sent/);
+    expect(row.textContent).not.toMatch(/Sending/);
+  });
+
+  it("offers no row at all when the chapter has no plan", async () => {
+    // A switch for a document that does not exist is a control that does
+    // nothing, and a writer who presses it learns the app is lying to them.
+    await openWithOutline("");
+    expect(screen.queryByTestId("context-outline-row")).toBeNull();
+  });
+
+  it("ignores an outline that is only whitespace", async () => {
+    await openWithOutline("   \n\n  ");
+    expect(screen.queryByTestId("context-outline-row")).toBeNull();
+  });
+
+  it("does not lose the other preferences when toggled", async () => {
+    // setPrefs rebuilds the whole object, so a field left out of it is a
+    // field reset by an unrelated click. This is the assertion that catches
+    // that -- switching the outline off must not restore an excluded Thread.
+    const { onPrefsChange } = await openWithOutline(OUTLINE, {
+      excludedIds: ["e-garrick"], excludedTypes: ["lore"],
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send this chapter's outline" }));
+    expect(onPrefsChange).toHaveBeenCalledWith({
+      off: false,
+      excludedIds: ["e-garrick"],
+      excludedTypes: ["lore"],
+      chapterOutlineOff: true,
+      aiNotesOff: false,
+    });
+  });
+
+  it("survives the world being switched off", async () => {
+    // Two separate decisions. Turning the WORLD off says nothing about the
+    // plan for the chapter in front of you, and a writer who wanted only
+    // their outline sent would otherwise have no way to say so.
+    const { onPrefsChange } = await openWithOutline(OUTLINE);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send world context" }));
+    expect(onPrefsChange).toHaveBeenCalledWith(
+      expect.objectContaining({ off: true, chapterOutlineOff: false }));
+  });
+});
+
+
+// ── The book's standing notes ────────────────────────────────────────────────
+// notes/ai-notes.md is sent with EVERY request, which makes it the most
+// consequential thing on this bar. The locked context rule applies to it in
+// full: readable, droppable, switchable off, remembered per book.
+
+async function openWithNotes(notes: string, prefs: WeaveContextPrefs = {}) {
+  const onPrefsChange = vi.fn();
+  const onBriefChange = vi.fn();
+  render(
+    <WeaveContextBar
+      projectPath={PROJECT}
+      chapterFilename="04.md"
+      text="Alexandra counted the coins again."
+      pinnedTokens={0}
+      prefs={prefs}
+      onPrefsChange={onPrefsChange}
+      onBriefChange={onBriefChange}
+      aiNotes={notes}
+    />,
+  );
+  await waitFor(() => expect(onBriefChange).toHaveBeenCalled());
+  return { onPrefsChange, onBriefChange };
+}
+
+const NOTES = "- Vance is the traitor now, changed in ch 12.\n- Do not soften Milton.";
+
+describe("the book's standing notes are inspectable and switchable off", () => {
+  it("says it is being sent, and that it is sent every time", async () => {
+    // "with every request" is the part that matters and the part that makes
+    // this different from the two rows above it. A writer who thinks this is
+    // occasional will write far too much in it.
+    await openWithNotes(NOTES);
+    const row = screen.getByTestId("context-ai-notes-row");
+    expect(row.textContent).toMatch(/Sending/);
+    expect(row.textContent).toMatch(/your AI Notes/);
+    expect(row.textContent).toMatch(/with every request/);
+  });
+
+  it("shows roughly what it costs", async () => {
+    await openWithNotes(NOTES);
+    expect(screen.getByTestId("context-ai-notes-row").textContent)
+      .toMatch(/\d+ tokens/);
+  });
+
+  it("says plainly when it is off", async () => {
+    // Not just an unlit button. The writer has to be able to tell, at a
+    // glance, that guidance they wrote is NOT in force.
+    await openWithNotes(NOTES, { aiNotesOff: true });
+    expect(screen.getByTestId("context-ai-notes-row").textContent)
+      .toMatch(/not being sent/);
+  });
+
+  it("offers no row when the writer has no notes", async () => {
+    // A switch for a file that does not exist does nothing, and a writer
+    // cannot tell a control that does nothing from one that is broken.
+    await openWithNotes("");
+    expect(screen.queryByTestId("context-ai-notes-row")).toBeNull();
+  });
+
+  it("ignores notes that are only whitespace", async () => {
+    // What an empty file that has been opened and saved once looks like.
+    await openWithNotes("  \n\n ");
+    expect(screen.queryByTestId("context-ai-notes-row")).toBeNull();
+  });
+
+  it("does not lose the other preferences when toggled", async () => {
+    const { onPrefsChange } = await openWithNotes(NOTES, {
+      excludedIds: ["e-garrick"], chapterOutlineOff: true,
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send your AI Notes" }));
+    expect(onPrefsChange).toHaveBeenCalledWith({
+      off: false,
+      excludedIds: ["e-garrick"],
+      excludedTypes: [],
+      chapterOutlineOff: true,
+      aiNotesOff: true,
+    });
+  });
+
+  it("is a separate decision from the world and from the chapter plan", async () => {
+    // Three things are sent automatically and they are wanted independently.
+    // A writer may want firm standing guidance and no world context at all.
+    const { onPrefsChange } = await openWithNotes(NOTES, { off: true });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send your AI Notes" }));
+    expect(onPrefsChange).toHaveBeenCalledWith(
+      expect.objectContaining({ off: true, aiNotesOff: true }));
+  });
+});

@@ -32,14 +32,14 @@ import { WeaveNav } from "./features/codex/WeaveNav";
 import { WeavingPanel } from "./features/codex/WeavingPanel";
 import { ExtractorScreen } from "./features/codex/ExtractorScreen";
 import { WeaveContextBar } from "./features/codex/WeaveContextBar";
-import { ThreadEditor } from "./features/codex/ThreadEditor";
+import { fetchSections } from "./features/codex/api";
+import { fetchChat, saveChat } from "./utils/chatSessions";
+import { ChatSessions } from "./components/chat/ChatSessions";
 
-/** The four kinds the Profile Builder owns. Everything else in the Weave is
- *  edited by the Thread editor -- named once so the three places that route on
- *  it cannot drift apart. */
-const PROFILE_KINDS = ["character", "relationship", "location", "lore"];
 import { SummaryView }    from "./components/SummaryView";
 import { SceneSummaryView } from "./components/SceneSummaryView";
+import { ChapterOutlineView } from "./components/ChapterOutlineView";
+import { Explain } from "./components/learn/Explain";
 import { SceneSummaryPreviewModal } from "./components/SceneSummaryPreviewModal";
 import { RightPanelResizer, useRightPanelWidth, RIGHT_PANEL_CLASS } from "./components/RightPanelResizer";
 import { Settings } from "./screens/Settings";
@@ -148,7 +148,7 @@ function App() {
   // main layout (keeps the left nav mounted) so its value is a peer of editor/notes.
   const [currentView, setCurrentView]   = useState<
     "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
-    | "weave" | "thread" | "extractor"
+    | "chapter_outline" | "weave" | "extractor"
   >("editor");
   // Which Weave section the sidebar shows as active. Kept here rather than
   // inside WeaveNav because opening a section changes the VIEW, and the view
@@ -162,9 +162,6 @@ function App() {
   // on THAT one rather than on its list. "Open it" has to open it.
   const [profileFilename, setProfileFilename] = useState<string | undefined>();
   // Which kind of Weave entry the Thread editor has open. The Profile
-  // Builder covers four kinds; everything else in the Weave -- factions,
-  // deities, objects, a writer's own Race -- is edited here.
-  const [threadType, setThreadType] = useState<string | null>(null);
   // Audiobook Converter: a standalone tool shown INSTEAD of Project Home
   // when no writing project is open. Not part of currentView because it
   // never coexists with the editor layout.
@@ -179,6 +176,15 @@ function App() {
   //   parent chapter row a subtle highlight while the child summary is active.
   const [expandedChapters, setExpandedChapters]           = useState<Set<string>>(new Set());
   const [currentSummaryChapter, setCurrentSummaryChapter] = useState<string | null>(null);
+  //   - currentOutlineChapter: which chapter's PLAN is open. A third child
+  //     document per chapter, and the only one that looks forward -- see
+  //     ChapterOutlineView. Keyed by the manuscript filename like the two
+  //     above, so migrateChapterKey re-points all three together.
+  const [currentOutlineChapter, setCurrentOutlineChapter] = useState<string | null>(null);
+  //   - chaptersWithOutline: which chapters have a plan on disk, so the
+  //     sidebar can mark them. One request for the whole book rather than one
+  //     per row, and re-read after a first save or a delete.
+  const [chaptersWithOutline, setChaptersWithOutline] = useState<Set<string>>(new Set());
 
   // Scene summaries (Phase 6):
   //   - sceneSummariesByChapter: per-chapter list of filled scene slots, so
@@ -330,6 +336,119 @@ function App() {
   // bar because the send path is what transmits it -- which is the locked
   // context rule: nothing goes until the writer initiates an AI action.
   const [weaveBrief, setWeaveBrief] = useState("");
+  // THE PLAN FOR THE CHAPTER IN THE EDITOR, read once per chapter.
+  //
+  // Held here rather than inside the context bar because two things need it:
+  // the bar, to show it and offer the switch, and the send path, to put it on
+  // the wire. Keyed on the chapter filename, the same key the bar resolves its
+  // anchor from -- so opening chapter four never sends chapter seven's plan.
+  const [chapterOutlineText, setChapterOutlineText] = useState("");
+
+  // What may actually go on the wire. Empty when the writer has switched it
+  // off in the context bar, so the payload never carries something they said
+  // not to send -- the backend filtering it would be a promise kept in the
+  // wrong place.
+  const outlineToSend =
+    projectUi.uiState.weaveContext?.chapterOutlineOff === true
+      ? "" : chapterOutlineText;
+
+  // THE WRITER'S STANDING NOTES FOR THE BOOK -- notes/ai-notes.md.
+  //
+  // Per BOOK rather than per chapter, which is the difference from the outline
+  // above and the reason it is read on project open rather than chapter
+  // change. Same two consumers though: the context bar shows it and offers the
+  // switch, the send path puts it on the wire.
+  const [aiNotesText, setAiNotesText] = useState("");
+
+  // Bumped after a Save to AI Notes so the file is re-read without a reload.
+  // Without this the writer saves a note, sees it confirmed, and the next
+  // request still carries the version from when the book was opened.
+  const [aiNotesRefresh, setAiNotesRefresh] = useState(0);
+
+  const aiNotesToSend =
+    projectUi.uiState.weaveContext?.aiNotesOff === true
+      ? "" : aiNotesText;
+
+  // ── Saved conversations ──────────────────────────────────────────────────
+  // The session the panel is currently writing to. Null means "not saved
+  // yet" -- the backend mints the id on the first save and hands it back, so
+  // this is never invented here.
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  // Bumped after a save so the picker's list and count refresh without being
+  // reopened.
+  const [chatSessionsKey, setChatSessionsKey] = useState(0);
+  const [restoringChat, setRestoringChat] = useState(false);
+  // THE SUMMARY SWAP, applied to a conversation.
+  //
+  // Set when a long saved conversation is reopened: `text` stands in for
+  // everything before `through`, and only the messages after it go on the
+  // wire verbatim. The whole transcript stays on SCREEN -- this changes
+  // what is sent, never what the writer can read.
+  //
+  // Null means send everything, which is both the state of every new
+  // conversation and what "Send everything instead" restores.
+  const [chatRecap, setChatRecap] = useState<{ text: string; through: number } | null>(null);
+  // Whether the recap's own text is expanded. Closed by default: it is
+  // reassurance rather than something to read every time.
+  const [showRecapText, setShowRecapText] = useState(false);
+  // What the backend's budget had to do to make the last request fit,
+  // in the writer's words. Empty on every ordinary turn.
+  const [materialsNote, setMaterialsNote] = useState("");
+
+  // The Save-to-AI-Notes composer. Non-null means it is open, holding the
+  // text the writer is editing before it is appended. Starts as the reply
+  // they pressed it on, which is a starting point rather than the answer --
+  // almost every useful note is one sentence out of a long paragraph.
+  const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteSavedAt, setNoteSavedAt] = useState<number | null>(null);
+
+  // Append one entry to notes/ai-notes.md.
+  //
+  // Read-then-write rather than a partial update, because POST /note is a
+  // whole-file overwrite -- which is also why the read failing has to abort
+  // the save. Writing on a failed read would replace the writer's whole
+  // guidance file with the single line they just typed.
+  const appendToAiNotes = useCallback(async (entry: string) => {
+    const root = currentProject?.root_path;
+    const body = entry.trim();
+    if (!root || !body) return;
+    setNoteSaving(true);
+    try {
+      const params = new URLSearchParams({ folder_path: root, filename: "ai-notes.md" });
+      const res = await fetch(`${API_BASE}/api/documents/note?${params}`);
+      // A note that does not exist yet is not a failure -- it is the first
+      // one. Anything else is, and must not lead to a write.
+      let existing = "";
+      if (res.ok) {
+        existing = String((await res.json())?.content ?? "");
+      } else if (res.status !== 404) {
+        throw new Error("Could not read your AI Notes.");
+      }
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      const seed = existing.trim() ? existing.replace(/\s+$/, "") : "# AI Notes";
+      const next = `${seed}\n\n- ${stamp} -- ${body}\n`;
+
+      const save = await fetch(`${API_BASE}/api/documents/note`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder_path: root, filename: "ai-notes.md", content: next }),
+      });
+      if (!save.ok) throw new Error("Could not save to your AI Notes.");
+
+      setNoteDraft(null);
+      setNoteSavedAt(Date.now());
+      // Re-read, or the next request carries the version from book-open and
+      // the writer's brand new note is not actually in force yet.
+      setAiNotesRefresh(n => n + 1);
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : "Could not save to your AI Notes.");
+      setNoteDraft(null);
+    } finally {
+      setNoteSaving(false);
+    }
+  }, [currentProject?.root_path]);
 
   // Reasoning toggle: when ON, chat requests ask OpenRouter for the model's
   // reasoning trace, shown as a collapsible block above the reply. Only offered
@@ -438,6 +557,12 @@ function App() {
   // `chapters` above stays the single source of chapter METADATA; this tree
   // only groups and orders filenames.
   const [structure, setStructure] = useState<StructureManifest | null>(null);
+  // WHETHER THE BOOK ALREADY HAS ONE. A second prologue is not a thing, so the
+  // button that would make one is not offered. Read from the manifest rather
+  // than from filenames: the manifest is what decides that a file IS front
+  // matter, and a chapter called "Prologue" is still a chapter.
+  const hasPrologue = (structure?.front.length ?? 0) > 0;
+  const hasEpilogue = (structure?.back.length ?? 0) > 0;
 
   // The chapter currently open in the editor.
   const [currentChapter, setCurrentChapter] = useState<ChapterInfo | null>(null);
@@ -497,7 +622,7 @@ function App() {
   const currentNoteRef = useRef<{ filename: string; title: string } | null>(null);
   const currentViewRef = useRef<
     "editor" | "profiles" | "notes" | "chapter_summary" | "scene_summary"
-    | "weave" | "thread" | "extractor"
+    | "chapter_outline" | "weave" | "extractor"
   >("editor");
 
   // Keep refs in sync with state on every render.
@@ -642,6 +767,76 @@ function App() {
     setCurrentSummaryChapter(chapterFilename);
     setCurrentView("chapter_summary");
   }, []);
+
+  /**
+   * Open a chapter's plan, with that chapter loaded behind it.
+   *
+   * THE LOAD IS NOT INCIDENTAL. The Writing Companion beside the outline,
+   * the Weave context bar, and the chapter-outline fetch that feeds Draft
+   * and Enhance are ALL keyed on `currentChapter`. Without this, a writer
+   * planning chapter 7 would be chatting about chapter 3 and the context
+   * bar would offer chapter 3's plan -- with nothing on screen to say so.
+   *
+   * The view is set AFTER the load, and that ordering is the whole trick:
+   * `loadChapter` sets the view to "editor" itself, after an await, so
+   * setting it first would be silently undone a moment later.
+   */
+  const openChapterOutline = useCallback(async (
+    chapterFilename: string,
+    chapter?: ChapterInfo,
+  ) => {
+    const project = currentProjectRef.current;
+    if (chapter && project && currentChapterRef.current?.filename !== chapterFilename) {
+      await loadChapter(chapter, project);
+    }
+    setCurrentOutlineChapter(chapterFilename);
+    setCurrentView("chapter_outline");
+  }, [loadChapter]);
+
+  /** Which chapters have a plan. Cheap enough to re-read whole. */
+  const loadChapterOutlines = useCallback(async () => {
+    const project = currentProjectRef.current;
+    if (!project) return;
+    try {
+      const params = new URLSearchParams({ folder_path: project.root_path });
+      const res = await fetch(`${API_BASE}/api/documents/chapter-outlines?${params}`);
+      if (!res.ok) return;
+      const rows = await res.json();
+      setChaptersWithOutline(new Set(
+        (Array.isArray(rows) ? rows : [])
+          .map((r: { chapter_filename: string }) => r.chapter_filename)));
+    } catch {
+      // A dot in the sidebar is a nicety. Failing to fetch it must not be an
+      // error the writer has to read.
+    }
+  }, []);
+
+  const handleDeleteChapterOutline = useCallback(async (chapterFilename: string) => {
+    const project = currentProjectRef.current;
+    if (!project) return;
+    const ok = window.confirm(
+      "Delete this chapter outline? The chapter itself is not touched.");
+    if (!ok) return;
+    try {
+      const params = new URLSearchParams({
+        folder_path: project.root_path, chapter_filename: chapterFilename,
+      });
+      const res = await fetch(`${API_BASE}/api/documents/chapter-outline?${params}`,
+                              { method: "DELETE" });
+      if (!res.ok && res.status !== 404) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail ?? "Delete failed.");
+      }
+      if (currentOutlineChapter === chapterFilename) {
+        setCurrentOutlineChapter(null);
+        setCurrentView("editor");
+      }
+      void loadChapterOutlines();
+      setEditorError(null);
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "Could not delete the outline.");
+    }
+  }, [currentOutlineChapter, loadChapterOutlines]);
 
 
   // --- Scene summaries (Phase 6) ---
@@ -898,10 +1093,32 @@ function App() {
   }, [structure, putStructure]);
 
 
-  const handleCreateChapter = useCallback(async () => {
+  /**
+   * Create a chapter, a prologue or an epilogue.
+   *
+   * One function for all three because they differ in exactly two ways the
+   * writer can see -- what it is called by default, and where it lands in the
+   * book -- and the backend owns the second. A separate handler per kind would
+   * be three copies of the same fetch-and-open.
+   */
+  const handleCreateChapter = useCallback(async (
+    kind: "chapter" | "front" | "back" = "chapter",
+  ) => {
     if (!currentProject) return;
 
-    const title = window.prompt("Chapter title:", `Chapter ${chapters.length + 1}`);
+    // The default title is the whole difference on this side. A prologue
+    // offered "Chapter 4" would be the app not understanding what was just
+    // asked for. Numbered chapters count only the NUMBERED ones, so a book
+    // with a prologue does not offer "Chapter 4" for its third chapter.
+    const numbered = chapters.filter(ch => /^\d+-/.test(ch.filename)).length;
+    const prompts = {
+      chapter: ["Chapter title:", `Chapter ${numbered + 1}`],
+      front:   ["Prologue title:", "Prologue"],
+      back:    ["Epilogue title:", "Epilogue"],
+    } as const;
+    const [ask, suggested] = prompts[kind];
+
+    const title = window.prompt(ask, suggested);
     if (!title || !title.trim()) return;
 
     try {
@@ -911,6 +1128,7 @@ function App() {
         body: JSON.stringify({
           folder_path: currentProject.root_path,
           title: title.trim(),
+          kind,
         }),
       });
 
@@ -928,13 +1146,17 @@ function App() {
 
       // Add to chapter list and open it. The structure tree is refetched so
       // the new chapter appears in the sidebar's Unassigned bucket.
-      setChapters((prev) => [...prev, newChapter].sort((a, b) => a.filename.localeCompare(b.filename)));
+      // Appended, not filename-sorted: "prologue.md" and "epilogue.md" sort
+      // in the wrong places and epilogue sorts before prologue. The list is
+      // re-read in reading order on the next load, and loadStructure below
+      // refreshes the tree the sidebar actually draws from.
+      setChapters((prev) => [...prev, newChapter]);
       void loadStructure(currentProject.root_path);
       loadChapter(newChapter, currentProject);
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not create chapter.");
     }
-  }, [currentProject, chapters.length, loadChapter, loadStructure]);
+  }, [currentProject, chapters, loadChapter, loadStructure]);
 
 
   // --- Rename cascade bookkeeping ---
@@ -998,6 +1220,7 @@ function App() {
       return next;
     });
     setCurrentSummaryChapter(prev => (prev === oldFilename ? newFilename : prev));
+    setCurrentOutlineChapter(prev => (prev === oldFilename ? newFilename : prev));
     setCurrentSummaryScene(prev =>
       prev?.chapterFile === oldFilename ? { ...prev, chapterFile: newFilename } : prev
     );
@@ -1132,6 +1355,10 @@ function App() {
         setCurrentSummaryChapter(null);
         setCurrentView("editor");
       }
+      if (currentOutlineChapter === chapter.filename) {
+        setCurrentOutlineChapter(null);
+        setCurrentView("editor");
+      }
       // Also drop any open scene summary for this chapter and clear the
       // sidebar cache so stale Scene N rows don't linger.
       if (currentSummaryScene?.chapterFile === chapter.filename) {
@@ -1155,7 +1382,7 @@ function App() {
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not delete chapter.");
     }
-  }, [currentSummaryChapter, currentSummaryScene, loadStructure]);
+  }, [currentSummaryChapter, currentOutlineChapter, currentSummaryScene, loadStructure]);
 
 
   // --- Delete a chapter summary (without touching the chapter itself) ---
@@ -1199,6 +1426,57 @@ function App() {
   }, [currentSummaryChapter]);
 
 
+  // THE PLAN FOR THE CHAPTER IN THE EDITOR. Re-read whenever the writer moves
+  // to a different chapter, and cleared the moment they do -- holding the old
+  // one for even a render would risk sending chapter four's plan while they
+  // draft chapter seven, which is the one thing this must never do.
+  useEffect(() => {
+    const filename = currentChapter?.filename;
+    const root = currentProject?.root_path;
+    setChapterOutlineText("");
+    if (!filename || !root) return;
+
+    let cancelled = false;
+    const params = new URLSearchParams({
+      folder_path: root, chapter_filename: filename,
+    });
+    fetch(`${API_BASE}/api/documents/chapter-outline?${params}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(body => {
+        if (!cancelled && body) setChapterOutlineText(String(body.content ?? ""));
+      })
+      .catch(() => {
+        // No plan is the ordinary state of most chapters. Failing to read one
+        // costs a row on the context bar and nothing else.
+      });
+    return () => { cancelled = true; };
+  }, [currentChapter?.filename, currentProject?.root_path]);
+
+  // Read the standing notes once per book, and again after the writer saves
+  // one from a reply. Keyed on the project rather than the chapter: the same
+  // guidance applies wherever they are in the manuscript.
+  useEffect(() => {
+    const root = currentProject?.root_path;
+    setAiNotesText("");
+    if (!root) return;
+
+    let cancelled = false;
+    const params = new URLSearchParams({
+      folder_path: root, filename: "ai-notes.md",
+    });
+    fetch(`${API_BASE}/api/documents/note?${params}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(body => {
+        if (!cancelled && body) setAiNotesText(String(body.content ?? ""));
+      })
+      .catch(() => {
+        // Not having any is the ordinary state of a new book. A failed read
+        // costs a row on the context bar and nothing else -- it must never
+        // stop the writer from sending the message they were typing.
+      });
+    return () => { cancelled = true; };
+  }, [currentProject?.root_path, aiNotesRefresh]);
+
   // --- Called by ProjectHome when a project is opened or created ---
   // Fetches the chapter list, then auto-opens the first chapter.
   const handleProjectOpen = useCallback(async (project: ProjectInfo) => {
@@ -1210,10 +1488,28 @@ function App() {
     setIsDirty(false);
     setEditorError(null);
 
+    // A CONVERSATION BELONGS TO A BOOK, and until now nothing said so: this
+    // function reset the chapters and the structure and never touched the
+    // chat, so opening a second book left the first book's conversation sitting
+    // in the panel -- with its chips still attached, still marked established,
+    // and the next message quietly grounded in the wrong novel.
+    //
+    // It was survivable while chats were session-only. It is not now: the
+    // panel writes to `currentChatId` after every turn, so carrying one across
+    // would append this book's messages to a session saved under the other
+    // book's folder.
+    clearWritingCompanionChat();
+    setCurrentChatId(null);
+    setChatSessionsKey(n => n + 1);
+
     // Fetch the acts tree in parallel with the chapter list -- neither
     // depends on the other, and a structure failure only costs the acts
     // grouping (flat list fallback), never the chapters themselves.
     void loadStructure(project.root_path);
+    // Which chapters are planned, for the sidebar dots. Same reasoning as the
+    // structure fetch: independent of the chapter list, and failing it costs
+    // a dot rather than the tree.
+    void loadChapterOutlines();
 
     try {
       const params = new URLSearchParams({ folder_path: project.root_path });
@@ -1235,7 +1531,14 @@ function App() {
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : "Could not load project chapters.");
     }
-  }, [loadChapter, loadStructure]);
+  // clearWritingCompanionChat is deliberately NOT in here, and not by
+  // oversight: it is declared below this point, and a dependency array is
+  // evaluated during render, so naming it here is a real temporal-dead-zone
+  // error rather than a lint quibble (tsc rejects it). Safe to omit because
+  // it is a useCallback with an empty dependency list -- referentially
+  // stable for the life of the component, so there is no stale closure to
+  // capture.
+  }, [loadChapter, loadStructure, loadChapterOutlines]);
 
 
   // --- Called by MarkdownEditor every time the writer types anything ---
@@ -1704,7 +2007,7 @@ function App() {
           // Only send messages from the current "new ask" boundary onward, so a
           // fresh ask starts the AI with a clean slate (the full transcript stays
           // visible in the UI). lastBoundary is 0 when no boundary is set.
-          messages:        newMessages.slice(askBoundaries[askBoundaries.length - 1] ?? 0),
+          messages:        recapAwareMessages(newMessages),
           context_chips:   newChips,
           model_id:        modelId,
           content_mode:    currentProjectRef.current?.content_mode_default ?? "general",
@@ -1724,6 +2027,16 @@ function App() {
           // action, which is the only thing allowed to transmit it. Empty
           // when they switched it off, emptied it, or it did not fit.
           weave_brief: weaveBrief,
+          // Switched off is switched off. The payload carries nothing rather
+          // than the backend being trusted to filter: nothing the writer has
+          // said not to send should reach the wire in the first place.
+          chapter_outline: outlineToSend,
+          // Standing notes for the book. Sent on every category, not
+          // just Draft and Enhance -- guidance is guidance.
+          ai_notes:        aiNotesToSend,
+          // Only the budget reads this: it is how a chapter too big to
+          // send finds its own summary to send instead.
+          chapter_filename: currentChapterRef.current?.filename ?? null,
           // Reasoning toggle: only honored by reasoning-capable models, and the
           // toggle is hidden otherwise, so this is false unless both are true.
           include_reasoning: reasoningMode && activeModelSupportsReasoning,
@@ -1759,8 +2072,24 @@ function App() {
         // emitted one; rendered as a collapsible block above the reply.
         ...(data.reasoning ? { reasoning: data.reasoning } : {}),
       };
-      setChatMessages(appendTurnToHistory(chatMessages, userMsg, data.materials_content, assistantMsg));
+      // WHAT THE BUDGET DID, if anything. Set on every turn including the
+      // empty case, or a note from one request would linger over the next
+      // and describe a swap that did not happen.
+      setMaterialsNote(String(data.materials_note ?? ""));
+      const nextHistory = appendTurnToHistory(chatMessages, userMsg, data.materials_content, assistantMsg);
+      setChatMessages(nextHistory);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+
+      // KEEP THE CONVERSATION. Written after the turn completed, never
+      // before -- a failed request must not leave a saved session claiming a
+      // reply that never arrived.
+      //
+      // This is not autosave in the sense the app forbids. That rule protects
+      // the writer's PROSE from changing underneath them; a reply is an
+      // artifact they already paid for, and losing it to a crash is what the
+      // rule is trying to prevent rather than something it permits.
+      void persistChatSession(nextHistory);
+
 
       // ── Mark materials as established after successful send ────────────
       // These will show as muted in the UI and won't be resent on future turns.
@@ -1805,11 +2134,13 @@ function App() {
       setChatCanCancel(false);
       setChatLoading(false);
     }
-    // weaveBrief is in here deliberately: without it this callback would
-    // close over the brief as it was when the deps last changed and send that
-    // instead of what the writer is looking at now -- the exact stale-closure
-    // shape that made Quick Fill wipe half-typed boxes.
-  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedSelection, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon, reasoningMode, activeModelSupportsReasoning, weaveBrief]);
+    // weaveBrief and outlineToSend are in here deliberately: without them
+    // this callback would close over the brief and the chapter plan as they
+    // were when the deps last changed, and send those instead of what the
+    // writer is looking at now -- the exact stale-closure shape that made
+    // Quick Fill wipe half-typed boxes. For the outline the failure would be
+    // worse than stale: it would be the PREVIOUS CHAPTER'S plan.
+  }, [chatInput, chatMessages, selectedText, contextChips, chatLoading, includeChapter, chapterEstablished, establishedSelection, establishedChipKeys, draftMode, draftNudgeDismissed, enhanceMode, enhanceLevel, askBoundaries, treatAsCanon, reasoningMode, activeModelSupportsReasoning, weaveBrief, outlineToSend, aiNotesToSend]);
 
 
   // --- Start a new ask ---
@@ -1886,10 +2217,184 @@ function App() {
     setAskBoundaries([]);
     setLastSentSelection("");
     setEstablishedSelection("");
+    // A recap stands in for messages that are no longer here.
+    setChatRecap(null);
+  }, []);
+
+
+  // ── Saving and reopening a conversation ──────────────────────────────────
+
+  // Everything the panel needs to come back the way it was.
+  //
+  // THE TRANSCRIPT ALONE IS NOT A SESSION. Without the chips and the stance,
+  // a reopened chat is a wall of text the model has no context for; without
+  // the ask boundaries the writer loses where one question ended and the
+  // next began. The checklist is clearWritingCompanionChat above: whatever
+  // that function has to reset is, by definition, part of the session.
+  //
+  // WHAT IS DELIBERATELY ABSENT is chapterEstablished and
+  // establishedChipKeys. Those say "the model has already been sent this",
+  // which is true of a conversation in flight and false of one being reopened
+  // days later -- the model is a fresh request with no memory of any of it.
+  // Restoring them would suppress the materials and leave the reply grounded
+  // in nothing.
+  const chatSetup = useCallback(() => ({
+    contextChips,
+    treatAsCanon,
+    askBoundaries,
+    draftMode,
+    enhanceMode,
+    enhanceLevel,
+  }), [contextChips, treatAsCanon, askBoundaries, draftMode, enhanceMode, enhanceLevel]);
+
+  // What actually goes on the wire, once a recap is standing in for the
+  // older half of a reopened conversation.
+  //
+  // TWO CUTS, AND THE LATER ONE WINS. "New ask" already trims the history to
+  // the last boundary; a recap trims it to where the summary ends. Taking the
+  // MAXIMUM means a fresh ask inside a resumed conversation does not drag the
+  // recap back in, and a recap does not resend messages a new ask had already
+  // put behind the writer.
+  const recapAwareMessages = useCallback((all: EditorChatMessage[]) => {
+    const boundary = askBoundaries[askBoundaries.length - 1] ?? 0;
+    if (!chatRecap) return all.slice(boundary);
+
+    const start = Math.max(boundary, chatRecap.through);
+    const tail = all.slice(start);
+    // The recap only earns its place if it is standing in for something. Once
+    // a new ask has moved past it there is nothing older to summarise, and
+    // sending it anyway would be paying for context twice.
+    if (boundary >= chatRecap.through) return tail;
+
+    return [
+      {
+        role: "user" as const,
+        content:
+          "EARLIER IN THIS CONVERSATION (a summary of messages from a previous "
+          + "sitting, standing in for them so they do not all have to be resent "
+          + "-- treat what it records as already agreed):\n\n"
+          + chatRecap.text,
+        hidden: true,
+      },
+      ...tail,
+    ];
+  }, [askBoundaries, chatRecap]);
+
+  const persistChatSession = useCallback(async (messages: EditorChatMessage[]) => {
+    const root = currentProjectRef.current?.root_path;
+    if (!root || messages.length === 0) return;
+    try {
+      const saved = await saveChat({
+        projectPath: root,
+        surface: "companion",
+        chatId: currentChatId,
+        // What the conversation was about, for the picker. The chapter that
+        // was open is the closest thing the Companion has to a subject.
+        subject: currentChapterRef.current?.title ?? "",
+        messages,
+        setup: chatSetup(),
+      });
+      // KEEP THE ID. Without this the next turn sends null again and every
+      // turn becomes its own one-turn session in the picker.
+      setCurrentChatId(saved.chat_id);
+      setChatSessionsKey(n => n + 1);
+    } catch {
+      // Deliberately silent. The writer has their reply on screen; a red
+      // banner about bookkeeping would suggest the reply itself failed.
+    }
+  }, [currentChatId, chatSetup]);
+
+  // Put the current conversation away and begin an empty one. The session
+  // stays on disk -- "fresh" is about the panel, not about deleting anything.
+  const startFreshChat = useCallback(() => {
+    clearWritingCompanionChat();
+    setCurrentChatId(null);
+    setChatSessionsKey(n => n + 1);
+  }, [clearWritingCompanionChat]);
+
+  const openChatSession = useCallback(async (chatId: string) => {
+    const root = currentProjectRef.current?.root_path;
+    if (!root) return;
+    setRestoringChat(true);
+    try {
+      const chat = await fetchChat(root, chatId);
+
+      // Hidden materials turns are stored as DESCRIPTORS, not text -- see
+      // backend/app/chat_sessions.py. There is nothing to replay, and replaying
+      // it would hand the model a chapter as it stood days ago. Dropped here;
+      // the materials are rebuilt from today's files on the next turn.
+      const messages = (chat.messages ?? [])
+        .filter(m => !m.hidden)
+        .map(m => ({
+          role: m.role,
+          content: String(m.content ?? ""),
+          ...(m.reasoning ? { reasoning: m.reasoning } : {}),
+        })) as EditorChatMessage[];
+
+      const setup = (chat.setup ?? {}) as Record<string, unknown>;
+      setChatMessages(messages);
+      setContextChips((setup.contextChips as ContextChip[]) ?? []);
+      setTreatAsCanon(setup.treatAsCanon !== false);
+      setAskBoundaries((setup.askBoundaries as number[]) ?? []);
+      setDraftMode(setup.draftMode === true);
+      setEnhanceMode(setup.enhanceMode === true);
+      if (typeof setup.enhanceLevel === "string") {
+        setEnhanceLevel(setup.enhanceLevel as typeof enhanceLevel);
+      }
+
+      // NOT restored, on purpose: see chatSetup above. The next turn re-sends
+      // the chapter and the chips from disk, because this is a new request to
+      // a model that remembers none of it.
+      setChapterEstablished(false);
+      setEstablishedChipKeys(new Set());
+      setEstablishedSelection("");
+      setLastSentSelection("");
+      setChatInput("");
+      setChatError(null);
+      setCurrentChatId(chat.chat_id);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "auto" }), 50);
+
+      // THE SUMMARY SWAP. Only for a conversation long enough to be worth
+      // it -- the endpoint decides that and answers `reused` with an empty
+      // recap when there is nothing to gain, having spent nothing to find
+      // out. A short conversation is simply sent whole.
+      //
+      // Done AFTER the transcript is on screen rather than before, so the
+      // writer is looking at their conversation while this happens instead
+      // of at a spinner.
+      setChatRecap(null);
+      try {
+        const res = await fetch(`${API_BASE}/api/ai/chat-recap`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_path: root, chat_id: chat.chat_id,
+            content_mode: currentProjectRef.current?.content_mode_default ?? "general",
+          }),
+        });
+        if (res.ok) {
+          const body = await res.json();
+          if (body.recap) {
+            setChatRecap({ text: body.recap,
+                           through: body.recap_visible_through ?? 0 });
+          }
+        }
+      } catch {
+        // Failing to summarise is not failing to reopen. The conversation
+        // is already on screen and will simply be sent in full, which is
+        // more expensive and completely correct.
+      }
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message
+        : "That conversation could not be opened.");
+    } finally {
+      setRestoringChat(false);
+    }
   }, []);
 
 
   // --- Theme + UI scale init ---
+
   // Load the saved theme and font-size scale from the backend on first
   // mount and apply each to the <html> element. Runs once at app boot;
   // from then on changes go through useTheme()/setTheme() and
@@ -2277,13 +2782,15 @@ function App() {
                 const isExpanded        = expandedChapters.has(filename);
                 const isActiveChapter   = currentView === "editor" && currentChapter?.filename === filename;
                 const isChapterSummaryActive = currentView === "chapter_summary" && currentSummaryChapter === filename;
+                const isChapterOutlineActive = currentView === "chapter_outline" && currentOutlineChapter === filename;
                 // "Summary ancestor" -- any descendant of this chapter is
                 // the active view; subtly highlight the chapter row so the
                 // writer can trace back up the tree.
                 const isSceneSummaryActiveInThisChapter =
                   currentView === "scene_summary" &&
                   currentSummaryScene?.chapterFile === filename;
-                const isSummaryAncestor = isChapterSummaryActive || isSceneSummaryActiveInThisChapter;
+                const isSummaryAncestor = isChapterSummaryActive
+                  || isChapterOutlineActive || isSceneSummaryActiveInThisChapter;
 
                 const sceneSummaries  = sceneSummariesByChapter.get(filename);
                 const isScenesExpanded = expandedSceneGroups.has(filename);
@@ -2336,6 +2843,8 @@ function App() {
                     isActiveChapter={isActiveChapter}
                     isSummaryAncestor={isSummaryAncestor}
                     isChapterSummaryActive={isChapterSummaryActive}
+                    isChapterOutlineActive={isChapterOutlineActive}
+                    hasChapterOutline={chaptersWithOutline.has(filename)}
                     sceneSummaries={sceneSummaries}
                     isScenesExpanded={isScenesExpanded}
                     activeSceneIndex={activeSceneIndex}
@@ -2346,6 +2855,8 @@ function App() {
                       }
                     }}
                     onOpenChapterSummary={() => openChapterSummary(filename)}
+                    onOpenChapterOutline={() => void openChapterOutline(filename, chapter)}
+                    onDeleteChapterOutline={() => void handleDeleteChapterOutline(filename)}
                     onRenameChapter={(newTitle) => handleRenameChapter(filename, newTitle)}
                     onDeleteChapter={() => handleDeleteChapter(chapter)}
                     onDeleteChapterSummary={() => handleDeleteChapterSummary(chapter)}
@@ -2374,13 +2885,30 @@ function App() {
               // the manifest (should be healed away server-side, but never
               // hide a chapter over a bookkeeping gap).
               const known = new Set([
+                ...structure.front.map(c => c.filename),
                 ...structure.acts.flatMap(a => a.chapters.map(c => c.filename)),
                 ...structure.unassigned.map(c => c.filename),
+                ...structure.back.map(c => c.filename),
               ]);
               const strays = chapters.filter(c => !known.has(c.filename));
 
+              // A prologue and an epilogue are labelled where they sit rather
+              // than left to be inferred from position -- an unlabelled row
+              // above Act I reads as a chapter somebody forgot to file, which
+              // is the thing they are most likely to be mistaken for. Their
+              // row menu offers no Move: a prologue's place is not a choice.
+              const matterLabel = (text: string) => (
+                <p className="mb-0.5 mt-1 px-2 text-micro font-semibold uppercase tracking-wider text-faint">
+                  {text}
+                </p>
+              );
+
               return (
                 <>
+                  {structure.front.length > 0 && matterLabel("Prologue")}
+                  {structure.front.map(ref =>
+                    renderChapterRow(ref.filename, ref.title, null))}
+
                   {structure.acts.map((act, actIdx) => (
                     <ActGroup
                       key={act.id}
@@ -2430,6 +2958,10 @@ function App() {
                   )}
                   {strays.map(c => renderChapterRow(c.filename, c.title, null))}
 
+                  {structure.back.length > 0 && matterLabel("Epilogue")}
+                  {structure.back.map(ref =>
+                    renderChapterRow(ref.filename, ref.title, null))}
+
                   {/* Ghost button: create the next act. First use is what
                       materializes structure.json on disk. */}
                   <button
@@ -2467,16 +2999,19 @@ function App() {
                          section.label, currentProject);
                 return;
               }
-              // A kind of entry. The Profile Builder still handles the four
-              // it was built for; everything else opens in the Thread editor.
-              if (PROFILE_KINDS.includes(section.id)) {
-                setProfileType(section.id as "character" | "relationship" | "location" | "lore");
-                setCurrentView("profiles");
-              } else {
-                setThreadType(section.id);
-                setProfileFilename(undefined);
-                setCurrentView("thread");
-              }
+              // EVERY KIND OF ENTRY OPENS IN THE PROFILE BUILDER.
+              //
+              // This used to check a hardcoded list of four, so a Creature
+              // or a Faction landed in the Weave's own simpler editor --
+              // a different look, a different feel, and no Profile Chat.
+              // The Profile Builder was already able to render them: its
+              // sections come from the registry and every character-only
+              // extra is guarded, and it even offered them as TABS. Only
+              // the way in disagreed -- two lists, one of them four items
+              // long and written by hand.
+              setProfileType(section.id);
+              setProfileFilename(undefined);
+              setCurrentView("profiles");
             }}
           />
 
@@ -2529,20 +3064,7 @@ function App() {
         continuity editing, not prose drafting, so the chat panel would only
         distract.
       */}
-      {currentView === "thread" && threadType ? (
-        // Every Weave kind the Profile Builder does not cover. Rendered like
-        // the Weave itself rather than as a takeover, so the chapter list
-        // stays put -- an entry is something a writer edits WHILE writing.
-        <div className="flex-1 overflow-hidden">
-          <ThreadEditor
-            projectPath={currentProject.root_path}
-            typeId={threadType}
-            initialFilename={profileFilename}
-            onBack={() => setCurrentView("editor")}
-            onDirtyChange={setIsDirty}
-          />
-        </div>
-      ) : currentView === "extractor" ? (
+      {currentView === "extractor" ? (
         // A SCREEN, not a popup, and roadmap decision 10 says so explicitly so
         // nobody later moves it inside the walkthrough. The closed-world rule
         // is about a WALK -- answering a stop must not send you away
@@ -2563,6 +3085,8 @@ function App() {
             projectPath={currentProject.root_path}
             pinned={projectUi.uiState.weaveNodePositions}
             onPin={positions => projectUi.update({ weaveNodePositions: positions })}
+            hiddenTypes={projectUi.uiState.weaveHiddenTypes}
+            onHiddenTypes={ids => projectUi.update({ weaveHiddenTypes: ids })}
           />
         </div>
       ) : currentView === "chapter_summary" && currentSummaryChapter ? (
@@ -2584,7 +3108,23 @@ function App() {
       ) : (
       <>
 
-      {/* ── CENTER PANEL: Writing Editor (chapters or notes) ─────────── */}
+      {/* ── CENTER PANEL ────────────────────────────────────────────────
+          The chapter outline is a CENTER-COLUMN view rather than a
+          takeover, so the Writing Companion below stays mounted beside it.
+          Planning a chapter is exactly when a writer wants to argue with
+          the AI about what should happen in it, and before this the panel
+          disappeared the moment they opened the outline. */}
+      {currentView === "chapter_outline" && currentOutlineChapter ? (
+        <ChapterOutlineView
+          project={currentProject}
+          chapterFile={currentOutlineChapter}
+          font={currentFont}
+          onFontChange={setCurrentFont}
+          onBack={() => setCurrentView("editor")}
+          onSidebarRefresh={() => void loadChapterOutlines()}
+          weaveBrief={weaveBrief}
+        />
+      ) : (
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
         {/* Title bar + save indicator -- shows chapter title or note title */}
@@ -2609,12 +3149,44 @@ function App() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={handleCreateChapter}
+              onClick={() => void handleCreateChapter("chapter")}
               className="rounded border border-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-success-fill hover:text-success-muted"
               title="Create a new chapter in manuscript/"
             >
               + New Chapter
             </button>
+            {/* A PROLOGUE AND AN EPILOGUE ARE NOT CHAPTERS, so they are not
+                behind the New Chapter button. Offered beside it, smaller,
+                because most books have neither and a writer looking for one
+                knows exactly what they are looking for. Each is offered only
+                while the book does not already have one -- a second prologue
+                is not a thing, and a button that made one would be the app
+                agreeing to something it then has to draw. */}
+            {!hasPrologue && (
+              <button
+                onClick={() => void handleCreateChapter("front")}
+                className="rounded border border-border px-1.5 py-0.5 text-micro text-faint transition-colors hover:border-success-fill hover:text-success-muted"
+                title="Add a prologue. It sits before chapter one and is not counted as a chapter."
+              >
+                + Prologue
+              </button>
+            )}
+            {!hasEpilogue && (
+              <button
+                onClick={() => void handleCreateChapter("back")}
+                className="rounded border border-border px-1.5 py-0.5 text-micro text-faint transition-colors hover:border-success-fill hover:text-success-muted"
+                title="Add an epilogue. It sits after the last chapter and is not counted as a chapter."
+              >
+                + Epilogue
+              </button>
+            )}
+            {/* ONE explanation for the pair, shown while either button is.
+                Icon-only because this is the title bar, where every word
+                competes with the chapter name. */}
+            {(!hasPrologue || !hasEpilogue) && (
+              <Explain of="manuscript.front-back" compact align="right"
+                       label="What are a prologue and an epilogue here?" />
+            )}
             {isDirty ? (
               <span className="flex items-center gap-1.5 text-xs text-warn-muted"
                 title="You have unsaved changes. Press Ctrl+S to save.">
@@ -2812,6 +3384,7 @@ function App() {
           )}
         </div>
       </main>
+      )}
 
 
       {/* ── RIGHT PANEL: Writing Companion ────────────────────────────────
@@ -2826,15 +3399,32 @@ function App() {
         <div className="border-b border-border px-4 py-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-text-primary">Writing Companion</h2>
-            {chatMessages.length > 0 && (
-              <button
-                onClick={clearWritingCompanionChat}
-                className="text-xs text-danger-fill transition-colors hover:text-danger-muted"
-                title="Clear the conversation and detach all context chips"
-              >
-                Clear
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {/* Past chats sits BESIDE Clear rather than replacing it, and
+                  the two mean different things now that conversations are
+                  kept: Start fresh puts this one away, Clear throws it out of
+                  the panel. Both leave what is on disk alone. */}
+              {currentProject && (
+                <ChatSessions
+                  projectPath={currentProject.root_path}
+                  surface="companion"
+                  currentChatId={currentChatId}
+                  refreshKey={chatSessionsKey}
+                  onOpen={id => void openChatSession(id)}
+                  onStartFresh={startFreshChat}
+                  busy={restoringChat}
+                />
+              )}
+              {chatMessages.length > 0 && (
+                <button
+                  onClick={clearWritingCompanionChat}
+                  className="text-xs text-danger-fill transition-colors hover:text-danger-muted"
+                  title="Clear the conversation and detach all context chips"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
           <p className="mt-1 text-xs text-text-muted">
             Discuss your writing, or turn on Draft mode to have the AI write a
@@ -3016,12 +3606,84 @@ function App() {
             text={selectedText}
             // The writer's own attachments claim their tokens first and are
             // never pruned, so the Weave spends what is left after them.
+            // The outline joins this sum for the same reason the chips are
+            // in it: it is never pruned, so the Weave's budget is what is
+            // left after it. Leaving it out would let the brief spend tokens
+            // the request has already committed, and the request would grow
+            // quietly rather than the world's share shrinking honestly.
             pinnedTokens={contextChips.reduce(
-              (sum, chip) => sum + estimateTokens(chip.content), 0)}
+              (sum, chip) => sum + estimateTokens(chip.content), 0)
+              + estimateTokens(outlineToSend)
+              + estimateTokens(aiNotesToSend)}
             prefs={projectUi.uiState.weaveContext ?? {}}
             onPrefsChange={next => projectUi.update({ weaveContext: next })}
             onBriefChange={setWeaveBrief}
+            chapterOutline={chapterOutlineText}
+            aiNotes={aiNotesText}
           />
+        )}
+
+        {/* THE COMPOSER. A dialog rather than an inline box because what
+            goes in here is sent on every request afterwards, and that
+            deserves a moment of attention rather than a stray click.
+
+            Backdrop does NOT close it: it holds typed text, and the app has
+            a standing rule about that (R11.5, the accidental-close guard --
+            seven overlays wired straight to onClose and five held prose). */}
+        {noteDraft !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-lg rounded-lg border border-border bg-bg-panel p-4 shadow-xl"
+                 data-testid="ai-notes-composer">
+              <h3 className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
+                <Bot size={13} className="text-accent" /> Save to AI Notes
+              </h3>
+              <p className="mt-1 text-mini text-text-muted">
+                This goes in <span className="text-text-primary">notes/ai-notes.md</span> and is
+                sent with every AI request for this book. Keep it to the decision itself --
+                a sentence, not a paragraph.
+              </p>
+              <textarea
+                value={noteDraft}
+                onChange={e => setNoteDraft(e.target.value)}
+                rows={5}
+                autoFocus
+                className="mt-2 w-full resize-y rounded border border-border bg-bg-surface px-2 py-1.5 text-sm text-text-primary"
+              />
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-micro text-faint">
+                  Dated automatically. Added to the end; nothing already there is changed.
+                </span>
+                <span className="text-micro text-faint">
+                  ~{estimateTokens(noteDraft).toLocaleString()} tokens per request
+                </span>
+              </div>
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  onClick={() => setNoteDraft(null)}
+                  disabled={noteSaving}
+                  className="rounded border border-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void appendToAiNotes(noteDraft)}
+                  disabled={noteSaving || !noteDraft.trim()}
+                  data-testid="ai-notes-confirm"
+                  className="rounded border border-accent-fill bg-accent-fill px-2.5 py-1 text-xs text-white disabled:opacity-50"
+                >
+                  {noteSaving ? "Saving..." : "Add to AI Notes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* A quiet confirmation. The file is not on screen, so without this
+            the writer has pressed a button and watched nothing happen. */}
+        {noteSavedAt !== null && noteDraft === null && (
+          <p className="px-3 pb-1 text-micro text-success-fill" data-testid="ai-notes-saved">
+            Saved to your AI Notes. It goes with every request from now on.
+          </p>
         )}
 
         {/* Chat history */}
@@ -3068,6 +3730,57 @@ function App() {
           )}
 
           {/* Chat messages */}
+          {/* WHAT IS BEING SENT, said out loud. The writer can see every
+              message on screen, so without this line they would reasonably
+              assume the model can see them too -- and be puzzled when it
+              answers as though it had only skimmed. Nothing about the summary
+              swap is hidden: what it covers, and the way out of it. */}
+          {chatRecap && (
+            <div data-testid="chat-recap-notice"
+                 className="mb-3 rounded border border-dashed border-border bg-bg-surface/40 px-3 py-2">
+              <p className="text-mini text-text-muted">
+                <span className="text-text-primary">Older messages are being sent as a summary.</span>
+                {" "}Everything above is still here to read; the model is given a short
+                recap of it plus the last few messages, which keeps its attention on
+                what you are asking now.
+              </p>
+              <div className="mt-1.5 flex items-center gap-3">
+                <button
+                  onClick={() => setShowRecapText(v => !v)}
+                  className="text-micro text-accent hover:underline"
+                >
+                  {showRecapText ? "Hide the summary" : "Read the summary"}
+                </button>
+                <button
+                  onClick={() => setChatRecap(null)}
+                  data-testid="chat-send-everything"
+                  className="text-micro text-faint hover:text-text-primary"
+                >
+                  Send everything instead
+                </button>
+              </div>
+              {showRecapText && (
+                <p className="mt-1.5 whitespace-pre-wrap border-t border-border pt-1.5 text-micro text-text-muted">
+                  {chatRecap.text}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* WHAT THE REQUEST HAD TO LOSE TO FIT. Shown only when something
+              actually changed -- a note on every turn is a note the writer
+              learns to skip, and then misses the one that mattered.
+
+              This is the difference between a budget and a silent truncation:
+              the reply is grounded in less than the writer thinks unless the
+              screen says so. */}
+          {materialsNote && (
+            <p data-testid="materials-note"
+               className="mb-3 rounded border border-dashed border-warn-fill/50 bg-warn-soft/20 px-3 py-2 text-mini text-text-muted">
+              {materialsNote}
+            </p>
+          )}
+
           {chatMessages.map((msg, i) => (
             <div key={i}>
               {/* "New ask" divider: everything below this line is a fresh ask; the
@@ -3111,7 +3824,31 @@ function App() {
                       </details>
                     )}
                     <ChatMarkdown content={msg.content} />
+                    {/* SAVE TO AI NOTES. Standing guidance is most often
+                        realised mid-conversation -- "right, Vance is the
+                        traitor then" -- and a decision the writer has to
+                        remember to go and write down somewhere else is a
+                        decision that does not get written down.
+
+                        It OPENS A COMPOSER rather than saving on click. What
+                        goes in this file is sent on every request from now
+                        on, so it has to be the writer's sentence rather than
+                        the model's paragraph -- and an AI reply written
+                        verbatim into a human-authored file with one click
+                        would be outside the write boundary. Free: no model
+                        call, just the reply text handed to them to edit. */}
+                    {currentProject && (
+                      <button
+                        onClick={() => setNoteDraft(msg.content.trim())}
+                        data-testid="save-to-ai-notes"
+                        title="Save a line from this to your AI Notes"
+                        className="mt-1.5 flex items-center gap-1 text-micro text-faint hover:text-accent"
+                      >
+                        <Bot size={10} /> Save to AI Notes
+                      </button>
+                    )}
                   </>
+
                 )}
               </div>
               {msg.role === "user" && (
@@ -3708,6 +4445,11 @@ const CHIP_TYPES: { id: string; label: string; color: string }[] = [
   { id: "lore",                   label: "Lore",                   color: "text-warn   border-warn-fill/50   bg-warn-soft/20"   },
   { id: "chapter_summary",        label: "Chapter Summary",        color: "text-accent     border-accent-fill/50     bg-accent-soft/20"     },
   { id: "scene_summary",          label: "Scene Summary",          color: "text-success border-success-fill/50 bg-success-soft/20" },
+  // The chapter's PLAN, which is the opposite document to the two above:
+  // they say what a chapter turned out to be, this says what it is meant to
+  // do. Needs no backend change -- ContextChip does not validate `type` and
+  // the materials builder renders any type as "=== BEGIN CHAPTER OUTLINE ===".
+  { id: "chapter_outline",        label: "Chapter Outline",        color: "text-weave  border-weave-fill/50  bg-weave-soft/20"  },
   // Notes -- outline and style guide documents from the notes/ folder
   { id: "note",                   label: "Note",                   color: "text-danger    border-danger-fill/50    bg-danger-soft/20"    },
   // Series canonical profiles -- attached from the series source toggle in ChipPicker
@@ -3717,8 +4459,14 @@ const CHIP_TYPES: { id: string; label: string; color: string }[] = [
   { id: "series_lore",            label: "Series Lore",            color: "text-warn-strong   border-warn-fill/50   bg-warn-fill/20"   },
 ];
 
-// Known note files in the project's notes/ folder.
-// These are created by the project init and can be attached as context chips.
+// FALLBACK ONLY. The real list comes from the backend's NOTE_SECTIONS, asked
+// for by ChipPicker on mount -- these two are what the picker shows if that
+// call fails, chosen because they are the two files project creation writes.
+//
+// It was the whole list until v2.0.6, hardcoded here while the backend shipped
+// six, so Themes, Research and Brainstorming could be written in the sidebar
+// and never attached to anything. A duplicated list does not announce that it
+// has drifted; it just quietly shows less than there is.
 const NOTE_FILES = [
   { filename: "outline.md",      name: "Outline" },
   { filename: "style-guide.md",  name: "Style Guide" },
@@ -3765,6 +4513,13 @@ interface ChapterSummaryListEntry {
   summary_filename: string;
 }
 
+// Mirrors ChapterOutlineListItem in backend/app/routers/documents.py.
+interface ChapterOutlineListEntry {
+  chapter_filename: string;
+  chapter_title:    string;
+  outline_filename: string;
+}
+
 // Shape of one scene inside a SceneSummaryGroup. Mirrors SceneSummaryInfo
 // in backend/app/routers/documents.py.
 interface SceneSummaryEntry {
@@ -3808,6 +4563,17 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
   // lazily the first time the writer opens the Chapter Summary tab.
   const [chapterSummaries, setChapterSummaries] = useState<ChapterSummaryListEntry[]>([]);
   const [chapterSummariesLoaded, setChapterSummariesLoaded] = useState(false);
+  const [chapterOutlines, setChapterOutlines] = useState<ChapterOutlineListEntry[]>([]);
+  const [chapterOutlinesLoaded, setChapterOutlinesLoaded] = useState(false);
+
+  // Notes tab: ASKED FOR rather than hardcoded.
+  //
+  // This list used to be two entries typed into this file, while the backend
+  // shipped six -- so Themes, Research and Brainstorming existed in the
+  // sidebar, could be written, and could not be attached to an AI request at
+  // all. Nothing failed; the tab just showed two rows and looked complete.
+  // The backend's NOTE_SECTIONS is the one list, and this asks it.
+  const [noteFiles, setNoteFiles] = useState<{ filename: string; name: string }[]>(NOTE_FILES);
 
   // Scene-summary tab: groups of (chapter, scenes[]) across the whole project.
   // Loaded lazily the first time the writer opens the Scene Summary tab. Each
@@ -3880,6 +4646,46 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
       .finally(() => setChapterSummariesLoaded(true));
   }, [profileType, chapterSummariesLoaded, rootPath]);
 
+  // The same, for the chapter plans.
+  useEffect(() => {
+    if (profileType !== "chapter_outline") return;
+    if (chapterOutlinesLoaded) return;
+    const params = new URLSearchParams({ folder_path: rootPath });
+    fetch(`${API_BASE}/api/documents/chapter-outlines?${params}`)
+      .then(r => r.json())
+      .then((data: ChapterOutlineListEntry[]) => {
+        setChapterOutlines(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setChapterOutlines([]))
+      .finally(() => setChapterOutlinesLoaded(true));
+  }, [profileType, chapterOutlinesLoaded, rootPath]);
+
+  // WHICH NOTES THIS PROJECT HAS, asked rather than assumed.
+  //
+  // Not lazy like the two above, because the fallback is WRONG rather than
+  // merely empty: showing two rows out of seven looks like a complete list,
+  // so the writer never learns the others can be attached. Better to ask
+  // once on mount and be right before the tab is ever opened.
+  //
+  // Sections carry every note the backend knows about, including any the
+  // writer has since added, and each one's writer-facing label -- so the
+  // picker cannot disagree with the sidebar about what a file is called.
+  useEffect(() => {
+    let cancelled = false;
+    fetchSections(rootPath)
+      .then(tree => {
+        const notes = tree.groups
+          .find(g => g.id === "notes")?.sections
+          .filter(s => s.filename)
+          .map(s => ({ filename: s.filename as string, name: s.label })) ?? [];
+        // An empty answer means something went wrong upstream, not that the
+        // project has no notes -- keep the fallback rather than showing none.
+        if (!cancelled && notes.length) setNoteFiles(notes);
+      })
+      .catch(() => { /* fallback list stands */ });
+    return () => { cancelled = true; };
+  }, [rootPath]);
+
 
   // Load the all-scene-summaries tree the first time the writer switches to
   // the Scene Summary tab. Same lazy-once pattern as chapter summaries above.
@@ -3913,7 +4719,8 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
   // Skipped for non-profile chip tabs (notes, chapter_summary, scene_summary)
   // which load via their own dedicated endpoints elsewhere in this component.
   useEffect(() => {
-    if (profileType === "notes" || profileType === "chapter_summary" || profileType === "scene_summary") {
+    if (profileType === "notes" || profileType === "chapter_summary"
+        || profileType === "scene_summary" || profileType === "chapter_outline") {
       return;
     }
     setLoading(true);
@@ -3983,7 +4790,7 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
   function confirmAttach() {
     if (!pending) return;
     const safeInclude: ChipIncludeOptions =
-      pendingInclude.summary || pendingInclude.traits || pendingInclude.overview || pendingInclude.details
+      pendingInclude.traits || pendingInclude.overview || pendingInclude.details
         ? pendingInclude
         : DEFAULT_CHIP_INCLUDE;
     const content = formatProfileForAI(pending.profile, safeInclude);
@@ -4051,6 +4858,42 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
       } else {
         onAdd({ type: "chapter_summary", name: chipName, content: body });
       }
+    } catch {
+      onClose();
+    } finally {
+      setAdding(null);
+    }
+  }
+
+  // Attach one chapter's PLAN as a "chapter_outline" chip. Named
+  // "<Title> (Outline)" so it cannot collide with the same chapter's
+  // "<Title> (Summary)" -- the chat dedupes on type plus name, and a writer
+  // attaching both at once is the ordinary case for this document.
+  async function pickChapterOutline(chapterFilename: string, chapterTitle: string) {
+    const chipName = `${chapterTitle || displayNameFromFilename(chapterFilename)} (Outline)`;
+    setAdding(`outline:${chapterFilename}`);
+    try {
+      if (existingChips.some(c => c.name === chipName && c.type === "chapter_outline")) {
+        onClose();
+        return;
+      }
+      const params = new URLSearchParams({
+        folder_path: rootPath, chapter_filename: chapterFilename,
+      });
+      const res = await fetch(`${API_BASE}/api/documents/chapter-outline?${params}`);
+      if (!res.ok) {
+        onClose();
+        return;
+      }
+      const data = await res.json();
+      const body = (data.content || "").trim();
+      onAdd({
+        type: "chapter_outline",
+        name: chipName,
+        // Empty-but-present is worth saying out loud rather than sending
+        // blank context, the same as the summary picker does.
+        content: body || `[${chipName} is empty. Write the plan first.]`,
+      });
     } catch {
       onClose();
     } finally {
@@ -4159,12 +5002,6 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
         .some(section => (section.trait_blocks ?? []).length > 0)
     : false;
 
-  // Whether the pending profile has an AI Summary worth offering. Brand-new
-  // profiles often haven't had a summary generated yet -- in that case we
-  // disable the checkbox and label it as missing rather than letting the
-  // writer toggle on something that produces nothing.
-  const pendingHasSummary = Boolean(pending && pending.profile.full_ai_summary && pending.profile.full_ai_summary.trim().length > 0);
-
   return (
     <div className="mb-3 rounded border border-accent-fill/50 bg-bg-primary p-3">
       <div className="mb-2 flex items-center justify-between">
@@ -4184,7 +5021,6 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
           onChange={setPendingInclude}
           tokens={pendingTokens}
           hasTraits={pendingHasTraits}
-          hasSummary={pendingHasSummary}
           onShowHelp={() => setShowHelp(true)}
           onCancel={() => setPending(null)}
           onAttach={confirmAttach}
@@ -4291,7 +5127,7 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
       {profileType === "notes" ? (
         // Notes list: hardcoded note files from the project's notes/ folder
         <div className="flex max-h-28 flex-col gap-0.5 overflow-y-auto">
-          {NOTE_FILES.map(n => {
+          {noteFiles.map(n => {
             const alreadyAdded = existingChips.some(c => c.name === n.name && c.type === "note");
             return (
               <button
@@ -4345,6 +5181,44 @@ function ChipPicker({ rootPath, seriesPath, currentChapterFilename, existingChip
                     : alreadyAdded
                     ? <><span>{cs.chapter_title}</span><span className="ml-auto text-success-fill">✓</span></>
                     : cs.chapter_title}
+                </button>
+              );
+            })}
+          </div>
+        )
+      ) : profileType === "chapter_outline" ? (
+        // One row per chapter that has been planned. Same shape as the
+        // chapter-summary list beside it.
+        !chapterOutlinesLoaded ? (
+          <p className="py-1 text-xs text-faint">Loading...</p>
+        ) : chapterOutlines.length === 0 ? (
+          <p className="py-1 text-xs text-faint">
+            No chapter outlines yet. Open a chapter and write one from the
+            Chapter Outline row in the sidebar.
+          </p>
+        ) : (
+          <div className="flex max-h-28 flex-col gap-0.5 overflow-y-auto">
+            {chapterOutlines.map(co => {
+              const chipName = `${co.chapter_title} (Outline)`;
+              const alreadyAdded = existingChips.some(
+                c => c.name === chipName && c.type === "chapter_outline");
+              const addingKey = `outline:${co.chapter_filename}`;
+              return (
+                <button
+                  key={co.outline_filename}
+                  onClick={() => !alreadyAdded
+                    && pickChapterOutline(co.chapter_filename, co.chapter_title)}
+                  disabled={alreadyAdded || adding === addingKey}
+                  className={`flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed ${
+                    alreadyAdded ? "text-faint" : "text-text-primary hover:bg-weave-fill/20"
+                  }`}
+                >
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full border text-weave border-weave-fill/50 bg-weave-soft/20" />
+                  {adding === addingKey
+                    ? "Adding..."
+                    : alreadyAdded
+                    ? <><span>{co.chapter_title}</span><span className="ml-auto text-success-fill">✓</span></>
+                    : co.chapter_title}
                 </button>
               );
             })}
@@ -4476,7 +5350,6 @@ interface ConfigureAttachPanelProps {
   onChange:    (next: ChipIncludeOptions) => void;
   tokens:      number;
   hasTraits:   boolean;
-  hasSummary:  boolean;
   onShowHelp:  () => void;
   onCancel:    () => void;
   onAttach:    () => void;
@@ -4486,7 +5359,7 @@ interface ConfigureAttachPanelProps {
 }
 
 function ConfigureAttachPanel({
-  include, onChange, tokens, hasTraits, hasSummary, onShowHelp, onCancel, onAttach,
+  include, onChange, tokens, hasTraits, onShowHelp, onCancel, onAttach,
   treatAsCanon, onTreatAsCanonChange,
 }: ConfigureAttachPanelProps) {
   // Local expand state for the Canon/Reference tutorial helptip.
@@ -4499,7 +5372,7 @@ function ConfigureAttachPanel({
   // Disable Attach when no slice is selected. Sending a chip that's just the
   // profile header line wastes tokens and confuses the AI ("why did the
   // writer attach this?"). Force the writer to pick at least one bucket.
-  const anySelected = include.summary || include.traits || include.overview || include.details;
+  const anySelected = include.traits || include.overview || include.details;
 
   // Visual warning when the writer's selection is unusually heavy. Same
   // thresholds as the inline chip badges: ~1.5k tokens (~6k chars) is large,
@@ -4520,16 +5393,15 @@ function ConfigureAttachPanel({
         </button>
       </div>
 
-      {/* Four checkboxes -- each one toggles a single bucket. Disabled
-          checkboxes show a hint about why they're unavailable. */}
+      {/* One checkbox per bucket. Disabled ones say why.
+
+          THE AI SUMMARY IS NOT OFFERED any more: it is prose generated
+          from the traits, and none of the markers the prompts act on --
+          the importance weight, SUBTEXT, the chapter window -- survive
+          into it. Sending it beside the traits paid twice for the same
+          facts, in a form where a secret reads as an ordinary sentence.
+          It is still written and still on the page; it is not sent. */}
       <div className="mb-2 grid grid-cols-2 gap-1 text-xs">
-        <CheckboxRow
-          label="AI Summary"
-          checked={include.summary && hasSummary}
-          disabled={!hasSummary}
-          disabledHint="(no summary yet)"
-          onToggle={() => toggle("summary")}
-        />
         <CheckboxRow
           label="Traits"
           checked={include.traits && hasTraits}

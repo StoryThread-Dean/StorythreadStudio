@@ -357,7 +357,7 @@ def parse_thread(raw: str, registry: dict | None = None,
             continue
 
         content, ai_summary = _split_ai_summary(section_body)
-        section_id, heading = _canonical_section(heading)
+        section_id, heading = _canonical_section(heading, thread["type"])
 
         # Trait blocks are a YAML list; ordinary sections are prose. Try the
         # list, and on ANY doubt keep the text as content -- the tolerance
@@ -481,15 +481,63 @@ def _looks_like_trait_list(text: str) -> bool:
 # the file is opened. The canonical heading is restored with the id, so a file
 # quietly heals the next time the writer saves it -- no pass to run, nothing
 # to schedule, and an untouched file stays byte-identical until then.
-_SECTION_ALIASES: dict[str, tuple[str, str]] = {
-    # character: the heading gained a word.
-    "hidden_and_foreshadowing":
-        ("hidden_and_foreshadowing_traits", "Hidden and Foreshadowing Traits"),
-    # location: the Weave's four became the Profile Builder's seven.
-    "appearance": ("physical_description", "Physical Description"),
-    "significance": ("historical_significance", "Historical Significance"),
-    # lore.
-    "details": ("rule_or_concept", "Rule or Concept"),
+# KEYED BY KIND, and that is the fix for a real bug rather than tidiness.
+#
+# These were keyed by section id alone, which quietly asserted that a section
+# name means the same thing in every kind. It does not:
+#
+#     creature  has its own "Appearance" -- a current, correct section
+#     object    has "Appearance" AND "Significance"
+#     concept   has "Details"
+#
+# All three were rewritten on read into a LOCATION's or a LORE entry's
+# headings, so a Creature's Appearance was filed as "Physical Description" --
+# an id the creature registry does not have. The editor looked up `appearance`,
+# found nothing, and showed the field empty while the writer's words sat on
+# disk under the wrong name. Worse, the heal-on-save below then rewrote the
+# file to match, so the mislabelling became permanent the next time they
+# pressed Save.
+#
+# Reported as "Creatures > Appearance doesn't appear after saved and coming
+# back", which is exactly what it looks like from the outside.
+_SECTION_ALIASES: dict[str, dict[str, tuple[str, str]]] = {
+    "character": {
+        # The heading gained a word.
+        "hidden_and_foreshadowing":
+            ("hidden_and_foreshadowing_traits", "Hidden and Foreshadowing Traits"),
+    },
+    # The Weave's four became the Profile Builder's seven.
+    "location": {
+        "appearance": ("physical_description", "Physical Description"),
+        "significance": ("historical_significance", "Historical Significance"),
+    },
+    "lore": {
+        "details": ("rule_or_concept", "Rule or Concept"),
+    },
+
+    # ── Undoing the damage the unscoped version already did ──────────────
+    #
+    # Scoping the aliases stops NEW files being mislabelled. It does not
+    # recover the ones already on disk: a Creature whose Appearance was
+    # renamed to "Physical Description" and then saved still says "Physical
+    # Description", and the editor still asks for `appearance` and still
+    # finds nothing. The writer's prose stays invisible until something maps
+    # it back.
+    #
+    # Safe precisely because these headings are not in these kinds' registry
+    # entries. A creature has overview / appearance / behaviour / notes and
+    # never had a Physical Description, so a file with one can only have got
+    # it here. Nothing legitimate is being renamed.
+    "creature": {
+        "physical_description": ("appearance", "Appearance"),
+    },
+    "object": {
+        "physical_description": ("appearance", "Appearance"),
+        "historical_significance": ("significance", "Significance"),
+    },
+    "concept": {
+        "rule_or_concept": ("details", "Details"),
+    },
 }
 
 
@@ -514,12 +562,19 @@ def _section_id(heading: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", heading.strip().lower()).strip("_")
 
 
-def _canonical_section(heading: str) -> tuple[str, str]:
-    """The id and heading a section is FILED under, old names included."""
+def _canonical_section(heading: str, kind: str = "") -> tuple[str, str]:
+    """
+    The id and heading a section is FILED under, old names included.
+
+    `kind` is required in practice even though it defaults: an alias applies
+    to the kind it was written for and to no other. Without it a Creature's
+    Appearance is renamed into a Location's Physical Description. Defaulted
+    rather than mandatory only so a caller reading a file with no `type` --
+    a hand-made fragment, a test fixture -- gets the plain answer instead of
+    an exception.
+    """
     section_id = _section_id(heading)
-    if section_id in _SECTION_ALIASES:
-        return _SECTION_ALIASES[section_id]
-    return section_id, heading
+    return _SECTION_ALIASES.get(kind, {}).get(section_id, (section_id, heading))
 
 
 # ── Writing ──────────────────────────────────────────────────────────────────
@@ -739,8 +794,22 @@ def render_thread(
             lines.append("")
         if section.get("content"):
             lines += [section["content"], ""]
-        lines.append(f"## AI Summary: {heading}")
-        lines += [section.get("ai_summary") or "_Generated on demand. Editable by writer._", ""]
+        # PER-SECTION AI SUMMARIES ARE RETIRED (v2.0.6), and this writes
+        # one only when the file already has one.
+        #
+        # They were generated one AI call at a time and read by nothing
+        # that reaches a model -- not a chip, not the profile chat, not
+        # the Weave brief, not even as input to the Full AI Summary.
+        # The control is gone; what writers already paid for is not, so
+        # an existing summary still round-trips untouched.
+        #
+        # The placeholder is what stopped: writing "_Generated on
+        # demand_" under every section of every entry advertised a
+        # button that no longer exists, and put a heading in the file
+        # for something that was never there.
+        if section.get("ai_summary"):
+            lines.append(f"## AI Summary: {heading}")
+            lines += [section["ai_summary"], ""]
 
     # The Run last: it is the machine-facing part, and a writer opening the
     # file should meet their own prose first.

@@ -34,6 +34,11 @@ tauri-plugin-updater = "2"
 # process plugin: lets the JS layer trigger app restart after an update
 # is installed. Without it the writer would have to manually restart.
 tauri-plugin-process = "2"
+# window-state plugin: remembers the window's size, position and
+# maximised state between launches. Without it every start re-applies the
+# width/height in tauri.conf.json, so a writer who resizes the window has
+# to do it again on the next launch, forever.
+tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

@@ -27,8 +27,13 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 
 # ── Scope constants ───────────────────────────────────────────────────────────
 #
-# Spec: walk manuscript/, notes/, profiles/ (all subfolders), summaries/,
-# arcs/. Hard-exclude exports/ and .storythread/.
+# Spec: walk manuscript/, notes/, profiles/ (all subfolders), summaries/.
+# Hard-exclude exports/ and .storythread/.
+#
+# The spec also named arcs/, and this list carried it as a TOP-LEVEL folder,
+# which never matched anything: an arc file lives at profiles/arcs/, and the
+# "profiles" entry below already walks every subfolder under it. Removing the
+# line changes no result. It went with the arc editor, which had no caller.
 #
 # CODEX/ WAS MISSING, and it is the folder a converted project keeps its entire
 # world in. Search walked profiles/ -- which after conversion holds the backup
@@ -48,7 +53,9 @@ _SEARCH_FOLDERS: list[str] = [
     "codex",
     "profiles",
     "summaries",
-    "arcs",
+    # The per-chapter plans. A writer renaming a faction wants it renamed in
+    # what they PLANNED as well as in what they wrote.
+    "outlines",
 ]
 
 _EXCLUDED_PARTS: frozenset[str] = frozenset({"exports", ".storythread"})

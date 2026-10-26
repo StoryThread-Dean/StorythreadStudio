@@ -43,6 +43,18 @@ export interface ProjectUiState {
    *  put things, which a per-machine setting would lose on a new laptop.
    *  Ids rather than names, so a rename never strands a position. */
   weaveNodePositions?: Record<string, { x: number; y: number }>;
+  /** Kinds the writer has switched OFF on the Weave map, by type id.
+   *
+   *  Follows the BOOK for the same reason the positions do: "I do not want to
+   *  look at the lore while I sort out who knows whom" is a decision about
+   *  this world, and having to make it again every session would mean the
+   *  filter was never really on.
+   *
+   *  Stored as what is HIDDEN rather than what is shown, so a kind the writer
+   *  adds next week arrives visible. A list of what to show would quietly
+   *  hide every new kind, which is the failure nobody would think to look
+   *  for. Absent means everything is on, which is the default. */
+  weaveHiddenTypes?: string[];
   /** What the writer decided about automatic world context in the Writing
    *  Companion: off entirely, and which Threads or kinds to leave out.
    *
@@ -55,6 +67,17 @@ export interface ProjectUiState {
     off?: boolean;
     excludedIds?: string[];
     excludedTypes?: string[];
+    /** The chapter's own plan, switched off. Absent means on: a writer who
+     *  bothered to write an outline meant it to be used. Kept beside the
+     *  Weave's prefs because it is the same decision -- what this book sends
+     *  automatically -- and the same bar offers both. */
+    chapterOutlineOff?: boolean;
+    /** The book's standing notes (notes/ai-notes.md), switched off. Absent
+     *  means on, for the same reason as the outline. Remembered per book
+     *  because the answer is about this book: a writer may want firm
+     *  guidance on the novel they are wrestling with and none on the one
+     *  that is writing itself. */
+    aiNotesOff?: boolean;
   };
 }
 

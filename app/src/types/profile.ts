@@ -102,6 +102,22 @@ export interface TraitBlock {
    * comparison, and the same room to grow scenes later.
    */
   true_in?: string[];
+  /**
+   * WHAT KIND OF RELATIONSHIP THIS IS -- and only ever on a Relationships
+   * block whose other end has no entry.
+   *
+   * A relationship with somebody in the world is a connection: it lives in the
+   * Weave, the map draws it, and the other person can hold their own version.
+   * One with a name that will never be a profile ("her parents... they do not
+   * have a charcter profile and won't", a lover dead before page one) has no
+   * second end to record against, so it stays on this character's page as a
+   * block -- and the writer's wording for it, "mother of", "sworn enemy of",
+   * has to travel with it or the block is a name and a paragraph with the
+   * relationship itself missing.
+   *
+   * Never present on an ordinary trait. See RelationshipsSection.
+   */
+  rel?: string;
 }
 
 // One section of a profile (e.g. "Physical Traits", "Overview")

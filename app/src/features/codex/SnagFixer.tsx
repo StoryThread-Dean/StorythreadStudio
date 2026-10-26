@@ -272,7 +272,11 @@ export function SnagFixer({ projectPath, stop, onClose, onDone }: SnagFixerProps
       `${API_BASE}/api/codex/tie?project_path=${encodeURIComponent(projectPath)}`
       + `&src_id=${encodeURIComponent(stop.entity_id)}`
       + `&rel=${encodeURIComponent(rel)}`
-      + `&dst_id=${encodeURIComponent(String(side.target ?? ""))}`,
+      + `&dst_id=${encodeURIComponent(String(side.target ?? ""))}`
+      // The side's own stage. A snag is about ONE state contradicting
+      // another, and resolving it must not delete the rest of that
+      // relationship's history. Empty for an undated stage (#31).
+      + `&at=${encodeURIComponent(side.at ?? "")}`,
       { method: "DELETE" });
     if (!response.ok) {
       throw await refusalFrom(response, "That could not be removed.");

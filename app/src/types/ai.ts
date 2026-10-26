@@ -99,7 +99,6 @@ export type ImportanceLevel = "core" | "present" | "background" | "contextual" |
 // what was selected (badges) and so the writer can re-build the chip later
 // if we add an "edit attachment" affordance. The backend never reads this.
 export interface ChipIncludeFlags {
-  summary:  boolean;
   traits:   boolean;
   overview: boolean;
   details:  boolean;

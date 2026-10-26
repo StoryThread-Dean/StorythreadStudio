@@ -12,15 +12,17 @@ This is a snapshot of what Storythread Studio does today. For where it is going 
 - **Passage / Dialogue Check** reads the selected passage aloud. Reading silently hides a passage's rhythm -- the writer supplies the pauses and emphasis without noticing, and an indifferent voice does not. It catches repeated words, sentences that only parse on the second read, and right-word-wrong-word errors no checker flags ("walked through the dessert" is perfectly spelled). Four voices, remembered per book, entirely local and free using the same engine as the Audiobook Converter; it saves nothing and applies no markers
 - Light and dark themes (app-wide, persisted), plus line spacing and paragraph spacing -- see Settings
 - Selection highlight persists when the writer moves focus into the chat or Smart Advisor panels
+- The window reopens at the size, position and maximised state it was left in; the config size is only the first-run default
 
 ## Project structure
 
 Each project is a folder the user owns. The app reads and writes Markdown files inside that folder; it never touches anything outside it.
 
-- `manuscript/` — one chapter per Markdown file; `structure.json` holds acts + reading order once the writer uses acts
+- `manuscript/` — one chapter per Markdown file, plus an optional prologue and epilogue; `structure.json` holds the reading order once the writer uses acts or adds either of those
 - `notes/` — outline, style guide, themes, plus any free notes the writer adds
-- `profiles/` — character, location and lore profiles. A `relationships/` folder is present in projects made before v2.0.5; the kind is retired rather than deleted, so those entries still open, still parse and still save
-- `profiles/arcs/` — for series projects, per-book overrides on canonical profiles
+- `codex/` — the Weave: characters, locations, lore, events and every other kind of entry. A new project is created with the four the sidebar shows even while empty (`characters/`, `locations/`, `lore/`, `events/`); the rest appear the moment the writer records their first one
+- `profiles/` — **legacy, and never created any more.** A project made before this version still has one, still reads and writes it, and is still only ever offered a conversion rather than made to take one. It may also hold `relationships/` (a retired kind whose existing entries still open), `chapters/` and `scenes/` (Phase 2 summaries, superseded by `summaries/`), and `arcs/`
+- `outlines/chapters/` — the plan for each chapter: what has to happen, in order. The only per-chapter document written BEFORE the prose
 - `summaries/chapters/` — one summary file per chapter
 - `summaries/scenes/<chapter-stem>/scene-NN.md` — per-scene summaries (with an optional `## Beats` checklist)
 - `exports/` — combined manuscript file plus dated snapshot folders
@@ -40,6 +42,7 @@ The left panel presents Story > Act > Chapter > Scene > Beat:
   at those paths.
 - **Acts** — created with "+ New Act"; chapters move between acts and reorder via each row's hover "..." menu (Move up / Move down / Move to Act). Acts collapse, and the collapsed state is remembered per book. Moves never rename chapter files.
 - **Chapters** — double-click to rename. A rename updates the heading AND the filename (slug follows the title, `NN-` prefix kept), and carries the chapter's summary, scene summaries, act slot, and progress history along.
+- **+ Prologue / + Epilogue** — offered beside New Chapter while the book has neither. A prologue always sits first and an epilogue always last, whatever happens to acts. Neither is numbered or counted among the chapters, but their words count towards the book's total. Otherwise they behave like chapters: summaries, outlines, renaming, export and the Weave.
 - **Scenes** — expandable under each chapter (from scene summaries); each scene with beats shows a done/total badge and expandable read-only beat rows.
 - **Notes / Profiles** — collapsible sections; collapse state remembered per book across restarts and updates.
 - **Writing Progress** — pinned at the bottom of the panel, always visible no matter how much of the tree is expanded; the breakdown slide-over opens upward.
@@ -125,7 +128,9 @@ A guided workspace for authoring structured project context.
 
 ### Profile types
 
-Character, Location, Lore. Each type has its own section template (Overview, Personality Traits, History, Tone and Atmosphere, Rule or Concept, etc.) defined in code, not user-edited.
+Every kind opens here: Character, Location, Lore, Event, Creature, Culture, Faction, Religion, Ruling Authority, Deity, Object, Concept and Language, plus any kind the writer invents. Each kind's sections come from its registry entry, and every kind has the Profile Builder chat. (Before v2.0.6, eight of them opened in the Weave's simpler editor, with a different look and no chat.)
+
+A section name does not mean the same thing in every kind: a Creature's Appearance is not a Location's Physical Description, and healing an old heading is scoped to the kind it belongs to.
 
 **Relationship profiles are retired.** They were a separate entry holding one blob of prose about everything a character was to everyone else, and they were the wrong shape for the job: the same names were described twice (once there, once on the character), the prose entered every AI brief whole and was usually pruned before it arrived, almost nothing could legally connect to such an entry, and the app ended up instructing the model to reconcile the two copies at request time.
 
@@ -167,7 +172,7 @@ Each trait block shows a word count gauge tuned to its importance level. Higher-
 Character creation offers a template choice, stored as `character_kind` in frontmatter (absent = main, so pre-v1.0.10 files are untouched):
 
 - **Main** — the full trait-block template: importance levels, word gauges, the Importance Audit.
-- **Side / Background** — every section is a single free-text field; Quick Build appends lines into them. Per-section AI Summary tiles are dropped (only the Full AI Summary at the bottom remains; existing summaries survive a resave). Trait-section headings are shared between templates, and the parser round-trips plain paragraphs under a trait heading instead of dropping them.
+- **Side / Background** — every section is a single free-text field; Quick Build appends lines into them. (Per-section AI Summary tiles were retired for every template in v2.0.6; existing summaries survive a resave.) Trait-section headings are shared between templates, and the parser round-trips plain paragraphs under a trait heading instead of dropping them.
 
 The Profile Builder's character list splits into collapsible **Main** and **Side / Background** groups; the chat attachment picker mirrors the same grouping.
 
@@ -193,8 +198,7 @@ A **[Generate Overview]** button on the Overview section spins the filled-in fie
 
 | Tool | What it does |
 |---|---|
-| **Section summary** | Generates a compact `## AI Summary: Section` summary into Markdown |
-| **Full profile summary** | Generates a multi-paragraph `# Full AI Summary` synthesizing all sections, weighted by importance. For characters, also reads `profiles/relationships/` and weaves in connected dynamics |
+| **Full profile summary** | Generates a multi-paragraph `# Full AI Summary` synthesizing all sections, weighted by importance. For characters, also reads any existing Relationship entries (a retired kind) from whichever folder the project keeps its world in, and weaves in connected dynamics |
 | **"How AI uses this" preview** | Sparkles button on a trait block; on-demand prose explanation of how that trait's importance level shapes AI behavior. Shown in a popover, not stored |
 | **AI Trim** | Scissors button that appears when a trait is in the Wordy/Bloated range; rewrites the description to a tighter target length |
 | **AI Importance Audit** | Profile-level pass that flags importance-level mismatches across all trait blocks |
@@ -284,12 +288,20 @@ Two supporting controls (v1.0.7): **"New ask"** starts a fresh request without c
 
 The writer attaches profiles, summaries, and notes as chips. Each chip has include flags so the writer can choose what part of the profile actually goes into the prompt:
 
-- **Summary** — the profile's `# Full AI Summary` section
 - **Traits** — structured trait blocks
 - **Overview** — the human-written `# Overview` section
 - **Details** — the rest of the body
+- **Notes** — your own jottings, off unless you ask for them
 
-Defaults are Summary + Traits on. The Profile Builder chat uses a more permissive default that includes the entire profile.
+Traits are on by default. The Profile Builder chat uses a more permissive default that includes the entire profile.
+
+**The Full AI Summary is not one of the options, as of v2.0.6.** A trait
+reaches the AI carrying three things the summary cannot: how much weight to
+give it, whether it is a secret to be known and never said out loud, and
+which chapters it is true in. The summary is written from those same traits
+and none of that survives into it — so attaching both paid twice for the
+same facts, in a form where a secret reads as an ordinary sentence. It is
+still generated, still on the profile page, and still in exports.
 
 Attached materials **persist for the whole conversation** (v1.0.10): the backend echoes the materials block it sent and the frontend stores it in the chat history as a hidden message, so profiles and the included chapter genuinely stay in front of the model on every later turn (they are sent over the wire once, then ride in history). The Canon/Reference stance stays active for as long as chips are attached. A VOICE FIDELITY rule in the base prompt keeps `[core]` voice and mannerism traits constant across turns and modes -- vary the expression, never drop the trait. The persisted chapter text is a snapshot from when it was attached; **New ask** refreshes it.
 
@@ -303,15 +315,146 @@ With nothing selected, the chat treats the whole chapter as context (capped at 1
 
 ## Series structure
 
-A series is a parent folder that contains multiple book projects plus a shared `series-profiles/` directory.
+A series is a parent folder that contains multiple book projects plus a shared `profiles/` directory.
 
 - **Canonical profiles** live at the series level and stay consistent across books.
-- **Arc files** live in each book's `profiles/arcs/` folder and overlay book-specific changes onto the canonical profile (different relationship status, new injuries, evolving motivations).
-- **Profile merge** combines canonical + arc at request time so AI sees the right state for the book the writer is in.
 - The **ChipPicker** offers a "This Book" / "Series Profiles" toggle so the writer can attach either source.
+- The series folder keeps the legacy `profiles/` shape on purpose: it has no `project.json`, so it can never be converted and can never answer which folder its entries live in. The books inside it are born in `codex/` like any other project.
+- **Arc files retired.** Each book used to get a `profiles/arcs/` folder for per-book overrides on a canonical profile, with a merge that combined the two at request time. The editor for it was built and wired to no control, so nothing could ever put a file there and the merge never ran. The Weave answers the same question better: a fact anchored to the chapter it starts at, which an arc file never was. A project that has arc files on disk still has them absorbed as facts when it converts.
 - **Story context** (`series.json` + `project.json`) is automatically prepended to every AI system prompt so the model knows the project's tone, genre, content mode, and POV defaults.
 
 ## Summaries
+
+### AI Notes
+
+Your running notes on how the book is going, at `notes/ai-notes.md`, added from
+the sidebar like any other note. Everything else you attach is about one thing —
+a character, a chapter, a place. This is the standing stuff that otherwise has
+to be repeated: a decision you changed your mind about, a habit you do not want
+copied, a rule your world runs on.
+
+**It goes with every AI request** — chat, Draft, Enhance, the Smart Advisor, and
+the Profile Builder. The Advisor case is the one that pays for itself fastest:
+"the fragments are deliberate" or "the narrator is unreliable on purpose" stops
+it reporting the same non-problem on every pass.
+
+You stay in charge of it, as with all automatic context. A row on the context
+bar above the chat says what it costs in tokens and switches it off; the answer
+is remembered for that book. In the Profile Builder the same control sits in the
+chat header. The row only appears when the file has something in it.
+
+**Save to AI Notes** under any AI reply opens a box with the reply in it. Cut it
+down to the sentence worth keeping and confirm — it is dated and added to the
+end, and nothing already in the file changes. Nothing is saved until you
+confirm, and it costs nothing: no AI request is made.
+
+Keep it short. It is sent every time, so length is a cost you pay again on each
+request; over 20,000 characters it is refused rather than quietly cut off.
+
+**`notes/author-notes.md` is the opposite file** and sits next to it: nothing in
+it is ever read by the app on its own initiative, and it never reaches an AI
+unless you attach it yourself.
+
+### When a request will not fit
+
+Every model has a limit on how much it can read at once, and a long chapter plus
+a full world plus several profiles can pass it. Rather than failing, the app
+shortens the request in a fixed order and tells you what it did.
+
+The world context goes first, because you can already see and prune it on the
+context bar. A chapter too big to send goes as its **chapter summary** instead,
+if one exists. Your AI Notes and the chapter's plan are never dropped — they are
+small and they are instructions. Profiles you attached by hand are never dropped
+either: you chose those for this turn, so if something has to give it will not
+be them.
+
+A line above the reply says what changed. A request that fits says nothing.
+
+If even the essentials will not fit, the request is **refused before anything is
+spent**, with the two numbers and a way out. Nothing is ever quietly cut in
+half — a model handed half a chapter cannot tell, and answers confidently about
+a book that stops mid-sentence.
+
+**Local models are a special case and are treated honestly.** They usually do
+not publish how much they hold, so the app cannot check. It says so rather than
+assuming the best, because most local servers trim an oversize prompt and answer
+anyway — which produces a confident reply built on half your book, with nothing
+to suggest anything went wrong.
+
+### Saved conversations
+
+Both chats keep what you say to them. A **Past chats** button lists your
+conversations newest first — "4 days ago — how should this land?" — and
+reopening one brings back the whole thing, including the profiles that were
+attached to it. Before this, closing the app threw away every reply you had
+paid for along with the setup that produced it.
+
+Profile Builder chats are named after the character: "4 days ago — Frodo
+Baggins — relationships buildout". Names come from your first message and can
+be changed. A conversation about a different character is still listed, but says
+to open that character to carry on rather than mixing the two.
+
+**Start fresh** puts the current conversation away without deleting it.
+Deleting asks first, and cannot be undone.
+
+**Long conversations are recapped rather than resent.** Reopening one sends a
+short summary of the older messages plus the last few word for word. It costs
+less, and it keeps the model's attention on what you are asking now instead of
+spreading it over forty old messages. Every message stays on screen; a line
+above the conversation says the summary is in use, offers to show it, and offers
+**Send everything instead**. The recap is worked out once and kept, so coming
+back a third time does not pay for it again.
+
+### Chapter outlines
+
+One per chapter at `outlines/chapters/<chapter-stem>.md`, reached from a
+**Chapter Outline** row in the sidebar beside Chapter Summary. It is the
+writer's plan: the key events that move the chapter along, in order.
+
+It is the only per-chapter document that looks forward. A chapter summary is
+generated from prose that already exists and says what the chapter turned out
+to be; an outline says what it is meant to do, and is usually written before
+there is a word to summarise.
+
+It has the manuscript's formatting toolbar — numbered lists, bullets,
+headings, bold — and the Writing Companion stays open beside it, so you can
+talk about the plan while you write it. Open chat is given the chapter's plan whenever
+that chapter has one, not only while the outline is on screen (the context
+bar shows it, says what it costs, and switches it off). Opening a
+chapter's outline opens that chapter too, so everything on screen is about
+the same chapter.
+
+Plain Markdown and **never parsed** — a numbered list is what the empty state
+suggests and nothing enforces, so dashes, paragraphs or a table all keep the
+shape you gave them. Manual save, like everything else. A dot on the sidebar
+row marks a chapter that has one. It follows its chapter through a rename and
+goes with it on a delete, attaches to a chat as a context chip, and exports
+under its own tick-box.
+
+**Build with AI.** In the Chapter Outline editor, describe what the chapter has
+to do in your own words and it drafts the outline. It writes nothing: the draft
+appears for you to read, and **Insert** puts it in the editor unsaved so you can
+change every line before saving. Optional by design -- if you already know what
+happens, typing it is faster than any round trip. It earns its place when you
+are finding the story as you write it.
+
+**The Weave reads your outlines.** A faction you have only ever named in chapter
+twelve's plan is raised by Weaving as a planned name, and the stop says which
+chapter's outline it came from. An entry also shows **Planned in** beside
+Appears in: the chapters whose outlines name it. That one is worked out from the
+files every time it is asked for, never stored, so editing an outline changes it
+immediately.
+
+**It reaches AI two ways.** Attach it by hand as a context chip, like a chapter
+summary. Or leave it alone: when you Draft or Enhance a chapter, that chapter's
+outline goes with the request automatically, so the AI writes to your plan. The
+world-context bar shows it as its own row with a token count and a switch, and
+what you decide is remembered for that book. The reviewing passes (Readability,
+Structure, Context) do not read it and are not charged for it.
+
+Distinct from **scene Beats**, which sit one rung down (Story > Act > Chapter >
+Scene > Beat), are parsed, and carry a done state. The outline is the plan the
+scenes are cut from. Spec: `docs/chapter-outline-spec.md`.
 
 ### Chapter summaries
 
@@ -354,7 +497,7 @@ to avoid (anything that filters hidden folders and so drops `.storythread/`).
 
 ## The Weave
 
-*In development on `feature/the-weave`, for v2.0.0. Not in a shipped release yet.*
+*Shipped in v2.0.0.*
 
 The Weave is one linked, time-aware world model. Every character, place, faction,
 object and idea is a **Thread**; the connections between them are **Ties**; and a
@@ -524,6 +667,21 @@ a large labelled edge that gives it away.
 
 Threads are ordinary Markdown files under `codex/`, so copying the project folder
 takes the whole world model with it.
+
+### Reading the map
+
+A line on the map names the KIND of connection -- "parent of", "rival of" --
+and the writer's own sentence about it is on the tooltip and on the entry,
+where there is room to read it. A connection written from both ends shows each
+label nearer the character who wrote it, so whose reading is whose is visible
+at a glance; one written from one end stays in the middle.
+
+Clicking a kind in the legend hides every entry of that kind and its
+connections; clicking again brings them back. Each kind shows how many there
+are, one with none is faded rather than clickable, the choice is remembered for
+that book only, and the map says how much it is holding back so nothing goes
+quietly missing. Zoom in, zoom out and reset sit on the map; zooming out reaches
+past the edges so a long name is readable, and dragging the background pans.
 
 ### Weaving
 
@@ -916,6 +1074,12 @@ as it lands, so a failure at part four of five keeps the first three. The saved
 read survives closing the app; starting a new one says how many unreviewed
 proposals it would discard first, because those were paid for.
 
+**On a model that does not publish its limit** -- most local models -- a run
+over about 30,000 tokens of manuscript is REFUSED before anything is sent.
+Most local servers trim an oversize prompt and answer anyway, so the result
+would look fine and be built on half the book. Run it over fewer chapters, or
+assign a model whose limit is published.
+
 Requires Weaving to have been run first: the request carries a snippet of each
 established entry, so the entries have to exist.
 
@@ -1010,13 +1174,13 @@ Eight roles, each listing on screen exactly which features use it:
 | **Critique** | Smart Advisor pass, Writing Companion review categories, chapter and scene summaries, importance audit, AI Trim |
 | **Character reasoning** | Profile Builder chat, Interview mode, full profile summaries, dialogue speaker analysis |
 | **Brainstorming** | Writing Companion chat |
-| **Structural analysis** | Scene break suggestions |
+| **Structural analysis** | Scene break suggestions, Build Chapter Outline |
 | **Prose** | Draft mode, Enhance mode, Revise suggestion |
-| **Extraction** (cheap work) | Usage previews, Generate Overview, section summaries |
-| **Long-context analysis** | *nothing yet* -- arrives with the Weave's AI passes, which are deferred to v2.1.0 |
+| **Extraction** (cheap work) | Usage previews, Generate Overview |
+| **Long-context analysis** | Profile Extractor, recapping a saved conversation |
 | **Research transformation** | *nothing yet* |
 
-The last two are marked "not used yet" on screen with the reason, rather than presenting a control that silently does nothing.
+The last one is marked "not used yet" on screen with the reason, rather than presenting a control that silently does nothing.
 
 **The list is collapsed by default** — one line per role: name, the model currently chosen (or "Use Default Model"), and a one-line description that truncates rather than wrapping, so all eight fit on screen at once. Opening a row reveals the full explanation behind "What's this?" (what the job is, why it matters, and what a better model actually buys you there), the features it covers, and the two pickers. Only one row opens at a time, so the list never scrolls itself away. A broken assignment shows a warning icon on the collapsed row, so it is visible without opening anything.
 
@@ -1031,7 +1195,7 @@ Two behaviours matter more than the rest:
 - **Leaving a role unassigned is the supported default.** It falls through to the Default Model, exactly as the app behaved before roles existed. An upgrading install changes nothing until the writer changes something.
 - **An assigned role never silently substitutes.** If it cannot run — no key for that service, an unreachable local server, a model the provider does not offer — the feature refuses and says why. Without this, a writer could assign Claude to prose, hit a missing key, and unknowingly have their book drafted by a different model.
 
-Per-book role overrides are supported by the resolver but have no UI yet; today roles are app-wide.
+Roles are app-wide. A per-book role level was documented for a while and never reachable in practice; it was removed in v2.0.0 (R8.6). The per-book Default Model is separate and still works.
 
 ## Content mode and routing
 

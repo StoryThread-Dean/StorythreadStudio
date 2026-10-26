@@ -65,6 +65,8 @@ let calls: { url: string; method: string; body: Record<string, unknown> }[] = []
 
 function mockApi(ties: Record<string, unknown>[] = [], opts: {
   failTie?: string;
+  /** Refuse only DELETE /tie, the way a stale address is refused. */
+  failDelete?: string;
 } = {}) {
   calls = [];
   blocks = [];
@@ -96,6 +98,11 @@ function mockApi(ties: Record<string, unknown>[] = [], opts: {
       return { ok: true, json: async () => ({ chapters: CHAPTERS }) } as Response;
     }
     if (url.includes("/api/codex/tie")) {
+      if (opts.failDelete && method === "DELETE") {
+        return { ok: false, json: async () => ({
+          detail: { code: "tie_endpoint_invalid", message: opts.failDelete },
+        }) } as Response;
+      }
       if (opts.failTie) {
         return { ok: false, json: async () => ({
           detail: { code: "tie_endpoint_invalid", message: opts.failTie },
@@ -119,16 +126,20 @@ function tie(over: Record<string, unknown> = {}) {
 }
 
 let blocks: { trait: string; description: string; rel?: string }[] = [];
+/** How many times the section told the page it wrote the entry's file. */
+let changed = 0;
 
 async function open(startBlocks = blocks) {
   blocks = startBlocks;
+  changed = 0;
   const Harness = () => {
     const [held, setHeld] = React.useState(startBlocks);
     blocks = held;
     return (
       <RelationshipsSection projectPath={PROJECT} entityId={KIPLING}
                             entityType="character" entityName="Kipling"
-                            blocks={held} onBlocksChange={setHeld} />
+                            blocks={held} onBlocksChange={setHeld}
+                            onChanged={() => { changed += 1; }} />
     );
   };
   render(<Harness />);
@@ -483,6 +494,22 @@ describe("removing one", () => {
     await userEvent.click(screen.getAllByLabelText(/Remove the relationship/)[0]);
     await waitFor(() => expect(posted("DELETE")).toHaveLength(1));
     expect(posted("DELETE")[0].url).toContain("at=c-1");
+  });
+
+  it("removes only the UNDATED stage, not its dated siblings (#31)", async () => {
+    // An undated stage's anchor is empty, and leaving `at` off for it asked
+    // the backend for every stage of that relationship.
+    mockApi([
+      tie({ rel: "rivals", reads_as: "rivals", at: "", why: "always" }),
+      tie({ rel: "rivals", reads_as: "rivals", at: "c-3", why: "worse" }),
+    ]);
+    await open();
+    await openAll();
+    await userEvent.click(screen.getAllByLabelText(/Remove the relationship/)[0]);
+    await waitFor(() => expect(posted("DELETE")).toHaveLength(1));
+    const params = new URL(posted("DELETE")[0].url).searchParams;
+    expect(params.has("at")).toBe(true);
+    expect(params.get("at")).toBe("");
   });
 
   it("drops an unsaved row without asking the server", async () => {
@@ -1071,5 +1098,143 @@ describe("relationships kept on the page", () => {
     await openAll();
     expect(screen.getByText(/linked -- on the map/)).toBeTruthy();
     expect(screen.getByText(/kept on Kipling.s page/)).toBeTruthy();
+  });
+});
+
+
+// ── Pointing a recorded relationship somewhere else ─────────────────────────
+//
+// The reported sequence: open a relationship that is linked to a character,
+// press Update, then change who it is with to a name that has no profile --
+// and get an error. Two bugs stood behind it:
+//
+//   1. The open/closed state of a card was keyed by the LIVE other end, so the
+//      first keystroke in the name box moved the key and the card snapped shut
+//      under the cursor. Everything typed after that went nowhere, and Update
+//      on the reopened, empty card said "Say who this relationship is with".
+//   2. Turning a connection into a hand-typed name never removed the
+//      connection. It vanished from the screen and came back on the next
+//      reload, beside the name that replaced it. Pointing it at a DIFFERENT
+//      character was worse: PATCH looks a connection up by its other end, so
+//      it was asked to correct one that did not exist yet, and refused.
+
+describe("changing who a recorded relationship is with", () => {
+  const nameBox = () => screen.getByLabelText(
+    /^Who Kipling has this relationship with/) as HTMLInputElement;
+
+  it("keeps the card open while the name is retyped", async () => {
+    mockApi([tie()]);
+    await open();
+    await openAll();
+    await userEvent.clear(nameBox());
+    await userEvent.type(nameBox(), "Aunt Mabel");
+    expect(nameBox().value).toBe("Aunt Mabel");
+  });
+
+  it("removes the connection when it becomes a hand-typed name", async () => {
+    mockApi([tie()]);
+    await open();
+    await openAll();
+    await userEvent.clear(nameBox());
+    await userEvent.type(nameBox(), "Aunt Mabel");
+    await userEvent.click(screen.getByRole("button", { name: /^Update$/ }));
+
+    await waitFor(() => expect(posted("DELETE")).toHaveLength(1));
+    // Addressed by what was SAVED, not by what the box says now.
+    const url = new URL(posted("DELETE")[0].url);
+    expect(url.searchParams.get("dst_id")).toBe("e-vic");
+    expect(url.searchParams.get("rel")).toBe("parent_of");
+    expect(posted("PATCH")).toHaveLength(0);
+    await waitFor(() => expect(blocks).toHaveLength(1));
+    expect(blocks[0].trait).toBe("Aunt Mabel");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("tells the page its file changed, so the page's next Update is not refused", async () => {
+    mockApi([tie()]);
+    await open();
+    await openAll();
+    await userEvent.clear(nameBox());
+    await userEvent.type(nameBox(), "Aunt Mabel");
+    await userEvent.click(screen.getByRole("button", { name: /^Update$/ }));
+    await waitFor(() => expect(changed).toBe(1));
+  });
+
+  it("works straight after an Update, which is the reported sequence", async () => {
+    mockApi([tie()]);
+    await open();
+    await openAll();
+    await userEvent.type(screen.getByDisplayValue("her mother"), " too");
+    await userEvent.click(screen.getByRole("button", { name: /^Update$/ }));
+    await waitFor(() => expect(posted("PATCH")).toHaveLength(1));
+
+    await openAll();
+    await userEvent.clear(nameBox());
+    await userEvent.type(nameBox(), "Aunt Mabel");
+    await userEvent.click(screen.getByRole("button", { name: /^Update$/ }));
+
+    await waitFor(() => expect(posted("DELETE")).toHaveLength(1));
+    await waitFor(() => expect(blocks.map(b => b.trait)).toEqual(["Aunt Mabel"]));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("keeps the row and says why if the old connection cannot be removed", async () => {
+    mockApi([tie()], { failDelete: "That connection is not recorded." });
+    await open();
+    await openAll();
+    await userEvent.clear(nameBox());
+    await userEvent.type(nameBox(), "Aunt Mabel");
+    await userEvent.click(screen.getByRole("button", { name: /^Update$/ }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(/not recorded/));
+    // Nothing kept on the page, so there is never a second copy.
+    expect(blocks).toHaveLength(0);
+    expect(nameBox().value).toBe("Aunt Mabel");
+  });
+
+  it("records a new connection and removes the old one when pointed at another character", async () => {
+    mockApi([tie()]);
+    await open();
+    await openAll();
+    const picker = screen.getByLabelText(/^Pick someone from this world/);
+    await userEvent.selectOptions(picker, "e-mil");
+    await userEvent.click(screen.getByRole("button", { name: /^Update$/ }));
+
+    await waitFor(() => expect(posted("DELETE")).toHaveLength(1));
+    expect(posted("PATCH")).toHaveLength(0);
+    expect(posted("POST")).toHaveLength(1);
+    expect(posted("POST")[0].body.dst_id).toBe("e-mil");
+    expect(new URL(posted("DELETE")[0].url).searchParams.get("dst_id"))
+      .toBe("e-vic");
+    // New one first, old one after: a failure part-way leaves a duplicate
+    // the writer can see, never a relationship that is simply gone.
+    const order = calls.filter(c => c.url.includes("/api/codex/tie?")
+                                  || c.url.endsWith("/api/codex/tie"))
+                       .map(c => c.method);
+    expect(order.indexOf("POST")).toBeLessThan(order.indexOf("DELETE"));
+  });
+
+  it("still corrects in place when the other end has not changed", async () => {
+    mockApi([tie()]);
+    await open();
+    await openAll();
+    await userEvent.type(screen.getByDisplayValue("her mother"), " too");
+    await userEvent.click(screen.getByRole("button", { name: /^Update$/ }));
+    await waitFor(() => expect(posted("PATCH")).toHaveLength(1));
+    expect(posted("DELETE")).toHaveLength(0);
+    expect(posted("POST")).toHaveLength(0);
+  });
+
+  it("removes a recorded row by its saved address even after the name was edited", async () => {
+    mockApi([tie()]);
+    await open();
+    await openAll();
+    await userEvent.clear(nameBox());
+    await userEvent.type(nameBox(), "Someone else");
+    await userEvent.click(screen.getByLabelText(/^Remove the relationship with/));
+    await waitFor(() => expect(posted("DELETE")).toHaveLength(1));
+    expect(new URL(posted("DELETE")[0].url).searchParams.get("dst_id"))
+      .toBe("e-vic");
   });
 });

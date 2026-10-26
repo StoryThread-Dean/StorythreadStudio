@@ -32,6 +32,8 @@ from app.outline_worksheet import (
     read_project_targets, set_target_chapter_count, set_target_word_count,
 )
 from app.settings_store import get_vault_root
+from app.codex.migrate import CODEX_NATIVE_KEY, stamp_codex_native
+from app.codex.types_registry import default_section_folders
 from pydantic import BaseModel
 
 
@@ -55,17 +57,34 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
 # --- The folder structure every new project gets ---
-# These folders are created relative to the project's root directory.
-# They match exactly what's described in 02-architecture-and-storage.md.
+#
+# A NEW PROJECT IS BORN IN THE WEAVE, AND NEVER GETS A profiles/ FOLDER.
+#
+# This list used to scaffold six profiles/* directories and no codex/ at all,
+# which is a straight leftover: the Weave replaced the profile system as the
+# app's world model in v2.0.0 and the Profile Builder was repointed at codex/,
+# but creation never was. A project made by the old code only BEHAVED like a
+# codex project by accident -- entries_home fell through to codex/ because the
+# profiles/ folders it had just made happened to be empty.
+#
+# Two of those folders were dead outright: profiles/chapters and profiles/
+# scenes are Phase-2 summary homes, and summaries have lived under summaries/
+# since v1.0.x (see SECTION_CONFIGS in routers/profiles.py, which says so).
+#
+# profiles/ IS NOT GONE FROM THE APP. Every project that has not converted
+# still reads it, still edits it, and is still only ever OFFERED a conversion
+# rather than made to take one. What changed is that no new project is given
+# one to begin with.
+#
+# The codex folder names come from the type registry rather than being spelled
+# here, so the four the sidebar shows while empty and the four that get made
+# cannot drift apart. summaries/ is still created on first write, as before.
+CODEX_FOLDERS = [f"codex/{name}" for name in default_section_folders()]
+
 PROJECT_FOLDERS = [
     "manuscript",
     "notes",
-    "profiles/characters",
-    "profiles/relationships",
-    "profiles/locations",
-    "profiles/lore",
-    "profiles/chapters",
-    "profiles/scenes",
+    *CODEX_FOLDERS,
     "exports",
     ".storythread",      # Hidden folder for app.db, cache, logs
 ]
@@ -425,6 +444,11 @@ async def create_project(request: CreateProjectRequest):
         # Story type chosen at creation. Drives display in the recent-projects
         # list and lets future features filter or scaffold by kind.
         "story_type":           request.story_type,
+        # BORN IN THE WEAVE, said in the file rather than worked out later.
+        # entries_home would answer "codex" for this project anyway, by noticing
+        # profiles/ is empty -- but that is an inference, and one stray .md
+        # appearing under profiles/ would silently reverse it. See migrate.py.
+        CODEX_NATIVE_KEY:       True,
         "created_at":           now,
         "updated_at":           now,
     }
@@ -489,6 +513,28 @@ async def open_project(request: OpenProjectRequest):
         # in-memory default keeps the session working either way.
         pass
 
+    # -- Freeze where this project's entries live --
+    #
+    # A second one-time backfill, deliberately kept as its OWN read-modify-
+    # write rather than folded into the block above. Hoisting the read so one
+    # dict serves both is how one marker ends up clobbering the other.
+    #
+    # This writes only when the project has nothing in profiles/ at all, in
+    # which case it is ALREADY being edited in codex/ -- so nothing changes
+    # today. What it buys is tomorrow: without it, that answer is an inference
+    # from an empty folder, and one stray .md appearing under profiles/ moves
+    # the writer's whole world to the legacy home with nothing on screen to
+    # say why. See stamp_codex_native.
+    #
+    # Best effort for the same reason as the block above and as
+    # _heal_series_path: a project that cannot be written to is still a
+    # project that should open.
+    try:
+        if stamp_codex_native(folder):
+            data[CODEX_NATIVE_KEY] = True
+    except OSError:
+        pass
+
     # Track in recent projects
     track_project(
         project_id=data.get("project_id", ""),
@@ -511,7 +557,14 @@ async def create_book_in_series(request: CreateBookInSeriesRequest):
     Similar to create_project but:
       - The book folder is created inside the series folder
       - project.json includes series_id and series_path linking it to the series
-      - An arcs/ subfolder is added under profiles/ for per-book character arcs
+
+    It used to add a profiles/arcs/ subfolder for per-book character arcs.
+    That is gone: the arc editor was built, tested and never wired to a single
+    control, so nothing in the app could ever put a file there and every book
+    got two empty folders. The Weave answers the same question better -- a
+    fact anchored to the chapter it starts at, which an arc file never was.
+    An existing project's arc files are still read, and are absorbed by the
+    conversion (see _absorb_arcs).
     """
     series_path = request.series_path
 
@@ -554,12 +607,9 @@ async def create_book_in_series(request: CreateBookInSeriesRequest):
                    f"Valid options: {', '.join(VALID_STORY_TYPES)}."
         )
 
-    # Create the standard project folders + arcs subfolder for per-book character arcs
-    book_folders = PROJECT_FOLDERS + [
-        "profiles/arcs/characters",
-        "profiles/arcs/relationships",
-    ]
-    for subfolder in book_folders:
+    # The same folders a standalone project gets, and nothing extra. A book in
+    # a series is born in the Weave exactly like any other project.
+    for subfolder in PROJECT_FOLDERS:
         os.makedirs(os.path.join(book_folder, subfolder), exist_ok=True)
 
     # Write starter files (chapter + style guide)
@@ -602,6 +652,11 @@ async def create_book_in_series(request: CreateBookInSeriesRequest):
         "cost_tier":            "balanced",
         "active_style_guide":   "notes/style-guide.md",
         "story_type":           request.story_type,
+        # BORN IN THE WEAVE, said in the file rather than worked out later.
+        # entries_home would answer "codex" for this project anyway, by noticing
+        # profiles/ is empty -- but that is an inference, and one stray .md
+        # appearing under profiles/ would silently reverse it. See migrate.py.
+        CODEX_NATIVE_KEY:       True,
         # Track which scaffold was last applied -- same field as standalone.
         "created_at":           now,
         "updated_at":           now,

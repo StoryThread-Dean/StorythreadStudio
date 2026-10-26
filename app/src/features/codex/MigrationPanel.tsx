@@ -56,8 +56,12 @@ interface Plan {
 }
 
 interface Result {
+  // "codex-native" is unreachable from this screen -- WeaveScreen does not
+  // render the panel for a project born in the Weave -- but the route can
+  // still return it, and a union that lies about what an endpoint answers is
+  // the sort of thing that is true right up until somebody changes the gate.
   status: "migrated" | "already-migrated" | "incomplete" | "restored"
-        | "nothing-to-restore";
+        | "nothing-to-restore" | "codex-native";
   converted?: number;
   arcs_absorbed?: number;
   backup_path?: string | null;

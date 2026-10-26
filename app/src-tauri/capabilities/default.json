@@ -23,6 +23,7 @@
       ]
     },
     "updater:default",
+    "window-state:default",
     "process:default",
     "process:allow-restart"
   ]

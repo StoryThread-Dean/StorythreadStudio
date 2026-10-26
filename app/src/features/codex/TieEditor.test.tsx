@@ -526,6 +526,34 @@ describe("removing one", () => {
     expect(url).toContain("dst_id=e-pathicus");
   });
 
+  // Issue #31. Without `at` the backend removes EVERY stage of the
+  // relationship, so taking one row off this list took the other chapters'
+  // versions with it. An undated stage sends an EMPTY anchor, which means
+  // that stage alone; a dated one sends its own.
+  it("removes only the undated stage it was pointed at", async () => {
+    mockApi({ ties: [TIE] });
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Remove worships Pathicus/ }));
+    await waitFor(() =>
+      expect(calls.some(c => c.method === "DELETE")).toBe(true));
+    const params = new URL(calls.filter(c => c.method === "DELETE")[0].url)
+      .searchParams;
+    expect(params.has("at")).toBe(true);
+    expect(params.get("at")).toBe("");
+  });
+
+  it("removes only the dated stage it was pointed at", async () => {
+    mockApi({ ties: [{ ...TIE, at: "c-3", at_label: "3. The Fall" }] });
+    await open();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Remove worships Pathicus/ }));
+    await waitFor(() =>
+      expect(calls.some(c => c.method === "DELETE")).toBe(true));
+    expect(new URL(calls.filter(c => c.method === "DELETE")[0].url)
+      .searchParams.get("at")).toBe("c-3");
+  });
+
   it("tells the map to redraw", async () => {
     mockApi({ ties: [TIE] });
     const { onChanged } = await open();

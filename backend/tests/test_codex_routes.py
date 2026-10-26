@@ -188,7 +188,7 @@ def test_a_thread_added_on_disk_appears_without_a_reindex_call(project):
 def test_health_reports_state_without_doing_the_work(project):
     body = client.get("/api/codex/health", params={"project_path": project}).json()
     assert body["registry_ok"] is True
-    assert body["migration_state"] in {"none", "done", "incomplete"}
+    assert body["migration_state"] in {"none", "done", "incomplete", "native"}
     # It reported dirty and did NOT quietly rebuild -- a status call a UI
     # polls must stay cheap.
     assert body["index_dirty"] is True
@@ -1244,6 +1244,37 @@ def test_deleting_without_an_anchor_still_removes_every_state(project):
                   params={"project_path": project, "src_id": "e-elara",
                           "rel": "connected_to", "dst_id": "e-garrick"})
     assert _ties(project) == []
+
+
+def test_an_empty_anchor_removes_only_the_undated_state(project):
+    # Issue #31. An UNDATED stage's address is "no anchor", which reads exactly
+    # like "no anchor given" -- and that means every stage. So the screens
+    # removed an undated "rivals" and took "rivals from chapter 2" with it.
+    # `at=""` is the undated stage alone; omitting `at` still means all of
+    # them (the test above), and the two must not collapse into one.
+    _one, two = _two_chapters(project)
+    _make(project, "connected_to", reason="known each other for years")
+    _make(project, "connected_to", at=two, reason="close friends now")
+
+    response = client.delete("/api/codex/tie",
+                             params={"project_path": project,
+                                     "src_id": "e-elara", "rel": "connected_to",
+                                     "dst_id": "e-garrick", "at": ""})
+    assert response.status_code == 200
+    assert [t["why"] for t in _ties(project)] == ["close friends now"]
+
+
+def test_an_empty_anchor_with_no_undated_state_says_so(project):
+    # The other half of "only the undated one": when there is none, nothing is
+    # removed and the writer is told, rather than the dated stages going.
+    _one, two = _two_chapters(project)
+    _make(project, "connected_to", at=two, reason="close friends now")
+    response = client.delete("/api/codex/tie",
+                             params={"project_path": project,
+                                     "src_id": "e-elara", "rel": "connected_to",
+                                     "dst_id": "e-garrick", "at": ""})
+    assert _code(response) in CODES
+    assert [t["why"] for t in _ties(project)] == ["close friends now"]
 
 
 def test_deleting_a_state_that_is_not_there_says_so(project):

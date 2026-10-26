@@ -38,6 +38,20 @@ log = logging.getLogger(__name__)
 MIGRATION_VERSION = 1
 JOURNAL_NAME = "codex-migration.json"
 
+# BORN IN THE WEAVE. Written into project.json when a project is created, and
+# stamped onto an existing project the first time it is opened with nothing in
+# profiles/ (see stamp_codex_native).
+#
+# Why a flag and not a version: `codex_migration_version` is versioned because
+# a conversion has a FORMAT, and a later build may need to know which one ran.
+# Being born here has nothing to migrate, so there is no version to record.
+#
+# Why a boolean and not `"entries_home": "codex"`: a stored home string is a
+# two-way switch, and the one hand edit that must never work is the one that
+# sends a project back to profiles/ and hides a world. A flag can only be true
+# or absent. See entries_home for the rule that reads it.
+CODEX_NATIVE_KEY = "codex_native"
+
 # Today's four profile folders, and the Weave type each becomes.
 FOLDER_TO_TYPE = {
     "characters": "character",
@@ -69,15 +83,20 @@ def _read_project(project_path: str) -> dict:
         return {}
 
 
-def _write_marker(project_path: str) -> None:
+def _merge_project(project_path: str, updates: dict) -> None:
     """
-    Record that migration finished. Written ONLY on success.
+    Read project.json, merge in a few keys, write it back atomically.
 
-    This is the one durable statement that the project is converted --
-    which is why nothing infers it from the existence of codex/.
+    ONE writer for this file, because there are now two things that stamp it
+    (the conversion marker and the born-here flag) and a second copy of the
+    read-modify-write would be a second chance to clobber the other one.
+
+    `replace_atomic` rather than a plain write: on Windows a replace fails
+    while a scanner, the indexer or a sync client holds the file for a
+    moment, and losing a writer's project settings to that is not acceptable.
     """
     data = _read_project(project_path)
-    data["codex_migration_version"] = MIGRATION_VERSION
+    data.update(updates)
     path = _project_json_path(project_path)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -85,18 +104,69 @@ def _write_marker(project_path: str) -> None:
     replace_atomic(tmp, path)
 
 
+def _write_marker(project_path: str) -> None:
+    """
+    Record that migration finished. Written ONLY on success.
+
+    This is the one durable statement that the project is converted --
+    which is why nothing infers it from the existence of codex/.
+    """
+    _merge_project(project_path, {"codex_migration_version": MIGRATION_VERSION})
+
+
+def stamp_codex_native(project_path: str) -> bool:
+    """
+    Freeze the answer this project already gives, so it cannot change by
+    accident. Returns True if it wrote anything.
+
+    Called when a project is opened. It changes NO behaviour on the day it
+    runs -- a project with nothing in profiles/ is already edited in codex/ by
+    rule 5 below. What it changes is the day AFTER: rule 5 is an inference
+    from an empty folder, and a single stray .md appearing under profiles/ at
+    any depth flips the whole project to the legacy home with nothing on
+    screen to explain where the writer's world went. A statement cannot be
+    flipped by a file appearing.
+
+    Deliberately silent when there is anything to lose. A project that has
+    been converted, is mid-conversion, or holds real work in profiles/ is left
+    exactly as it is -- this can only ever confirm an answer, never change one.
+    """
+    if migration_state(project_path) != "none":
+        return False          # converted, interrupted, or already stamped
+    if _holds_entries(os.path.join(project_path, "profiles")):
+        return False          # the writer has work there; say nothing
+    _merge_project(project_path, {CODEX_NATIVE_KEY: True})
+    return True
+
+
 def migration_state(project_path: str) -> str:
     """
-    "done" | "incomplete" | "none"
+    "incomplete" | "done" | "native" | "none"
 
     Checked when a project is opened. "incomplete" means a journal survived,
     so a previous run died partway and the writer must be offered a choice
     rather than silently continuing into a half-converted folder.
+
+    "native" means the project was CREATED in the Weave and has no legacy
+    world behind it. It is a fourth value rather than a second meaning for
+    "done", because "done" is a claim that a conversion ran: it implies a
+    backup on disk, a report to read, and a set of files that used to be
+    something else. A native project has none of those, and the screen that
+    offers to show "what the conversion did" would have nothing to open.
+
+    It is also not "none". `WeaveScreen.tsx` renders the conversion panel for
+    "none", so a new project reporting it is shown an offer to convert a world
+    it does not have, INSTEAD of the map -- with no button on the panel, since
+    there is nothing to convert. That was the state of every new project
+    before this value existed.
     """
     if os.path.isfile(journal_path(project_path)):
         return "incomplete"
-    if _read_project(project_path).get("codex_migration_version"):
+    data = _read_project(project_path)
+    if data.get("codex_migration_version"):
         return "done"
+    if data.get(CODEX_NATIVE_KEY):
+        return "native"
     return "none"
 
 
@@ -129,18 +199,40 @@ def entries_home(project_path: str) -> str:
 
     1. An INTERRUPTED conversion reads as profiles/. The backup a restore puts
        back is profiles/, so writing into a half-converted codex/ is the one
-       thing that could make that restore lossy.
+       thing that could make that restore lossy. This stays first even against
+       the born-here flag below: a journal can only exist on a project that
+       ran a conversion, which a native project cannot do, so if the two ever
+       contradict each other on disk the contradiction is a hand edit -- and
+       the answer that loses must be the one that cannot lose files.
     2. A CONVERTED project is codex/. That is what conversion means.
-    3. An UNCONVERTED project whose profiles/ holds work is profiles/, even if
+    3. A project BORN IN THE WEAVE is codex/, and this rule has to sit above
+       rule 4 rather than below it. Rule 4 is an inference drawn from counting
+       files; this is a statement the project makes about itself. A statement
+       outranks an inference about the same question. Without this ordering,
+       one stray .md anywhere under profiles/ -- an export dropped in the
+       wrong folder, a backup unzipped a level too high -- silently relocates
+       the writer's entire world and every codex entry disappears from the
+       Profile Builder with nothing to explain it.
+    4. An UNCONVERTED project whose profiles/ holds work is profiles/, even if
        codex/ has a few entries Weaving made. Hiding a world of thirteen
        profiles behind three placeholders would be the worse failure by far,
        and conversion is an offer rather than a toll gate.
-    4. Anything else is codex/. A project with nothing in profiles/ has nothing
+    5. Anything else is codex/. A project with nothing in profiles/ has nothing
        to lose and everything to gain: entries Weaving creates are editable in
        the Profile Builder the moment they exist, which is the handshake the
        Weave is for.
 
-    Rule 3 leaves a real gap, and it is deliberately left visible rather than
+    THE FLAG IS A POSITIVE CLAIM ONLY. It is read as a plain truth test, so a
+    hand-written `"codex_native": false` -- or any other value -- falls
+    through to rule 4 exactly as an absent key does. There is deliberately no
+    value of it that means "profiles". Two things make rule 3 safe in the one
+    direction it can act: the flag is only ever WRITTEN when profiles/ holds
+    nothing, so it can never be what hides existing work; and if work turns up
+    in profiles/ afterwards, `GET /health` counts it as `elsewhere` and the
+    screen says so out loud, which is a far better answer than the app
+    quietly reversing itself.
+
+    Rule 4 leaves a real gap, and it is deliberately left visible rather than
     papered over: on a project with both, entries Weaving made are edited in
     the Weave and not here. `GET /health` reports the count in the other home
     so the screen can say so out loud instead of quietly showing less than the
@@ -149,11 +241,34 @@ def entries_home(project_path: str) -> str:
     state = migration_state(project_path)
     if state == "incomplete":
         return "profiles"
-    if state == "done":
+    if state in ("done", "native"):
         return "codex"
     if _holds_entries(os.path.join(project_path, "profiles")):
         return "profiles"
     return "codex"
+
+
+def entries_root(project_path: str) -> tuple[str, dict]:
+    """
+    (the folder this project keeps its entries in, its type registry).
+
+    `entries_home` answers WHICH folder; this hands back the path and the
+    registry that names the subfolders inside it, which is what a caller
+    walking the world actually needs. Promoted here from export.py, where it
+    was the only copy, because the completion gauge needed the same pair and
+    a third hand-rolled version is how the two screens come to disagree.
+
+    A broken types.json is reported by the screen that owns it. Here it means
+    "use the shipped kinds", not "there is no world".
+    """
+    from app.codex.types_registry import TypesError, default_registry, load_registry
+
+    home = entries_home(project_path)
+    try:
+        registry, _ = load_registry(project_path)
+    except TypesError:
+        registry = default_registry()
+    return os.path.join(project_path, home), registry
 
 
 # ── Looking before leaping ───────────────────────────────────────────────────
@@ -177,6 +292,16 @@ def plan_migration(project_path: str) -> dict:
         "unconvertible": [],
         "total": 0,
     }
+
+    # BORN HERE, so there is nothing to convert -- and the older wording below
+    # would be actively wrong for this project: "the Weave will start empty"
+    # said to a writer with thirty entries already in it reads as a threat.
+    if report["state"] == "native":
+        report["warnings"].append(
+            "This project was created in the Weave, so there is nothing to "
+            "convert. Your entries already live in codex/."
+        )
+        return report
 
     if not os.path.isdir(profiles_root):
         report["warnings"].append(
@@ -268,6 +393,16 @@ def run_migration(project_path: str, resume: bool = False) -> dict:
     if state == "done":
         return {"status": "already-migrated", "converted": 0, "arcs_absorbed": 0,
                 "backup_path": None, "warnings": []}
+    # BORN HERE. Nothing on screen offers this, but the route is reachable, and
+    # letting it run would do real damage rather than nothing: it writes a
+    # journal, calls seed_registry -- which creates a codex/types.json the
+    # project deliberately does not have -- and stamps codex_migration_version,
+    # relabelling a project that was never converted as converted.
+    if state == "native":
+        return {"status": "codex-native", "converted": 0, "arcs_absorbed": 0,
+                "backup_path": None,
+                "warnings": ["This project was created in the Weave, so there "
+                             "is nothing to convert."]}
     if state == "incomplete" and not resume:
         return {"status": "incomplete", "journal": journal_path(project_path),
                 "message": "A previous migration did not finish. Resume it or "
@@ -457,9 +592,17 @@ def _absorb_arcs(project_path: str, registry: dict, warnings: list[str]) -> int:
     Series arcs become facts on the canonical Thread.
 
     An arc was "this character, but in this book" -- which is exactly a fact
-    with an anchor, now that anchors exist. Absorbing them removes the second
-    overlay mechanism (merge_profile_with_arc, built and tested with zero
-    frontend callers) rather than maintaining two.
+    with an anchor, now that anchors exist. Absorbing them removed the second
+    overlay mechanism rather than maintaining two: the arc editor and
+    GET /api/profiles/merged were built, tested, and never called by anything
+    on screen, and they are gone.
+
+    WHICH IS WHY THIS STAYS. Nothing in the app can write an arc file any
+    more, so it is tempting to delete this too. But an older project, or a
+    hand-authored one, may still have files here, and a conversion that
+    silently dropped them would be exactly the kind of quiet loss the whole
+    backup-and-report design exists to prevent. It costs one isdir check on
+    every other project.
 
     Arc content becomes an UNANCHORED fact: we cannot know which chapter it
     began at, and inventing one would place something in the story where it

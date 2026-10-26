@@ -187,6 +187,16 @@ export interface Brief {
    *  mistaken for a smaller world. */
   withheld_not_present?: number;
   budget: Record<string, number>;
+  /** Which model's window the budget was measured against. Empty when the
+   *  caller supplied a limit itself, or when the model could not be
+   *  resolved at all. */
+  budget_model?: string;
+  /** True when the window is an ASSUMPTION rather than a measurement --
+   *  the model does not publish one (every local model) or the catalog
+   *  could not be reached. Shown, because a budget whose limit is a guess
+   *  and does not say so is the bug this whole field exists to end: the
+   *  Weave measured against a hardcoded 32,000 for three releases. */
+  budget_assumed?: boolean;
   mentioned: string[];
 }
 
@@ -323,11 +333,19 @@ export function fetchBrief(
   projectPath: string,
   options: {
     at?: string | null; pov?: string | null; text?: string;
+    /** Leave unset. Omitting it tells the backend to look up the real
+     *  window for the model that will actually answer -- which the frontend
+     *  cannot know, because roles resolve server-side. Passing a number
+     *  overrides that, and the only honest reason to is a test. */
     modelContextLimit?: number; outputReserve?: number;
     systemPromptTokens?: number; fixedRequestOverhead?: number;
     pinnedTokens?: number;
     pinned?: string[]; excludeIds?: string[]; excludeTypes?: string[];
     enabled?: boolean; includeOnRequest?: boolean;
+    /** Which job this brief is for, so the backend measures against the
+     *  model that will answer. An open chat and a Draft can be assigned
+     *  very differently sized models. */
+    category?: string;
   } = {},
 ): Promise<Brief> {
   // THIS SENDS NOTHING ANYWHERE. It asks what WOULD be sent, so the writer
@@ -338,11 +356,15 @@ export function fetchBrief(
     at: options.at ?? null,
     pov: options.pov ?? null,
     text: options.text ?? "",
-    model_context_limit: options.modelContextLimit ?? 32000,
+    // 0 = "work it out". THIS USED TO DEFAULT TO 32000 with no caller ever
+    // passing anything, so every budget the writer has ever been shown was
+    // measured against a number nobody chose.
+    model_context_limit: options.modelContextLimit ?? 0,
     output_reserve: options.outputReserve ?? 4000,
     system_prompt_tokens: options.systemPromptTokens ?? 0,
     fixed_request_overhead: options.fixedRequestOverhead ?? 0,
     pinned_tokens: options.pinnedTokens ?? 0,
+    category: options.category ?? "chat",
     pinned: options.pinned ?? [],
     exclude_ids: options.excludeIds ?? [],
     exclude_types: options.excludeTypes ?? [],

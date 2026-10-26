@@ -80,9 +80,26 @@ The first four ids are **never renamed**. They sit in every existing writer's
 `settings.json`, and `largest` no longer being the largest is a cosmetic wart;
 losing a saved choice is not.
 
-A second map, `TEXT_ENTRY_PX`, drives `--text-entry-size` for the five
-`.text-entry` surfaces (chat boxes, description textareas) with bigger jumps,
-because +1px on a surface you type into is imperceptible.
+A second map, `TEXT_ENTRY_PX`, drives `--text-entry-size` for the
+`.text-entry` surfaces with bigger jumps, because +1px on a surface you type
+into is imperceptible.
+
+**Which surfaces those are, corrected 2026-09-04.** Three: the two chat inputs
+and the scene-summary editor. This said "description textareas", and the
+Profile Builder's `AutoTextarea` forced the class on to match -- but the
+profile's description, notes and trait boxes are plain textareas at `text-sm`,
+and the only two things `AutoTextarea` renders are the AI summary boxes. So
+the rule enlarged the MACHINE's prose and left the writer's alone, which is
+backwards, and it was visible as one profile page carrying two sizes of text:
+
+>   "in Profile Builder > Characters > Full AI Summary. This text is a size
+>    larger than the rest of the text within this profile."
+
+`.text-entry` is a plain class in `App.css`, outside Tailwind's cascade layer,
+so it beats a `text-sm` on the same element however the call site orders its
+classes -- 16px against 14 at Default, 28 against 16.6 at Maximum. The two AI
+summary boxes are `text-sm` now, like every box beside them; being rem-based
+they still follow Interface size, in step rather than ahead.
 
 **Known limitation, deliberately not fixed here.** Lucide icons take a numeric
 `size=` prop in pixels and do not scale with the root. At `maximum` they sit

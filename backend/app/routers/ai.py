@@ -16,6 +16,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.settings_store import load_settings
+from app.chat_sessions import load_chat, save_chat
+from app.utils.paths import validate_project_path
 from app.ai.openrouter import run_completion, run_chat, list_models
 from app.ai.providers import (ProviderConfig, OPENROUTER, PROVIDERS,
                               active_provider, base_url_for, list_base_url_for)
@@ -30,8 +32,9 @@ from app.ai.prompts import (
     generate_quick_overview_prompt,
     trim_trait_prompt,
     audit_importance_prompt,
-    generate_section_summary_prompt,
     generate_full_summary_prompt,
+    build_chapter_outline_prompt,
+    build_chat_recap_prompt,
     generate_chapter_summary_prompt,
     generate_scene_summary_prompt,
     generate_scene_title_prompt,
@@ -122,22 +125,6 @@ class AuditImportanceRequest(BaseModel):
 
 class AuditImportanceResponse(BaseModel):
     flags: list[dict]   # [{trait, current_importance, suggested_importance, reason}, ...]
-
-
-class GenerateSectionSummaryRequest(BaseModel):
-    """
-    Asks the AI to write a compact summary of one profile section.
-    The summary lives under the ## AI Summary: heading and is used as AI context.
-    """
-    profile_name:    str
-    profile_type:    str
-    section_heading: str
-    section_content: str   # The formatted content of the section (trait blocks or plain text)
-    model_id: str | None = None
-
-
-class GenerateSectionSummaryResponse(BaseModel):
-    section_summary: str
 
 
 class GenerateFullSummaryRequest(BaseModel):
@@ -267,6 +254,12 @@ class ProfileChatRequest(BaseModel):
     behavior_mode:   str        = "general"   # Which AI behavior is active
     content_mode:    str        = "general"   # "general" | "mature" | "explicit"
     project_path:    str | None = None        # Project root -- used for story context injection
+    # The book's standing notes (notes/ai-notes.md), sent by the Profile
+    # Builder the same way the editor sends them. Building a character is
+    # exactly where a writer's standing decisions matter -- "her mother is
+    # alive again as of ch 9" is the kind of thing that otherwise has to be
+    # retyped into every conversation.
+    ai_notes:        str = ""
     # Section labels from the frontend SECTION_CONFIGS -- passed so the backend
     # always uses the current template structure without hardcoding section names.
     # Defaults cover the standard character profile if not provided.
@@ -635,6 +628,23 @@ def _build_story_context(project_path: str | None) -> str:
 _RELATIONSHIP_SNIPPET_CAP = 400    # Per-section character cap -- keep prompts tight.
 
 
+def _clip(text: str, cap: int) -> str:
+    """
+    Cut to `cap` characters and SAY SO in the text itself.
+
+    A bare `text[:400]` reads to the model as a sentence that simply stops,
+    and it has no way to tell a truncation from a writer who trailed off --
+    so it fills the gap, confidently, from nothing. This repo's rule is that
+    what is dropped is COUNTED rather than dropped quietly (codex/context.py
+    refuses rather than truncating for the same reason); where a cap is the
+    right answer, the marker is what makes it honest.
+    """
+    text = text or ""
+    if len(text) <= cap:
+        return text
+    return text[:cap].rstrip() + f" [...trimmed, {len(text) - cap:,} more characters]"
+
+
 def _extract_frontmatter_field(raw: str, field: str) -> str:
     """
     Pull a single top-level YAML frontmatter field without a full YAML parse.
@@ -746,13 +756,16 @@ def _find_related_relationships(project_path: str, character_name: str) -> list[
 
                 snippet_parts: list[str] = []
                 if overview:
-                    snippet_parts.append(f"Overview: {overview[:_RELATIONSHIP_SNIPPET_CAP]}")
+                    snippet_parts.append(
+                        f"Overview: {_clip(overview, _RELATIONSHIP_SNIPPET_CAP)}")
                 if dynamic:
-                    snippet_parts.append(f"Current Dynamic: {dynamic[:_RELATIONSHIP_SNIPPET_CAP]}")
+                    snippet_parts.append(
+                        f"Current Dynamic: {_clip(dynamic, _RELATIONSHIP_SNIPPET_CAP)}")
                 if not snippet_parts:
                     # Nothing structured to pull -- fall back to a short slice
                     # of the body so the AI still sees *something* linking them.
-                    snippet_parts.append(raw[:_RELATIONSHIP_SNIPPET_CAP].strip())
+                    snippet_parts.append(
+                        _clip(raw.strip(), _RELATIONSHIP_SNIPPET_CAP))
 
                 results.append((rel_name, "\n".join(snippet_parts)))
     except OSError:
@@ -1143,39 +1156,6 @@ async def audit_importance(request: AuditImportanceRequest):
     return AuditImportanceResponse(flags=flags)
 
 
-@router.post("/generate-section-summary", response_model=GenerateSectionSummaryResponse)
-async def generate_section_summary(request: GenerateSectionSummaryRequest):
-    """
-    Generate a compact AI summary for one section of a profile.
-    Stored under the ## AI Summary: heading. Designed to be concise and
-    prompt-efficient so it can be used as context without burning many tokens.
-    """
-    provider, api_key, model_id = _resolve_model_and_key("extraction", request.model_id)
-
-    system_prompt = generate_section_summary_prompt()
-
-    user_message = (
-        f"Profile: {request.profile_name} ({request.profile_type})\n"
-        f"Section: {request.section_heading}\n\n"
-        f"Content:\n{request.section_content}\n\n"
-        "Convert this into an AI-prompt-friendly summary. Distinguish what the writer "
-        "clearly emphasizes from what is mentioned only in passing."
-    )
-
-    try:
-        result = await run_completion(provider=provider, api_key=api_key, model_id=model_id,
-                                      cache_prompts=_prompt_cache_enabled(provider),
-                                      system_prompt=system_prompt, user_message=user_message,
-                                      temperature=TEMPERATURE_DEFAULTS["profile"])
-    except httpx.HTTPStatusError as e:
-        raise _provider_exc(e, provider)
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
-
-    text = _extract_text_field(result, "section_summary")
-    return GenerateSectionSummaryResponse(section_summary=sanitize(text.strip()))
-
-
 @router.post("/generate-full-summary", response_model=GenerateFullSummaryResponse)
 async def generate_full_summary(request: GenerateFullSummaryRequest):
     """
@@ -1273,6 +1253,29 @@ def _chapter_title_from_text(chapter_text: str, fallback: str) -> str:
     return fallback
 
 
+def _chapter_summary_for(request) -> str:
+    """
+    The chapter's existing summary, for the budget to send instead of the
+    full prose. Empty when there is none.
+
+    READ, NEVER GENERATED. Writing a summary here would turn a request the
+    writer made about their chapter into a second, unasked-for AI call they
+    are paying for -- and generate-chapter-summary WRITES TO DISK, so it
+    would also put a file in their project as a side effect of a chat
+    message. If there is no summary the chapter is dropped and named
+    instead, which is worse for the answer and correct about the money.
+    """
+    if not request.project_path or not request.chapter_filename:
+        return ""
+    try:
+        path = _chapter_summary_path(request.project_path,
+                                     request.chapter_filename)
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
 def _chapter_summary_path(project_path: str, chapter_filename: str) -> str:
     """Resolve the absolute path of the summary file for a given chapter stem."""
     stem   = os.path.splitext(chapter_filename)[0]
@@ -1350,6 +1353,152 @@ async def generate_chapter_summary(request: GenerateChapterSummaryRequest):
     return GenerateChapterSummaryResponse(
         content    = content,
         filename   = filename,
+        model_used = model_id,
+    )
+
+
+# The first `# Heading` of a chapter file. Shared by the outline builder to
+# tell "a chapter with a title" apart from "a chapter with something in it".
+_CHAPTER_HEADING_RE = re.compile(r"^\s*#[^\n]*\n?")
+
+
+# ── Build Chapter Outline ────────────────────────────────────────────────────
+
+class BuildChapterOutlineRequest(BaseModel):
+    project_path:  str
+    chapter_path:  str      # the manuscript file, so the pass can read the prose
+    # WHAT THE WRITER WANTS, in their words. The whole point of the feature and
+    # the only required input: this is not "generate an outline", it is "build
+    # the outline I am describing".
+    instruction:   str
+    # What is already there, when they are asking for a change rather than a
+    # first draft. The model returns the WHOLE revised outline, because a patch
+    # would have to be applied by something, and nothing here parses outlines.
+    existing:      str = ""
+    # The world, already assembled and already inspected by the writer. Arrives
+    # the same way it does for chat: only because they started an AI action,
+    # and only what they left in it.
+    weave_brief:   str = ""
+    content_mode:  str = "general"
+    model_id:      str | None = None
+
+
+class BuildChapterOutlineResponse(BaseModel):
+    # The proposed outline. NOT written anywhere -- see the docstring.
+    outline:    str
+    model_used: str = ""
+
+
+@router.post("/build-chapter-outline", response_model=BuildChapterOutlineResponse)
+async def build_chapter_outline(request: BuildChapterOutlineRequest):
+    """
+    Draft a chapter outline from what the writer says they want.
+
+    THIS WRITES NOTHING, AND THAT IS THE DESIGN RATHER THAN AN OMISSION.
+
+    An outline is a human-authored planning document, so it is not one of the
+    four fields the AI write boundary allows a model to fill in. The proposal
+    comes back to the screen, the writer reads it, and an Insert button puts it
+    into the editor buffer UNSAVED, where they can change every line of it
+    before pressing Save. That keeps the boundary's actual requirement -- AI
+    output does not land in a human-authored field "without the writer applying
+    it, per action" -- without needing a new exception to it.
+
+    Compare generate-chapter-summary, which DOES write to disk: a chapter
+    summary is one of the four designated generated fields, and an outline is
+    not.
+
+    What it reads: the writer's instruction, whatever outline already exists,
+    the chapter's prose if any has been written, and the Weave brief the writer
+    already inspected. Nothing else -- in particular it does not go and read
+    the book outline behind their back, because context the writer cannot see
+    is the thing the locked context rule exists to prevent.
+    """
+    if not request.instruction.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Say what you want this chapter to do. The outline is built "
+                   "from your description, so there is nothing to work from "
+                   "without one.",
+        )
+
+    provider, api_key, model_id = _resolve_model_and_key("structure", request.model_id)
+
+    # The prose, when there is any. Most chapters being planned have none, and
+    # that is the ordinary case rather than a failure -- planning usually comes
+    # first, which is the whole reason this document exists.
+    try:
+        chapter_text = _read_chapter_text(request.project_path, request.chapter_path)
+    except HTTPException:
+        chapter_text = ""
+
+    stem = os.path.splitext(os.path.basename(request.chapter_path))[0]
+    chapter_name = _chapter_title_from_text(chapter_text, fallback=stem)
+
+    parts = [f"Chapter: {chapter_name}", ""]
+    if request.weave_brief.strip():
+        parts += [
+            "FROM YOUR WORLD (established at this point in the story -- use "
+            "these names and facts, and do not invent others):",
+            "=== BEGIN WORLD CONTEXT ===",
+            request.weave_brief.strip(),
+            "=== END WORLD CONTEXT ===",
+            "",
+        ]
+    # THE HEADING IS NOT PROSE. A chapter the writer has only created reads
+    # "# Chapter 7" and nothing else, which is the ordinary state of a chapter
+    # being planned. Sending that as "what is already written" hands the model
+    # a block with no information in it and invites it to treat the chapter as
+    # started when it has not been.
+    body_text = _CHAPTER_HEADING_RE.sub("", chapter_text, count=1).strip()
+    if body_text:
+        # Bounded, and it SAYS it is bounded -- see _clip. A long chapter
+        # would otherwise crowd out the instruction,
+        # which is the input that actually matters here.
+        prose = _clip(body_text, 12_000)
+        parts += [
+            "WHAT IS ALREADY WRITTEN in this chapter (for what has been "
+            "established, not to be summarised back):",
+            "=== BEGIN CHAPTER TEXT ===",
+            prose,
+            "=== END CHAPTER TEXT ===",
+            "",
+        ]
+    if request.existing.strip():
+        parts += [
+            "THE CURRENT OUTLINE. Return the whole revised version, renumbered:",
+            "=== BEGIN CURRENT OUTLINE ===",
+            request.existing.strip(),
+            "=== END CURRENT OUTLINE ===",
+            "",
+        ]
+    # LAST, so it is the freshest thing in front of the model. Everything above
+    # is material; this is the brief.
+    parts += [
+        "WHAT I WANT FROM THIS CHAPTER:",
+        request.instruction.strip(),
+    ]
+
+    try:
+        body = await run_chat(
+            provider      = provider,
+            cache_prompts = _prompt_cache_enabled(provider),
+            api_key       = api_key,
+            model_id      = model_id,
+            system_prompt = build_chapter_outline_prompt(request.content_mode),
+            messages      = [{"role": "user", "content": "\n".join(parts)}],
+            # Structure work, not prose: the writer wants their plan back, not
+            # a surprising one. The same low-randomness setting the reviewing
+            # passes use.
+            temperature   = TEMPERATURE_DEFAULTS["critique"],
+        )
+    except httpx.HTTPStatusError as e:
+        raise _provider_exc(e, provider)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
+
+    return BuildChapterOutlineResponse(
+        outline    = body.strip(),
         model_used = model_id,
     )
 
@@ -1651,6 +1800,31 @@ async def profile_chat(request: ProfileChatRequest):
     #    frontend to persist in history -- see editor_chat.)
     conversation = [{"role": m.role, "content": m.content} for m in request.messages]
 
+    # Standing notes go ahead of the profile, and ahead of the conversation.
+    # Same reasoning as _build_materials_message: this is instruction rather
+    # than material, and instruction that arrives after the material has
+    # already been read is instruction that arrived too late.
+    if len(request.ai_notes) > 20_000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Your AI Notes are too long ({len(request.ai_notes):,} chars, "
+                   f"max 20,000). They are sent with every request, so they need "
+                   f"to stay short.",
+        )
+
+    lead: list[dict] = []
+    if request.ai_notes.strip():
+        lead.append({
+            "role": "user",
+            "content": (
+                "THE WRITER'S STANDING NOTES FOR THIS BOOK (their running "
+                "notes on how the story is being built -- keep these in mind, "
+                "and where they conflict with a habit of yours, they win):\n\n"
+                f"=== BEGIN AI NOTES ===\n{request.ai_notes.strip()}\n"
+                "=== END AI NOTES ==="
+            ),
+        })
+
     if request.profile_content.strip():
         profile_label = request.profile_type.replace("_", " ").title()
         materials = {
@@ -1660,9 +1834,9 @@ async def profile_chat(request: ProfileChatRequest):
                 f"{request.profile_content}"
             ),
         }
-        messages = [materials] + conversation
+        messages = lead + [materials] + conversation
     else:
-        messages = conversation
+        messages = lead + conversation
 
     # Pick temperature based on behavior mode. "interview" deliberately takes
     # the default profile temperature (0.5): it asks focused questions and
@@ -1731,6 +1905,47 @@ class EditorChatRequest(BaseModel):
     # nothing is transmitted until the writer initiates. Empty means the
     # Weave is off, has nothing to say, or the writer emptied it.
     weave_brief: str = ""
+    # THE PLAN FOR THE CHAPTER BEING WRITTEN.
+    #
+    # Sent for Draft and Enhance only, and only for the chapter the writer is
+    # in. It is the one material the prompts have always ASSUMED was here --
+    # both _DRAFT_RESPONSE_RULES and _ENHANCE_RESPONSE_RULES tell the model to
+    # treat "the attached profiles, outline, and location notes as canon", and
+    # until now nothing delivered an outline unless the writer attached the
+    # BOOK outline by hand.
+    #
+    # Its own field rather than a chip, because a chip is something the writer
+    # chose for one turn and this is standing context for the chapter. Its own
+    # field rather than part of weave_brief, because the brief is Thread-shaped
+    # end to end -- every piece in it has an entity_id and a relevance score,
+    # and a document has neither. See docs/chapter-outline-spec.md section 5.2.
+    #
+    # Same rule as the brief: it arrives only because the writer started an AI
+    # action, and they can see it, drop it, or switch it off in the context bar
+    # first. Empty means no outline, or they turned it off.
+    chapter_outline: str = ""
+    # STANDING GUIDANCE FOR THE WHOLE BOOK -- the writer's notes/ai-notes.md.
+    #
+    # Where the chapter outline says what THIS chapter must do, this says what
+    # to keep in mind whatever is being written: decisions taken, things that
+    # changed, habits to avoid. The writer's own prose, in their own file.
+    #
+    # IT ARRIVES AS A FIELD RATHER THAN BEING READ OFF DISK BY THE BACKEND, and
+    # that is the whole reason the locked context rule can be kept. If a route
+    # opened notes/ai-notes.md itself, every endpoint would send it whether or
+    # not it had any way of showing the writer that it had -- and the rule is
+    # that they can inspect it, drop it and switch it off. A field can only be
+    # filled by a surface that has a control for it.
+    #
+    # Its sibling notes/author-notes.md is the opposite promise and is excluded
+    # from AI by name; see PRIVATE_NOTES in codex/scan.py.
+    ai_notes: str = ""
+    # Which chapter is open. Used only by the budget, to find that
+    # chapter's summary when the full prose will not fit -- the swap this
+    # whole mechanism is named after. Optional: without it a chapter that
+    # does not fit is dropped and named rather than summarised, which is
+    # worse but still honest.
+    chapter_filename: str | None = None
     # Reasoning toggle: when True (and the model supports it), OpenRouter is
     # asked for the model's reasoning trace, returned alongside the reply.
     # The frontend only offers the toggle for reasoning-capable models.
@@ -1748,6 +1963,10 @@ class EditorChatResponse(BaseModel):
     # cause of "the AI forgot my character's voice". None when no new
     # materials were sent (or in enhance mode, which resends fresh per turn).
     materials_content: str | None = None
+    # What the budget had to do to make this fit, in the writer's words.
+    # Empty on every ordinary request -- a note on every turn is a note
+    # they learn to stop reading, and then miss the one that mattered.
+    materials_note: str = ""
 
 
 # Absolute ceiling on a single Enhance rewrite, in approximate words. Multiplier
@@ -1817,6 +2036,8 @@ def _build_materials_message(
     is_enhance: bool = False,
     treat_as_canon: bool = True,
     weave_brief: str = "",
+    chapter_outline: str = "",
+    ai_notes: str = "",
 ) -> dict:
     """
     Build a user message containing all variable content (selected text,
@@ -1833,6 +2054,35 @@ def _build_materials_message(
       ENHANCE (the only thing to rewrite) -> the level directive.
     """
     lines = []
+
+    # THE WRITER'S STANDING NOTES, and they go FIRST for a reason that is not
+    # the reason the rest of this order exists.
+    #
+    # Everything below is MATERIAL -- profiles, a plan, a world, a passage --
+    # and it is ordered narrowest-first. AI Notes is not material. It is
+    # guidance about how to read the material and how to help with this
+    # particular book: decisions already taken, things that changed, habits
+    # the writer does not want. That conditions everything after it, so it
+    # cannot come after it.
+    #
+    # NOT gated to Draft and Enhance the way the chapter outline is. The
+    # outline is about one chapter, so it only makes sense while writing that
+    # chapter; standing guidance is standing, and a general question deserves
+    # it as much as a draft does.
+    if ai_notes.strip():
+        lines.append(
+            "THE WRITER'S STANDING NOTES FOR THIS BOOK (their own running "
+            "notes on how the story is being built -- decisions already made, "
+            "things that have changed, and how they want to be helped. Keep "
+            "these in mind for everything below; where they conflict with a "
+            "habit of yours, they win):"
+        )
+        lines.append("=== BEGIN AI NOTES ===")
+        lines.append(ai_notes.strip())
+        lines.append("=== END AI NOTES ===")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
 
     if context_chips:
         if treat_as_canon:
@@ -1853,6 +2103,32 @@ def _build_materials_message(
             lines.append(chip.content.strip())
             lines.append(footer)
             lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    # THE PLAN FOR THIS CHAPTER, between the chips and the world.
+    #
+    # That position is the honest order of what each thing is: a chip is what
+    # the writer chose for this turn, the outline is what this chapter is
+    # supposed to do, and the brief is the world it happens in. A model that
+    # reads them in that order has the writer's intention in front of it
+    # before the standing facts, which is the right way round for prose it is
+    # about to draft.
+    #
+    # Framed as INTENT rather than as fact. It describes something that has
+    # not been written yet, so telling the model to treat it as established
+    # would invite it to write as though the chapter were already done.
+    if chapter_outline.strip():
+        lines.append(
+            "THE PLAN FOR THIS CHAPTER (what the writer intends to happen, in "
+            "order -- follow it as the shape of the chapter, but it is a plan "
+            "rather than finished prose, so it is not something that has "
+            "already been written):"
+        )
+        lines.append("=== BEGIN CHAPTER OUTLINE ===")
+        lines.append(chapter_outline.strip())
+        lines.append("=== END CHAPTER OUTLINE ===")
+        lines.append("")
         lines.append("---")
         lines.append("")
 
@@ -1912,6 +2188,112 @@ def _build_materials_message(
     return {"role": "user", "content": "\n".join(lines)}
 
 
+def _survived(fit, key: str, original: str) -> str:
+    """
+    What to actually send for one material.
+
+    THE `fit.ran` CHECK IS THE WHOLE FUNCTION. When the budget did not run --
+    an unknown window, or a model that would not resolve -- the original
+    value is correct and this route behaves exactly as it did before. When it
+    DID run, `kept` is the whole truth and a missing key means dropped.
+
+    Written first as `fit.kept.get(key, original)`, which reads fine and is
+    wrong in the one case that matters: a material dropped for not fitting
+    fell straight back to the thing that did not fit. The test for the drop
+    order is what caught it.
+    """
+    if not fit.ran:
+        return original
+    return fit.kept.get(key, "")
+
+
+async def _fit_chat_materials(request, outline: str, system_prompt: str,
+                              conversation: list[dict]):
+    """
+    Decide what of this turn actually fits, and what to do about the rest.
+
+    DROP ORDER, least missed first, and the reasoning for each:
+
+      surrounding  the window around an Enhance selection. Labelled
+                   grounding-only and explicitly not-to-be-rewritten in the
+                   prompt, so it is the one material whose absence changes
+                   the answer least.
+      brief        the world. Already budgeted where it is assembled, and the
+                   writer can see and prune it on the context bar -- so if
+                   something has to go, this is the one they have already
+                   been given tools for.
+      passage      the chapter or selection. Not dropped, SWAPPED: a full
+                   chapter has a summary, and that is the roadmap's
+                   "swaps full chapter prose for chapter summaries".
+
+    PINNED, and never dropped:
+
+      ai_notes     standing instruction. Small, and dropping it would silently
+                   revoke guidance the writer believes is in force.
+      outline      the plan for this chapter, sent only on Draft and Enhance,
+                   which are the passes that cannot do their job without it.
+
+    Chips are deliberately NOT in this list. The writer attached them by hand
+    for this turn; dropping something they chose, on a request they are
+    watching, is worse than a request that is refused and says why. They are
+    counted against the budget as spent, so the droppable material shrinks
+    around them.
+    """
+    from app.ai.context_window import context_window
+    from app.ai.materials_budget import FitResult, Material, fit_materials
+    from app.codex.context import Budget, estimate_tokens
+
+    passage = request.text_content or ""
+
+    # WHAT MODEL, AND HOW BIG. An unknown window means do nothing: the old
+    # behaviour, unchanged, with the flat caps still underneath.
+    try:
+        provider, api_key, model_id = _resolve_model_and_key(
+            _editor_chat_role(request.category), request.model_id)
+        window = await context_window(provider, api_key, model_id)
+    except Exception:                              # noqa: BLE001 - see below
+        # A model that cannot be resolved is a problem the real request is
+        # about to raise properly. Budgeting is not the place to report it.
+        return FitResult()
+
+    if not window:
+        return FitResult()
+
+    # Room already committed before any of this is asked to fit. The
+    # conversation so far is the big one and is easy to forget -- it grows
+    # every turn and is never trimmed.
+    history_tokens = sum(estimate_tokens(m.get("content") or "")
+                         for m in conversation)
+    chips_tokens = sum(estimate_tokens(c.content) for c in request.context_chips)
+
+    budget = Budget(
+        model_context_limit=window,
+        system_prompt_tokens=estimate_tokens(system_prompt),
+        fixed_request_overhead=history_tokens,
+        pinned_tokens=chips_tokens,
+    )
+
+    materials: list[Material] = [
+        Material(key="surrounding", label="the text around your passage",
+                 text=request.surrounding_context or ""),
+        Material(key="brief", label="your world context",
+                 text=request.weave_brief or ""),
+        Material(key="passage", label="your chapter",
+                 text=passage,
+                 swap_text=_chapter_summary_for(request)
+                 if request.is_full_chapter else "",
+                 swap_label="its summary"),
+        Material(key="outline", label="this chapter's plan",
+                 text=outline, pinned=True),
+        Material(key="ai_notes", label="your AI Notes",
+                 text=request.ai_notes or "", pinned=True),
+    ]
+    # Nothing to weigh is not the same as nothing to send.
+    materials = [m for m in materials if m.text.strip()]
+
+    return fit_materials(materials, budget)
+
+
 @router.post("/editor-chat", response_model=EditorChatResponse)
 async def editor_chat(request: EditorChatRequest):
     """Writing Companion chat endpoint for the main editor panel."""
@@ -1952,6 +2334,23 @@ async def editor_chat(request: EditorChatRequest):
                    f"context panel, or switch it off for this turn."
         )
 
+    # AI Notes is sent on EVERY turn, so an oversize one is not a single
+    # expensive request -- it is every request from now on. Capped here from
+    # the start rather than left for the budget work, because that is the
+    # mistake the chapter outline shipped with: a new material with no guard
+    # anywhere, found later by reading rather than by anything failing.
+    #
+    # 20,000 chars is generous for standing guidance (roughly 3,000 words of
+    # notes) and small enough that it cannot crowd out the chapter.
+    if len(request.ai_notes) > 20_000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Your AI Notes are too long ({len(request.ai_notes):,} chars, "
+                   f"max 20,000). They are sent with every request, so they need "
+                   f"to stay short. Move the detail into a profile or a note you "
+                   f"attach when you need it, or switch AI Notes off for now."
+        )
+
     is_enhance = request.category == "enhance"
 
     # 1. System prompt = instructions only (no story text, no chips)
@@ -1982,26 +2381,77 @@ async def editor_chat(request: EditorChatRequest):
     #    frontend persists the echoed materials into its chat history as a
     #    hidden message, so "already sent" genuinely means "already in the
     #    conversation the model sees" -- not "vanished after one turn".
+    # NOT THE STRUCTURED REVIEW PASSES. Readability, Structure and Context
+    # are reading prose that exists -- how it reads, how it is built,
+    # whether it fits -- and the plan for a chapter is not evidence about
+    # any of those. Sending it would cost the writer tokens on every pass
+    # to tell the model something it has no use for. Same shape as
+    # WEAVE_BRIEF_PASS on the editor-pass route: a material belongs to the
+    # passes that read it.
+    #
+    # PLAIN CHAT WAS ADDED IN v2.0.6, and the reason is that the Chapter
+    # Outline now has the chat panel beside it. A writer looking at their
+    # plan and asking "does this hold together?" was talking to a model
+    # that could not see the thing on screen -- which is not a chat panel,
+    # it is a chat panel-shaped disappointment. Open conversation is the
+    # one category where the plan IS the likely subject.
+    #
+    # It stays inspectable: the context bar shows the row, its token cost
+    # and an off switch remembered per book, so this cannot become a cost
+    # the writer cannot see or stop.
+    outline_for_this_turn = (
+        request.chapter_outline
+        if request.category in ("draft", "enhance", "chat") else "")
+
     has_new_materials = (
         bool(request.text_content.strip())
         or bool(request.context_chips)
         or bool(request.surrounding_context.strip())
         or bool(request.weave_brief.strip())
+        or bool(outline_for_this_turn.strip())
+        # Standing notes alone are enough. Same lesson as the brief and the
+        # outline before it: leave a material out of this check and it is
+        # silently dropped on any turn where nothing else happens to be new.
+        or bool(request.ai_notes.strip())
     )
 
     conversation = [{"role": m.role, "content": m.content} for m in request.messages]
 
+    # ── Make it fit, and say so ──────────────────────────────────────────
+    #
+    # Engages automatically and ONLY when the model's window is known and
+    # the request would overflow it. An unknown window (every local model)
+    # leaves the old behaviour exactly as it was: acting on a number we do
+    # not have would be guessing with the writer's prose, and the flat caps
+    # below are still there as backstops.
+    fit = await _fit_chat_materials(request, outline_for_this_turn,
+                                    system_prompt, conversation)
+    if fit.refused:
+        # A REAL REFUSAL FROM THE ENDPOINT, not a frontend convention. The
+        # Weave's refusal is enforced by one line in WeaveContextBar, and
+        # editor-pass and revise-suggestion have no UI in front of them at
+        # all -- so this one has to be a status code.
+        raise HTTPException(status_code=400, detail=fit.refusal)
+
     materials_content: str | None = None
     if has_new_materials:
         materials = _build_materials_message(
-            text_content        = request.text_content,
-            is_full_chapter     = request.is_full_chapter,
+            # Each of these takes what SURVIVED the budget -- see _survived.
+            text_content        = _survived(fit, "passage", request.text_content),
+            # A chapter sent as its SUMMARY is not a full chapter any more,
+            # and saying it is would have the prompt frame a paragraph as
+            # the whole thing.
+            is_full_chapter     = request.is_full_chapter and
+                                  "passage" not in dict(fit.swapped),
             context_chips       = request.context_chips,
-            surrounding_context = request.surrounding_context,
+            surrounding_context = _survived(fit, "surrounding",
+                                            request.surrounding_context),
             enhance_level       = request.enhance_level,
             is_enhance          = is_enhance,
             treat_as_canon      = request.treat_attachments_as_canon,
-            weave_brief         = request.weave_brief,
+            weave_brief         = _survived(fit, "brief", request.weave_brief),
+            chapter_outline     = _survived(fit, "outline", outline_for_this_turn),
+            ai_notes            = _survived(fit, "ai_notes", request.ai_notes),
         )
         # Insert the materials just BEFORE the newest user message rather than
         # at the front of the whole conversation. Turn 1 is identical either
@@ -2057,8 +2507,10 @@ async def editor_chat(request: EditorChatRequest):
     except httpx.RequestError as e:
         raise HTTPException(status_code=503, detail=f"Could not reach {provider.label}: {e}")
 
-    return EditorChatResponse(reply=reply, model_used=model_id, reasoning=reasoning,
-                              materials_content=materials_content)
+    return EditorChatResponse(reply=reply, model_used=model_id,
+                              reasoning=reasoning,
+                              materials_content=materials_content,
+                              materials_note=fit.note())
 
 
 # ── Editor Pass (Inline Overlay Feedback) ─────────────────────────────────────
@@ -2111,6 +2563,16 @@ class EditorPassRequest(BaseModel):
     # POST /api/codex/context, which sends nothing anywhere, and arriving here
     # only because the writer pressed a button.
     weave_brief:      str = ""
+    # STANDING NOTES, on every pass rather than one of them.
+    #
+    # Unlike the brief above, this is not scoped to a single pass, and the
+    # reason is what the Advisor is FOR. It reports things it believes are
+    # wrong, and the most useful thing a writer can tell it is which of those
+    # are deliberate: an unreliable narrator, fragments used on purpose, a
+    # character who is meant to sound stilted. Withholding that from the
+    # check that raises the finding would be withholding it from the one
+    # place it prevents a wrong answer.
+    ai_notes:         str = ""
 
 
 class EditorIssueModel(BaseModel):
@@ -2278,11 +2740,20 @@ async def editor_pass(request: EditorPassRequest):
                    f"world context off for this pass.",
         )
 
+    if len(request.ai_notes) > 20_000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Your AI Notes are too long ({len(request.ai_notes):,} chars, "
+                   f"max 20,000). They are sent with every request, so they need "
+                   f"to stay short.",
+        )
+
     materials = _build_materials_message(
         text_content    = request.chapter_text,
         is_full_chapter = not request.is_selection,
         context_chips   = request.context_chips,
         weave_brief     = weave_brief,
+        ai_notes        = request.ai_notes,
     )
     messages = [materials]
 
@@ -2338,6 +2809,10 @@ class ReviseSuggestionRequest(BaseModel):
     model_id:           str | None = None
     content_mode:       str = "general"
     project_path:       str | None = None
+    # Standing notes. A revision is prose the writer will read straight away,
+    # so voice guidance ("no semicolons", "she never swears") pays for itself
+    # here more visibly than anywhere else.
+    ai_notes:           str = ""
 
 
 class ReviseSuggestionResponse(BaseModel):
@@ -2362,6 +2837,14 @@ async def revise_suggestion(request: ReviseSuggestionRequest):
     if not request.quote.strip():
         raise HTTPException(status_code=400, detail="Quote is required.")
 
+    if len(request.ai_notes) > 20_000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Your AI Notes are too long ({len(request.ai_notes):,} chars, "
+                   f"max 20,000). They are sent with every request, so they need "
+                   f"to stay short.",
+        )
+
     system_prompt = build_revise_suggestion_system_prompt(
         modifier     = request.modifier,
         content_mode = request.content_mode,
@@ -2382,6 +2865,7 @@ async def revise_suggestion(request: ReviseSuggestionRequest):
         text_content    = materials_text,
         is_full_chapter = False,
         context_chips   = request.context_chips,
+        ai_notes        = request.ai_notes,
     )
 
     try:
@@ -2412,3 +2896,160 @@ async def revise_suggestion(request: ReviseSuggestionRequest):
     cleaned = sanitize(cleaned.strip())
 
     return ReviseSuggestionResponse(suggestion=cleaned, model_used=model_id)
+
+
+# ── The recap that stands in for older turns ─────────────────────────────────
+
+# How many of the most recent VISIBLE messages are always sent word for word.
+#
+# Six is three exchanges, which is about as far back as a follow-up ("no, the
+# other one") can reasonably point. Everything older is what the recap covers.
+# Too small and the writer feels the conversation lurch; too large and the
+# recap saves nothing, which is the whole reason it exists.
+_RECAP_KEEP_VERBATIM = 6
+
+# Below this there is nothing worth compressing, and a request to find that
+# out would cost the writer money to be told so.
+_RECAP_MIN_MESSAGES = 10
+
+
+class ChatRecapRequest(BaseModel):
+    project_path: str
+    chat_id:      str
+    model_id:     str | None = None
+    content_mode: str = "general"
+
+
+class ChatRecapResponse(BaseModel):
+    recap:         str
+    # An index into the STORED message array.
+    recap_through: int
+    # The same cut counted in VISIBLE messages only, which is what a
+    # reopened panel actually holds -- it drops the hidden materials
+    # descriptors on the way in, so the two indices differ by however many
+    # of those there were. Returned rather than re-derived on the frontend,
+    # because re-deriving it means copying _RECAP_KEEP_VERBATIM into a
+    # second language and slicing the wrong half the day one of them moves.
+    recap_visible_through: int = 0
+    # True when nothing was bought -- either the conversation is short enough
+    # to send whole, or a recap was already paid for and is being reused.
+    reused:        bool
+    model_used:    str | None = None
+
+
+@router.post("/chat-recap", response_model=ChatRecapResponse)
+async def chat_recap(request: ChatRecapRequest):
+    """
+    Compress the older half of a saved conversation so it can be resumed.
+
+    WHY THIS IS BOUGHT ON RESUME AND THEN KEPT.
+
+    Generating it when the conversation is put away would buy a recap for
+    every session the writer never reopens, and most are never reopened.
+    Generating it on every resume would re-buy what they already paid for,
+    which this codebase treats as a rule rather than a preference (see
+    codex/findings.py). So: once, at the first moment it is actually needed,
+    and stored in the session file from then on.
+
+    It EXTENDS rather than rebuilds. A second resume recaps the turns added
+    since the last one and folds the previous recap in as the opening context,
+    so the older material is never re-read and never re-charged.
+
+    Writes only to the session file. It does not touch the manuscript, the
+    Weave, or any of the four AI-writable fields.
+    """
+    root = validate_project_path(request.project_path)
+    chat = load_chat(root, request.chat_id)
+    if chat is None:
+        raise HTTPException(status_code=404,
+                            detail="That conversation could not be opened.")
+
+    messages = chat.get("messages") or []
+    visible = [(i, m) for i, m in enumerate(messages) if not m.get("hidden")]
+
+    # Nothing to gain. Said as a normal answer rather than an error: the
+    # caller asks before it knows how long the conversation is.
+    if len(visible) < _RECAP_MIN_MESSAGES:
+        return ChatRecapResponse(
+            recap=chat.get("recap", ""),
+            recap_through=int(chat.get("recap_through") or 0),
+            recap_visible_through=int(chat.get("recap_visible_through") or 0),
+            reused=True)
+
+    # Everything except the last few exchanges. `cut` is an index into the
+    # STORED array, so the caller can slice messages directly by it.
+    cut = visible[-_RECAP_KEEP_VERBATIM][0]
+    visible_cut = len(visible) - _RECAP_KEEP_VERBATIM
+    previous_through = int(chat.get("recap_through") or 0)
+    previous_recap = str(chat.get("recap") or "")
+
+    # Already covers everything it would cover. Nothing new has been said
+    # since the last recap, so there is nothing to buy.
+    if previous_recap and previous_through >= cut:
+        return ChatRecapResponse(
+            recap=previous_recap, recap_through=previous_through,
+            recap_visible_through=int(chat.get("recap_visible_through") or 0),
+            reused=True)
+
+    provider, api_key, model_id = _resolve_model_and_key(
+        "long_context", request.model_id)
+
+    lines: list[str] = []
+    if previous_recap:
+        # FOLDED IN RATHER THAN RE-READ. The turns it covers are not sent
+        # again -- the writer already paid to have them compressed once.
+        lines += [
+            "NOTES FROM EARLIER IN THIS CONVERSATION (already summarised once "
+            "-- carry anything still relevant into your new summary):",
+            previous_recap.strip(),
+            "",
+            "---",
+            "",
+        ]
+
+    lines.append("THE CONVERSATION TO SUMMARISE:")
+    lines.append("")
+    for i, m in enumerate(messages):
+        if i >= cut or m.get("hidden"):
+            continue
+        if i < previous_through:
+            continue
+        who = "WRITER" if m.get("role") == "user" else "ASSISTANT"
+        text = str(m.get("content") or "").strip()
+        if text:
+            lines.append(f"{who}: {text}")
+            lines.append("")
+
+    reply = await run_chat(
+        provider      = provider,
+        cache_prompts = _prompt_cache_enabled(provider),
+        api_key       = api_key,
+        model_id      = model_id,
+        system_prompt = build_chat_recap_prompt(request.content_mode),
+        messages      = [{"role": "user", "content": "\n".join(lines)}],
+        # critique temperature (0.3): this is a faithful compression, not a
+        # piece of writing. Invention here becomes canon the assistant then
+        # acts on. Named "critique" rather than "extraction" since v2.0.2 --
+        # same value, clearer semantics.
+        temperature   = TEMPERATURE_DEFAULTS["critique"],
+    )
+
+    recap = sanitize(str(reply or "").strip())
+    if not recap:
+        # An empty answer must not be stored as "this conversation contained
+        # nothing", which would silently erase the older half of it on the
+        # next turn. Send everything instead.
+        raise HTTPException(
+            status_code=502,
+            detail="The model returned an empty summary. The whole "
+                   "conversation will be sent instead.",
+        )
+
+    chat["recap"] = recap
+    chat["recap_through"] = cut
+    chat["recap_visible_through"] = visible_cut
+    save_chat(root, chat)
+
+    return ChatRecapResponse(recap=recap, recap_through=cut,
+                             recap_visible_through=visible_cut,
+                             reused=False, model_used=model_id)

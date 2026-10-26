@@ -593,7 +593,12 @@ function relOptionLabel(rel: Relation): string {
         `${API_BASE}/api/codex/tie?project_path=${encodeURIComponent(projectPath)}`
         + `&src_id=${encodeURIComponent(tie.src_id)}`
         + `&rel=${encodeURIComponent(tie.rel)}`
-        + `&dst_id=${encodeURIComponent(tie.dst_id)}`,
+        + `&dst_id=${encodeURIComponent(tie.dst_id)}`
+        // THIS STAGE, not every stage of the relationship. Without `at` the
+        // backend removes them all, so taking one row off this list took
+        // every other chapter's version of the same relationship with it.
+        // Empty for an undated stage, which means that stage alone (#31).
+        + `&at=${encodeURIComponent(tie.at ?? "")}`,
         { method: "DELETE" });
       if (!response.ok) {
         const body = await response.json();

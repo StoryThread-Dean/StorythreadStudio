@@ -131,34 +131,45 @@ Every project is a folder the user owns. Storythread does not touch anything out
 MyNovel/
   project.json                     project settings
   manuscript/                      chapter .md files (one chapter per file)
-    structure.json                 acts + chapter reading order (only once acts are used)
+    structure.json                 reading order: front matter, acts, unassigned,
+                                   back matter. Written once the writer uses acts
+                                   OR adds a prologue or epilogue
+    prologue.md                    front matter: no number, outside the acts, not
+                                   counted as a chapter. Its words still count
     01-chapter-1.md
     02-the-storm.md
+    epilogue.md                    back matter, on the same terms
   notes/                           outline, style guide, themes
     outline.md
     style-guide.md
     themes.md
-  profiles/                        canonical profiles for this book
-    characters/
-    relationships/
-    locations/
-    lore/
-    chapters/                      legacy (Phase 2 profile-based summaries); still scaffolded
-    scenes/                        legacy; current summaries live in summaries/ below
-    arcs/                          (series projects only) per-book overrides
-      characters/
-      relationships/
+    author-notes.md                the writer's own room. Excluded from every
+                                   AI-facing corpus BY NAME (PRIVATE_NOTES in
+                                   codex/scan.py); theirs to attach by hand
+    ai-notes.md                    the exact opposite, and next to it on
+                                   purpose: standing guidance sent with EVERY
+                                   AI request. Inspectable and switchable on
+                                   the context bar, remembered per book
+  outlines/
+    chapters/<chapter-stem>.md     the PLAN for a chapter: what has to happen,
+                                   in order. The only per-chapter document that
+                                   looks forward; the two below look back.
+                                   Plain Markdown, never parsed
   summaries/
     chapters/                      one summary per chapter
     scenes/<chapter-stem>/         per-scene summaries (+ optional ## Beats section)
       scene-01.md
       scene-02.md
   codex/                           the Weave: one linked, time-aware world model
-    types.json                     which kinds of thing this world has, and which
-                                   connections are meaningful between them
-    characters/  locations/  lore/
+    characters/  locations/  lore/  events/
+                                   scaffolded at creation -- the four kinds the
+                                   sidebar shows even while empty
+    types.json                     only once the writer customises a kind; the
+                                   shipped kinds are the fallback, so a project
+                                   that has not customised has no such file
     factions/  religions/  governments/  deities/  creatures/  cultures/
-    objects/  concepts/  events/
+    objects/  concepts/  languages/
+                                   created on first entry of that kind
     relationships/                 retired kind: existing entries still open
                                    and save, no new ones are made. Who a
                                    character is to everyone else lives on that
@@ -168,9 +179,83 @@ MyNovel/
     app.db
     ui-state.json                  per-book remembered UI state (sidebar collapse etc.)
     weave/runs/<run-id>.json       Weaving sessions -- NOT a cache, see below
+    chats/<chat-id>.json           saved conversations -- NOT a cache either, and
+                                   for the same reason: a reply was paid for in
+                                   tokens and is not derivable from the Markdown.
+                                   Hidden materials turns are stored as a
+                                   DESCRIPTOR of what was attached, never the
+                                   text -- which keeps the files small and stops
+                                   a resumed session replaying a stale chapter
     cache/
     logs/
 ```
+
+**`profiles/` is not in that tree, and that is the point.** A project created
+by this version is born in the Weave: it gets `codex/` and never gets a
+`profiles/` folder at all. An older project keeps the one it has --
+
+```text
+  profiles/                        LEGACY. Never created by this version; still
+                                   read, edited and exported for every project
+                                   that has one and has not converted
+    characters/  relationships/  locations/  lore/
+    chapters/  scenes/               Phase 2 summaries; superseded by summaries/
+    arcs/                            per-book overrides; the editor for these is
+                                     gone, and a conversion absorbs them as facts
+```
+
+-- and conversion stays an offer rather than a toll gate. Which folder a given
+project uses is decided in ONE place, `entries_home()` in
+`backend/app/codex/migrate.py`, and every surface asks it rather than deciding
+for itself. `project.json` carries `codex_native: true` on a project born here;
+that flag is a positive claim only, and no value of it can send a project back
+to `profiles/`. See "Where a project's entries live" below.
+
+### Where a project's entries live
+
+Two folders can hold a world, and exactly one function decides which one a
+given project uses: `entries_home()` in `backend/app/codex/migrate.py`. Every
+surface asks it -- the sidebar, the Profile Builder, the chip picker, exports,
+the relationship scan, the completion gauge. That is not tidiness: the sidebar
+counting one folder while the editor read the other is a bug the writer met, as
+thirteen Characters in the tree, twelve on the map, and twelve of them
+impossible to open.
+
+Its rules, in order, and the order is the design:
+
+| # | When | Home |
+|---|---|---|
+| 1 | A conversion journal survived, so a run died partway | `profiles/` |
+| 2 | `codex_migration_version` is set -- it was converted | `codex/` |
+| 3 | `codex_native` is set -- it was born in the Weave | `codex/` |
+| 4 | `profiles/` holds any `.md`, at any depth | `profiles/` |
+| 5 | Anything else | `codex/` |
+
+**Rule 1 stays first** because `profiles/` is what a restore puts back, and
+writing into a half-converted `codex/` is the one thing that could make that
+restore lossy.
+
+**Rule 3 has to sit above rule 4.** Rule 4 is an inference drawn from counting
+files; rule 3 is a statement the project makes about itself, and a statement
+outranks an inference about the same question. Before the flag existed, a
+project created in the Weave reached `codex/` only by rule 5 -- by nobody
+having put a file in `profiles/` yet -- so one stray `.md` appearing there
+silently relocated the writer's entire world, and nothing errored, because "you
+have no characters" is an ordinary thing for this app to say.
+
+**`codex_native` is a positive claim only.** It is read as a plain truth test,
+so a hand-edited `false` falls through exactly as an absent key does, and there
+is deliberately no value of it that means `profiles/`. It is also only ever
+written when `profiles/` holds nothing, so it can never be what hides existing
+work. If work turns up there later, `GET /api/codex/health` reports it as
+`elsewhere` and the screen says so out loud.
+
+`migration_state()` reports `incomplete` / `done` / `native` / `none` from the
+same three signals. `native` is a fourth value rather than a second meaning for
+`done` because `done` claims a conversion RAN -- a backup on disk, a report to
+open -- and because `WeaveScreen` renders the conversion panel for `none`, so a
+new project reporting it was shown an offer to convert a world it did not have
+instead of the map.
 
 ### The Weave (`codex/`)
 
@@ -272,11 +357,22 @@ The manuscript hierarchy is Story > Act > Chapter > Scene > Beat:
 Renaming a chapter rewrites its `# Heading` AND renames the file so the slug
 matches the title (the numeric `NN-` prefix is preserved). The backend
 cascades everything keyed to the old filename stem: the chapter summary
-file, the scene-summary folder, the structure.json entry (in place, so act
-membership and position survive), and writing-progress history rows. Steps
-after the file rename are fail-soft with per-step flags in the response.
+file, the scene-summary folder, the chapter outline, the structure.json entry
+(in place, so act membership and position survive), and writing-progress
+history rows. Steps after the file rename are fail-soft with per-step flags in
+the response, and "nothing to move" counts as success -- most chapters have no
+outline and must not report a failed step for it.
 
-For a multi-book series, an additional `series.json` and shared `series-profiles/` folder live one level above each book.
+For a multi-book series, a `series.json` and a shared `profiles/` folder live
+one level above each book. (This said `series-profiles/`, which exists in no
+code; the folder `POST /api/series/create` actually makes is `profiles/`.)
+
+**A series folder keeps that legacy shape on purpose.** It has no
+`project.json`, so it can never be converted and can never answer "which home?"
+-- and the editor's chip picker reads it through `/api/profiles` for exactly
+that reason. The ruling that a new project is born in `codex/` was about BOOK
+projects; moving the shared series world is a separate change with a live
+reader to repoint.
 
 ## project.json
 
@@ -361,6 +457,10 @@ GET    /note                   POST   /note
 GET    /outline/presets        GET    /outline/worksheet
 GET    /chapter-summary        POST   /chapter-summary        DELETE /chapter-summary
 GET    /chapter-summaries
+GET    /chapter-outline         POST   /chapter-outline        DELETE /chapter-outline
+GET    /chapter-outlines        (the plan for each chapter; see chapter-outline-spec.md)
+                                 the ONLY writer of an outline file is POST above:
+                                 Build Chapter Outline proposes and never writes
 GET    /scene-summary          POST   /scene-summary          DELETE /scene-summary
 GET    /scene-summaries        DELETE /scene-summaries
 GET    /all-scene-summaries
@@ -381,12 +481,21 @@ POST   /create
 POST   /save
 DELETE /profile
 POST   /import
-GET    /merged                 (series: canonical + arc overlay)
-GET    /arc/list
-GET    /arc/profile
-POST   /arc/create
-POST   /arc/save
 ```
+
+**This whole router is the LEGACY dialect**, serving projects that still keep
+their world in `profiles/`. A project created by this version never reaches it;
+the Profile Builder asks `GET /api/codex/health` where the entries live and
+talks to `/api/codex` instead. See `app/src/screens/profileSource.ts`.
+
+**Five arc routes went in the same change that stopped scaffolding `profiles/`:**
+`/merged`, `/arc/list`, `/arc/profile`, `/arc/create` and `/arc/save`, plus
+`merge_profile_with_arc`. They were built, tested, and wired to no control at
+all -- nothing in the app could put a file in `profiles/arcs/`, so every book in
+a series got two empty folders and the "canonical + arc overlay" the docs
+described never once ran. `docs/weave-spec.md` had already ruled they should go
+when the route calling them went. An existing project's arc files are still
+read: a conversion absorbs each one as an unplaced fact (`_absorb_arcs`).
 
 **A heading the section list does not recognise is preserved, not dropped.**
 `_parse_profile_markdown` collects headings as an ordered list of pairs rather
@@ -412,12 +521,33 @@ POST   /profile-chat           (Profile Builder companion)
 POST   /generate-usage-preview
 POST   /trim-trait
 POST   /audit-importance
-POST   /generate-section-summary
+POST   /generate-quick-overview (Side/Background character: Generate Overview)
 POST   /generate-full-summary
 POST   /generate-chapter-summary
 POST   /split-chapter-scenes
 POST   /generate-scene-summary
+POST   /build-chapter-outline  (Structural role; PROPOSES an outline, writes nothing)
+POST   /chat-recap             (Long-context role; bought once per conversation,
+                                extended rather than rebuilt, an empty answer is
+                                a 502 and never stored)
 ```
+
+`/generate-section-summary` was removed in v2.0.6 with the per-section summary
+tiles: it cost one request per section and its output reached no model.
+
+### Chats — `/api/chats`
+```
+GET    ""                      a book's saved conversations, newest first
+GET    /one                    one conversation
+PUT    /one                    save; the FIRST save mints a chat_id and returns it
+DELETE /one
+POST   /rename
+```
+
+Stored at `.storythread/chats/<chat-id>.json` -- NOT in `app.db`, because a
+transcript was paid for and cannot be rebuilt from anything. A hidden materials
+turn is stored as a descriptor rather than its text, so a reopened conversation
+rebuilds its materials from today's files. See `docs/long-context-spec.md`.
 
 ### Settings — `/api/settings`
 ```
@@ -507,7 +637,9 @@ POST   /entity  /thread/new    save; create an empty Thread from a name
 DELETE /entity
 POST   /tie   PATCH /tie   DELETE /tie
                                DELETE takes an optional `at`: without it every
-                               state of that connection goes, with it only one
+                               state of that connection goes, with it only one.
+                               `at=""` is the UNDATED state alone (#31) -- a
+                               screen removing one row always sends `at`
 POST   /fact                   PATCH /fact   DELETE /fact
 
 Time
@@ -515,6 +647,8 @@ GET    /anchors                chapters + scenes with ids, in reading order
 GET    /resolve                a Thread AS OF an anchor
 GET    /graph                  nodes + edges at an anchor, spoiler-aware
 POST   /place                  which chapters an entry appears in (the WHOLE list, not a delta)
+GET    /planned-in             chapters whose OUTLINES name an entry -- derived on
+                               read, never cached
 
 Weaving
 POST   /scan                   the free deterministic pass -- no role, no model, no cost
@@ -644,6 +778,8 @@ The recent-projects list is written the same way as `settings.json`, and for the
 A note on the custom palettes, because the obvious home is the wrong one: a writer's own theme (`custom_theme`, and `audiobook_custom_theme` for the Converter) lives in `settings.json` rather than `app.db`. `app.db` is per-project, is documented as safe to delete, and holds only what can be rebuilt from Markdown. A palette is global, is not derivable from anything, and losing an evening of colour choices to a cache clear would be a real loss. See [`appearance-spec.md`](appearance-spec.md).
 | Weave graph index, progress log, model registry | Per-project `.storythread/app.db` (rebuildable) |
 | Weaving answers (applied / deferred / retired / muted) | `.storythread/weave/runs/*.json` -- NOT rebuildable, never in app.db |
+| Saved conversations (both chats) | `.storythread/chats/*.json` -- NOT rebuildable, never in app.db, same argument |
+| The writer's standing guidance to the AI | `notes/ai-notes.md` -- their own Markdown, sent with every AI request |
 | Project state (current chapter, scroll, etc.) | In-memory only; no autosave |
 
 ## AI write boundary
@@ -651,7 +787,7 @@ A note on the custom palettes, because the obvious home is the wrong one: a writ
 AI may only write directly to these designated fields in Markdown:
 
 - `ai_profile_summary`
-- `ai_section_summary`
+- `ai_section_summary` -- retired in v2.0.6: nothing generates it any more; an existing value is kept on resave and still exports
 - `chapter_summary`
 - `scene_summary`
 
