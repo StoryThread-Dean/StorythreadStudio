@@ -1322,6 +1322,14 @@ async def delete_tie(project_path: str = Query(...), src_id: str = Query(...),
     Omitting the anchor still removes every state, deliberately: a writer who
     wants the whole relationship gone should not have to delete it a chapter at
     a time. The anchor NARROWS; its absence means all of them.
+
+    AN EMPTY ANCHOR (`at=""`) IS THE UNDATED STATE ALONE, and it is not the
+    same as an absent one. An undated stage's address is "no anchor", so a
+    screen that left `at` off when a stage had none was asking for every stage
+    -- removing "rivals, all the way through" took "rivals from chapter 3" with
+    it (issue #31). A screen removing ONE stage always sends `at`, empty or
+    not. `?at=` reaches here as "" rather than None, and `"" or None` matches
+    exactly the stages stored with no anchor.
     """
     project_path = validate_project_path(project_path)
     registry = _registry(project_path)

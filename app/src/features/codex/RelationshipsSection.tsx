@@ -460,8 +460,9 @@ export function RelationshipsSection({
     const params = new URLSearchParams({
       project_path: projectPath, src_id: entityId,
       rel: row.savedRel, dst_id: row.savedTargetId,
+      // ALWAYS sent, empty for an undated stage. See removeRow.
+      at: row.savedAt,
     });
-    if (row.savedAt) params.set("at", row.savedAt);
     const response = await fetch(`${API_BASE}/api/codex/tie?${params}`,
                                  { method: "DELETE" });
     if (!response.ok) {
@@ -611,8 +612,12 @@ export function RelationshipsSection({
         rel: row.savedRel, dst_id: row.savedTargetId,
       });
       // The anchor is part of the address: without it, removing one stage of a
-      // relationship removes every stage of it.
-      if (row.savedAt) params.set("at", row.savedAt);
+      // relationship removes every stage of it. And it is sent EVEN WHEN EMPTY
+      // (issue #31): an undated stage's anchor is "", and leaving `at` off for
+      // it asked the backend for every stage -- so removing "rivals, all the
+      // way through" also removed "rivals from chapter 3". `at=""` means the
+      // undated stage alone.
+      params.set("at", row.savedAt);
       await fetch(`${API_BASE}/api/codex/tie?${params}`, { method: "DELETE" });
       await load();
       onChanged?.();

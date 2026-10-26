@@ -496,6 +496,22 @@ describe("removing one", () => {
     expect(posted("DELETE")[0].url).toContain("at=c-1");
   });
 
+  it("removes only the UNDATED stage, not its dated siblings (#31)", async () => {
+    // An undated stage's anchor is empty, and leaving `at` off for it asked
+    // the backend for every stage of that relationship.
+    mockApi([
+      tie({ rel: "rivals", reads_as: "rivals", at: "", why: "always" }),
+      tie({ rel: "rivals", reads_as: "rivals", at: "c-3", why: "worse" }),
+    ]);
+    await open();
+    await openAll();
+    await userEvent.click(screen.getAllByLabelText(/Remove the relationship/)[0]);
+    await waitFor(() => expect(posted("DELETE")).toHaveLength(1));
+    const params = new URL(posted("DELETE")[0].url).searchParams;
+    expect(params.has("at")).toBe(true);
+    expect(params.get("at")).toBe("");
+  });
+
   it("drops an unsaved row without asking the server", async () => {
     mockApi();
     await open();
