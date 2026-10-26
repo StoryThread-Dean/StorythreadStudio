@@ -1419,7 +1419,7 @@ classifier needs is already plumbed (`context_length` at `openrouter.py:157`).
 Content-size awareness exists in exactly one place and **refuses rather than
 routes**: `routers/extractor.py:515-536`.
 
-### Long-context handling: priority pinning + summary swap
+### Long-context handling: priority pinning + summary swap -- SHIPPED in v2.0.6
 
 **SCOPE CORRECTED AND SLICE 1 SHIPPED IN v2.0.6.** Asked for as one item, this
 turned out to be two features sharing a name. The roadmap entry below is about
@@ -1441,8 +1441,11 @@ summary swap, applied to a conversation rather than to a chapter, and which
 therefore proves out the mechanism before slice 4 applies it to prose.
 
 **Slice 4, the budget itself, shipped too, and the whole item is now DONE.**
-`app/ai/materials_budget.py` fits the chat, Draft, Enhance and Advisor paths
-against the model's real window: the world context is dropped first, a chapter
+`app/ai/materials_budget.py` fits the Writing Companion's chat, Draft and
+Enhance requests (`editor-chat`) against the model's real window. **The Smart
+Advisor pass (`editor-pass`) is NOT budgeted** -- it still has only its flat
+caps, which refuse an oversize request rather than fitting it. Extending the
+budget to it is open work, not done work. Within `editor-chat`: the world context is dropped first, a chapter
 too big to send goes as its summary, AI Notes and the chapter plan are pinned,
 and hand-attached chips are never dropped. A swap or a drop is reported in
 `materials_note`; a request that fits says nothing; a request whose pinned
@@ -1462,19 +1465,25 @@ made every local model unrefusable while Ollama trims and answers anyway. And
 the window cache kept a failed lookup forever, so one flaky call at startup
 left a model "unknown" until the app was restarted.
 
-**One thing found while sizing it, and it is worse than the entry says.**
+*The rest of this entry is the analysis written BEFORE the build, kept for
+the reasoning. Every problem it describes in the present tense was fixed in
+v2.0.6 -- the 32,000 default, the silent truncation, the missing budget -- and
+the original plan to pin the Style Guide was not what shipped (AI Notes and the
+chapter outline are pinned; nothing is truncated).*
+
+~~**One thing found while sizing it, and it is worse than the entry says.**
 `weavingApi.ts` defaults `model_context_limit` to 32000 and **no caller
 anywhere passes it**. So the Weave's budget -- the working reference
 implementation this entry is built on -- has never once measured against the
 model the writer actually selected. Every refusal and every "where the room
 went" breakdown was computed against a fictional window. That plumbing is a
 prerequisite for slice 4, not a side task: a budget against a made-up limit is
-worse than a flat cap, because it looks authoritative.
+worse than a flat cap, because it looks authoritative.~~ -- fixed in v2.0.6.
 
-When a request would exceed the model's context window, the materials builder pins Outline + Style Guide first and swaps full chapter prose for chapter summaries before truncating older scene text. Engages automatically; no user toggle.
+~~When a request would exceed the model's context window, the materials builder pins Outline + Style Guide first and swaps full chapter prose for chapter summaries before truncating older scene text. Engages automatically; no user toggle.~~ -- the original plan; see above for what shipped.
 
-**PARTLY BUILT, and the built half is a working reference implementation
-(noted 2026-08-23).** Everything this section describes exists for the Weave's
+**(Pre-build state, 2026-08-23 -- no longer true.)** **PARTLY BUILT, and the
+built half is a working reference implementation.** Everything this section describes exists for the Weave's
 brief and nowhere else: a `Budget` dataclass reserving output / system / user /
 overhead / pinned (`backend/app/codex/context.py:86-120`), a four-rung relevance
 ladder that doubles as prune order (`:60-64`), and `_fit()` splitting required

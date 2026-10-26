@@ -208,6 +208,10 @@ entry while working on a feature, append it under Unreleased.
   waved everything through — and most local servers quietly trim an oversize
   prompt and answer anyway, so the reply looked fine and was built on half your
   book. Unknown is now treated as unknown, and said out loud.
+- **The Profile Extractor says so too.** On a model that does not publish its
+  limit, a run over about 30,000 tokens of manuscript is now refused before
+  anything is sent or spent, rather than sent and quietly cut in half. Run it
+  over fewer chapters, or pick a model whose limit is published.
 - **Two places quietly cut text and did not say so.** A relationship snippet and
   a chapter sent to the outline builder were trimmed silently, which reads to
   the AI as a sentence that just stops. They now say they were trimmed.
@@ -245,12 +249,11 @@ entry while working on a feature, append it under Unreleased.
   of", "sworn enemy of" -- written to the file, read back from it, and dropped
   in between, so the wording was gone when the writer reopened the profile with
   the name and the description still sitting there.
-- **The AI summary boxes are the same size as the rest of the profile.** The
-  Full AI Summary and every section summary rendered a step larger than the
-  Notes, description and trait boxes beside them -- 16px against 14 at the
-  default Interface size, and 28 against 16.6 at Maximum. They follow the
-  Interface size setting the same as before, now in step with their
-  neighbours.
+- **The Full AI Summary box is the same size as the rest of the profile.** It
+  rendered a step larger than the Notes, description and trait boxes beside
+  it -- 16px against 14 at the default Interface size, and 28 against 16.6 at
+  Maximum. It follows the Interface size setting the same as before, now in
+  step with its neighbours.
 - **The window opens the size you left it.** Size, position and whether it was
   maximised are remembered between launches. The 1536x864 in the app's config
   is a first-run default now rather than something re-applied on every start.
@@ -265,6 +268,11 @@ entry while working on a feature, append it under Unreleased.
   sitting next to the one that replaced it. Pointing it at a different
   character was refused outright. Both work now, and if the old connection
   cannot be removed you are told why and nothing is duplicated.
+- **Removing one stage of a relationship no longer removes the others.** If a
+  relationship had an "all the way through" stage and a later one -- rivals
+  from the start, worse from chapter 3 -- removing the first took the second
+  with it. On the connection editor and the Snag fixer, removing ANY stage
+  removed every stage. Now only the one you pointed at goes.
 
 ---
 

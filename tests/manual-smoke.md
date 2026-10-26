@@ -90,10 +90,11 @@ opens it, and is still only OFFERED a conversion; scenario 18 covers that side.
 kinds are the fallback; the file appears only once you customise a kind (rename
 one, add your own). Do not file its absence.
 
-The other ten kinds -- factions, religions, governments, deities, creatures,
-cultures, objects, concepts, languages, relationships -- have no folder yet.
-Each is created the moment you record your first entry of that kind. Do not
-file those as missing.
+The other nine kinds -- factions, religions, governments, deities, creatures,
+cultures, objects, concepts, languages -- have no folder yet. Each is created
+the moment you record your first entry of that kind. Do not file those as
+missing. (Relationships are a retired kind: a new project never gets a folder
+for them, and the app does not offer to create one.)
 
 - [ ] Open **project.json** in a text editor. It contains `"codex_native": true`.
       That line is what stops a stray Markdown file dropped into a `profiles/`
@@ -286,7 +287,8 @@ Steps:
 11. With that chapter open in the editor, look at the world-context bar under
     the attachment chips.
     - [ ] There is a **Chapter outline** row, saying it is being sent, roughly
-          what it costs in tokens, and that it goes with Draft and Enhance.
+          what it costs in tokens, and that it goes with chat, Draft and
+          Enhance.
     - [ ] It is ON without you having done anything.
 12. Turn Draft on and ask for something. Then untick the outline row and ask
     again.
@@ -1369,8 +1371,9 @@ button that has become invisible against the surface behind it.
          text-entry surfaces reach 28px there; if either one cramps or wraps
          badly, say so -- the fix is to hold all three new steps at 24.
    - [ ] Open a character profile at ANY size and look down it. Notes, the
-         section boxes, the trait descriptions, the section AI summaries and
-         the Full AI Summary are all ONE size. The AI boxes were a step larger
+         section boxes, the trait descriptions and the Full AI Summary are
+         all ONE size. (Per-section AI summaries were retired in v2.0.6 -- do
+         not look for them.) The AI boxes were a step larger
          until 2026-09-04, which is what this line is here to catch coming back.
    - [ ] **Icons stay their old size and that is KNOWN.** Lucide icons take a
          pixel `size=` prop and do not scale. At Maximum they look a size
@@ -1558,11 +1561,33 @@ Steps:
 5. Open the other character's page.
    - [ ] The linked connection is there. The typed one is NOT -- it belongs to
          one character and has no second end to appear on.
+6. Back on the first character, open the LINKED relationship, change its
+   one-line reason and press **Update**. Then clear the name box and type a
+   name that has no profile, and press **Update** again.
+   - [ ] The card stays OPEN while you type the new name. (It used to snap
+         shut on the first keystroke, and Update then said "Say who this
+         relationship is with".)
+   - [ ] The row moves to "kept on this page". Leave the profile and come
+         back: the OLD linked connection is gone, not sitting beside the new
+         one. Press the page's **Update** -- it saves.
+7. Record a linked relationship, then pick a DIFFERENT character for it from
+   "Pick from your world..." and press **Update**.
+   - [ ] It saves, now pointing at the new character. The old one is gone
+         from both pages.
+8. **One stage, not all of them.** For one other character, record a
+   relationship left at **All the way through**, then a second of the SAME
+   kind with the SAME person starting **From** a later chapter. Remove the
+   undated one with the bin icon.
+   - [ ] Only that one goes. The later stage is still there after leaving the
+         profile and coming back. (Removing the undated stage used to take
+         every stage of that relationship with it.)
 
 Expected:
 - Recording a connection never costs the writer their unsaved page.
 - A hand-typed relationship survives leaving the profile and coming back,
   wording included.
+- Changing who a relationship is with replaces it rather than duplicating it,
+  and removing one stage never removes another.
 
 ---
 
@@ -1745,8 +1770,8 @@ Expected:
 case. Steps 2 and 6 are the ones that matter -- an ordinary request must be
 completely unchanged, and a local model must not be quietly waved through.
 
-You will need a model with a SMALL published window assigned to Writing (the
-`prose` role) for steps 3 to 5. Something in the 8k-16k range. Put your usual
+You will need a model with a SMALL published window assigned to **Prose** (the
+role Draft and Enhance use; plain chat uses Brainstorming) for steps 3 to 5. Something in the 8k-16k range. Put your usual
 model back afterwards.
 
 Steps:
@@ -1758,7 +1783,7 @@ Steps:
    - [ ] It says "Measured against <your model>" underneath the numbers.
    - [ ] The limit shown is your model's real window, not 32,000. (Before
          v2.0.6 it was always 32,000 whatever you had chosen.)
-3. Assign a small model to Writing in Settings > Model Roles. Turn on Draft on a
+3. Assign a small model to **Prose** in Settings > Model Roles. Turn on Draft on a
    long chapter with a big world context and ask for a few lines.
    - [ ] The reply still arrives.
    - [ ] A note above it says it did not all fit and names what was left out --
@@ -1772,7 +1797,7 @@ Steps:
          you what to do. Nothing was spent -- no reply appears and no tokens
          are used.
    - [ ] Trim the notes back and it works again.
-6. **THE LOCAL CASE.** Assign a local model (Ollama or similar) to Writing.
+6. **THE LOCAL CASE.** Assign a local model (Ollama or similar) to **Prose**.
    - [ ] Everything behaves exactly as it did before this release -- no notes,
          no swaps. The app does not guess at a limit it cannot look up.
    - [ ] In the context bar's **Where the room went**, it says the model does
@@ -1789,6 +1814,34 @@ Expected:
 - Ordinary requests are untouched and silent.
 - Anything the app leaves out or swaps, it says.
 - Nothing is ever quietly cut in half.
+
+---
+
+## 37. Every kind in one editor
+
+**Touches:** Profile Builder routing for the eight kinds that used to open in
+the Weave's simpler editor, and the section-name healing that was keyed by
+section id alone. Needs a project in the Weave.
+
+**Why this is here.** Creatures, Cultures, Factions, Religions, Ruling
+Authorities, Deities, Objects and Languages opened in a different editor with
+no Profile Chat. And a Creature's Appearance was filed under a Location's
+heading on save, so the box came back empty while the words sat on disk under
+the wrong name -- reported as "Appearance doesn't appear after saved and
+coming back".
+
+Steps:
+1. Create a Creature. Write something in **Appearance** and save.
+   - [ ] It opens in the same editor as a Character, with the Profile Chat.
+2. Open another entry, then come back to the Creature.
+   - [ ] Appearance still shows what you wrote.
+3. Repeat steps 1-2 with an Object (Appearance, Significance) and a Concept
+   (Details).
+   - [ ] Each keeps its words after leaving and coming back.
+
+Expected:
+- Every kind opens in one editor with one look and one chat.
+- A section a kind owns is never filed under another kind's heading.
 
 ---
 

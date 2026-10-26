@@ -521,12 +521,33 @@ POST   /profile-chat           (Profile Builder companion)
 POST   /generate-usage-preview
 POST   /trim-trait
 POST   /audit-importance
-POST   /generate-section-summary
+POST   /generate-quick-overview (Side/Background character: Generate Overview)
 POST   /generate-full-summary
 POST   /generate-chapter-summary
 POST   /split-chapter-scenes
 POST   /generate-scene-summary
+POST   /build-chapter-outline  (Structural role; PROPOSES an outline, writes nothing)
+POST   /chat-recap             (Long-context role; bought once per conversation,
+                                extended rather than rebuilt, an empty answer is
+                                a 502 and never stored)
 ```
+
+`/generate-section-summary` was removed in v2.0.6 with the per-section summary
+tiles: it cost one request per section and its output reached no model.
+
+### Chats — `/api/chats`
+```
+GET    ""                      a book's saved conversations, newest first
+GET    /one                    one conversation
+PUT    /one                    save; the FIRST save mints a chat_id and returns it
+DELETE /one
+POST   /rename
+```
+
+Stored at `.storythread/chats/<chat-id>.json` -- NOT in `app.db`, because a
+transcript was paid for and cannot be rebuilt from anything. A hidden materials
+turn is stored as a descriptor rather than its text, so a reopened conversation
+rebuilds its materials from today's files. See `docs/long-context-spec.md`.
 
 ### Settings — `/api/settings`
 ```
@@ -616,7 +637,9 @@ POST   /entity  /thread/new    save; create an empty Thread from a name
 DELETE /entity
 POST   /tie   PATCH /tie   DELETE /tie
                                DELETE takes an optional `at`: without it every
-                               state of that connection goes, with it only one
+                               state of that connection goes, with it only one.
+                               `at=""` is the UNDATED state alone (#31) -- a
+                               screen removing one row always sends `at`
 POST   /fact                   PATCH /fact   DELETE /fact
 
 Time
@@ -624,6 +647,8 @@ GET    /anchors                chapters + scenes with ids, in reading order
 GET    /resolve                a Thread AS OF an anchor
 GET    /graph                  nodes + edges at an anchor, spoiler-aware
 POST   /place                  which chapters an entry appears in (the WHOLE list, not a delta)
+GET    /planned-in             chapters whose OUTLINES name an entry -- derived on
+                               read, never cached
 
 Weaving
 POST   /scan                   the free deterministic pass -- no role, no model, no cost
@@ -762,7 +787,7 @@ A note on the custom palettes, because the obvious home is the wrong one: a writ
 AI may only write directly to these designated fields in Markdown:
 
 - `ai_profile_summary`
-- `ai_section_summary`
+- `ai_section_summary` -- retired in v2.0.6: nothing generates it any more; an existing value is kept on resave and still exports
 - `chapter_summary`
 - `scene_summary`
 

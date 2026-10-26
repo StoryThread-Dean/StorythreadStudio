@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## CURRENT STATE: v2.0.4 SHIPPED 2026-09-02
+## CURRENT STATE: v2.0.5 SHIPPED 2026-09-04 -- v2.0.6 IN PREP on `release/v2.0.6`
 
 **v2.0.0 shipped 2026-08-14** (115 commits, tag v2.0.0, installer live). The
 recovery plan is 93 of 107 with the rest deferred by scope or blocked on a
@@ -173,6 +173,46 @@ is not filed as a bug. Branch health at the cut: 2233 backend tests, 1834
 frontend across 83 files, ruff and tsc clean. Spec: `docs/appearance-spec.md`,
 plus `docs/audiobook-converter-spec.md` 5.0 amended.
 
+**v2.0.5 shipped 2026-09-04** (tag v2.0.5, PR #29). Relationships moved onto
+the character: a relationship is a CONNECTION in a Relationships section on
+the character's page, written from that character's side, with a start
+chapter so "cold for 1-6, trusting from 21" is two rows and the later one
+takes over on its own. The Relationship profile kind is retired for creation;
+existing ones stay readable and say where the job moved. A name with no entry
+is kept on the page as a trait-shaped block. **The headline fix was silent for
+the Weave's whole life: a connection's required reason line was never sent to
+any AI** -- the screen insisted on it and it went into the file and no further.
+Also Fix Profile, for a hand-mistyped heading that the older profile format
+would drop on the next ordinary save.
+
+**v2.0.6 -- IN PREP, branch `release/v2.0.6`.** Everything dated 2026-09-05 to
+2026-09-07 below is v2.0.6, plus the relationship retarget fix (PR #30, merged
+into the release branch): a recorded row's open/closed key and its delete
+address used the LIVE `targetId`, so retyping the other end closed the card on
+the first keystroke, and turning a connection into a typed name never removed
+the connection -- it returned on the next reload beside its replacement.
+`savedTargetId` is the address now; retargeting to another entry POSTs the new
+one before deleting the old so a part-way failure duplicates rather than loses.
+**Issue #31, fixed on the release branch, and wider than filed.** The backend
+reads a MISSING `at` as "every stage of this rel on this pair" (deliberate),
+and three screens left it off: RelationshipsSection for an undated stage, and
+TieEditor and SnagFixer ALWAYS -- so removing any one stage there removed all of
+them. No backend change was needed: `?at=` arrives as "" and `"" or None`
+already matched only undated stages. A real contract nothing used; it is
+documented on the route now and every screen sends `at` always.
+`tieDeleteAnchor.test.ts` reads every tie DELETE in `features/codex` from
+source, because SnagFixer has no component tests.
+
+**Docs audit at prep found the app itself saying two untrue things**, both
+fixed: the "Past chats" explanation said FREE while a long conversation's first
+reopen buys a recap (it now names `/api/ai/chat-recap`, so
+`test_explain_costs.py` watches it), and the context bar said the chapter
+outline went with "Draft and Enhance" when open chat receives it too. Model
+Roles also listed "Section summaries", a deleted feature. CHANGELOG heading is `[2.0.6] - UNRELEASED`
+until the cut stamps the date; release notes are
+`release-artifacts/v2.0.6-notes.md`. Branch health at prep (2026-10-26): 2593
+backend tests, 2122 frontend across 93 files, ruff and tsc clean.
+
 **The Profile Extractor, for reference.** Reads the manuscript
 and proposes what each entry should say. Its ten decisions and the reasoning
 behind each are in `docs/roadmap.md`; the section is the record, not a plan.
@@ -279,8 +319,10 @@ Survivable while chats were session-only; with a session id in play it would
 append one book's turns to the other book's file.
 
 **2026-09-06: THE LONG-CONTEXT BUDGET, AND THREE BUGS OF THE KIND IT EXISTS TO
-STOP.** `app/ai/materials_budget.py` fits the chat/Draft/Enhance/Advisor path
-against the model's real window. It reuses `Budget` (pure arithmetic) and
+STOP.** `app/ai/materials_budget.py` fits the Writing Companion's chat/Draft/
+Enhance path (`editor-chat`) against the model's real window. **The Smart
+Advisor (`editor-pass`) is NOT budgeted** -- this line used to say it was, and
+so did the roadmap; only its flat caps stand in front of it. It reuses `Budget` (pure arithmetic) and
 deliberately NOT `_fit`: `_fit` sorts `Piece`s, which need an `entity_id` and a
 rung on a ladder about how a Thread relates to a scene, and a chapter has
 neither. Documents get their own fitter -- putting two unrelated kinds of thing
@@ -827,7 +869,7 @@ ledger below is kept as the shipped record.
 
 ## Project Status
 
-**Status: shipped.** The current release is **v2.0.4** (2026-09-02) -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
+**Status: shipped.** The current release is **v2.0.5** (2026-09-04), with v2.0.6 in prep -- see `CHANGELOG.md` for the full release history and `docs/features.md` for what the product does today.
 
 **Versioning is a three-tier rule, not semver.** Tier 3 (`v1.1.x`) = enhancements to existing features. Tier 2 (`v1.x.0`) = additions, like the Audiobook Converter. Tier 1 (`vX.0.0`) = major restructuring -- a change needing its own dashboard, or one that alters multiple existing features at once. Judge the tier by what the RELEASE delivers, not by the size of the programme it belongs to.
 
@@ -1012,6 +1054,14 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
 
 ### Test layout
 
+**The lists below are NOT exhaustive.** A 2026-10-26 audit found about 45 test
+files on disk that were never added here (among them `test_entries_home.py`,
+`test_series_path_healing.py`, `test_project_portability.py`,
+`test_related_relationships.py`, `WeaveContextBar.test.tsx`,
+`profileSource.test.ts`, `sectionRegistry.test.ts`, `profileFormat.test.ts`).
+`ls backend/tests` and `npx vitest list` are the real inventory; this is the
+annotated one.
+
 - `backend/tests/` -- pytest + pytest-asyncio. Uses FastAPI's `TestClient` for HTTP-level tests and `async with open_db(tmp_path)` for store-level tests. Test files named `test_*.py`. Current files:
   - `test_db_migrations.py` -- the app.db migration ladder, and the only thing that finds this class of bug: an UPGRADE. Every other test builds its database from scratch, where an ALTER smuggled into an already-applied migration looks perfectly correct -- which is how a real project came to die on `no such column`. Pins that a v2 or v3 database ends up byte-identical to a fresh one, and that each rung runs on the one before it
   - `test_explain_costs.py` -- does the help text tell the truth about MONEY: Python reads the TypeScript explanation registry, finds each named route's handler, and fails if one that calls `_resolve_model_and_key` is described as free (or the reverse). A "free" claim is a promise about the writer's credit, and the `universal` incident proved a frontend claim about the backend is only as good as something checking it
@@ -1110,10 +1160,13 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_codex_context.py` -- the amended context rule, one test per obligation; pinned content never pruned and refused rather than truncated
   - `test_codex_weaving_routes.py` -- scan / run ledger / brief end to end; a run id off the wire is not trusted as a path
   - `test_world_rules.py` -- the Unwoven corpus: every unlock and crosslink resolves, a crosslink always leaves its domain, every answer lands somewhere the app understands
+  - `test_codex_native.py` -- a new project is born in `codex/` and never gets `profiles/`. The home used to be an INFERENCE from which folders were empty, so one stray `.md` under `profiles/` silently moved the writer's whole world to the legacy home; `codex_native: true` in project.json is read ABOVE the file-counting rule and is a positive claim only. Also the fourth migration state, `native`, without which every new project's Weave tab was a conversion panel with no button
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/App.css.test.ts` -- the design system's own contract: both themes declare the same `--st-*` tokens, the audiobook block overrides every one of them, an inset surface is never lighter than the panel holding it, and NO raw Tailwind palette class survives ANYWHERE -- `features/audiobook/` was exempt for two releases and is not any more, because giving the Converter a theme switch meant converting its 940 shade classes onto role tokens (a literal `bg-zinc-900` cannot follow a theme; the conversion was near zero-delta because `.audiobook-theme` was built FROM those shades). Since v2.0.4 it also **computes WCAG contrast from the stylesheet** -- every ink token against every surface it is painted on, in all three palettes, failing the build under 4.5:1, with `.audiobook-theme`'s `bg-raised` a named and reasoned exemption (no grey clears it without inverting the ladder). Plus two gates for the ways a colour goes wrong silently: a `text-<role>` class whose `--color-<role>` does not exist emits NO rule and inherits its parent (eight such call sites shipped in DialogueCheck), and an unprefixed `opacity-` on already-dim ink multiplies a measured token into something no check can see -- `disabled:` and `group-hover:` variants are deliberately allowed, because low contrast is the correct rendering of a control you cannot use. It reads App.css off disk with `readFileSync` rather than `import.meta.glob(..., "?raw")`, which returns an empty string for stylesheets and would have passed every assertion vacuously
   - `src/aiNotesSeams.test.ts` -- the wiring in App.tsx that no component test can see, all of it silent when it breaks: that the payload carries the GATED value rather than the raw file (or the off switch toggles and changes nothing, the shape of the useUiScale and line-height bugs), that Save to AI Notes opens a composer instead of writing, that a failed read of the notes file ABORTS the append (POST /note is a whole-file overwrite, so falling through would replace the writer's whole guidance file with one line), that a reopened conversation clears `chapterEstablished` so materials rebuild from today, and that the recap swap takes the LATER of the two cuts. It opens with a guard on itself -- `?raw` returns an empty string for some file types, which is how App.css.test.ts once passed vacuously
+  - `src/screens/profilePageSeams.test.ts` -- the two panels that write this entry's OWN file before the page saves (Relationships and Connections) must both tell the page, or its next Update is refused as "changed on disk" for the writer's own change -- or, past that, hands back the old connection list and deletes the new one. Read from source, one element at a time, because a callback nothing passes does not run. Also pins one AutoTextarea at `text-sm`
+  - `src/screens/relationshipsResync.test.ts` -- the same resync wiring for the Relationships section alone; it came in with PR #30, built off v2.0.5 before profilePageSeams existed on main. The two overlap and one can go
   - `src/utils/chatSessions.test.ts` -- mostly `relativeDay`, because it is the only decision in the file and the way it fails is one nobody reports: a picker that says "today" beside last night's conversation is merely confusing, so the writer works around it. CALENDAR days at LOCAL midnight, not a duration divided by 86,400,000; plain day counts out to 90 days because that is what was asked for ("4 days ago", "23 days ago") where a date library would round to "3 weeks"; and "" rather than "in -3 days" for a future stamp, because clocks do go backwards
   - `src/components/chat/ChatSessions.test.tsx` -- the picker. That an empty list and a FAILED read never look the same (this repo has shipped that confusion three times now, and the test found it in this very component); that deleting asks first; that a long conversation says it may be summarised BEFORE it is opened rather than after the request is paid for; and that a profile conversation about somebody else is still SHOWN but says which character to open instead of quietly mixing two transcripts
   - `src/hooks/useEditorFontSize.test.ts` -- the size of the writer's own prose. The pin that matters is `resolveEditorFontPx(12) === 16`: the editor hardcoded `fontSize: "16px"` in its CodeMirror theme from the day it was written, which no setting could reach (useUiScale moves rem utilities via `html { font-size }`), so the manuscript rendered at one size forever while three separate comments claimed the toolbar's font picker handled it -- that picker chooses a FAMILY and does not persist. 12pt is exactly 16px, which is what lets the control ship without reflowing a single existing book. Also: Infinity clamps and NaN falls back to the DEFAULT, and Settings is read as source to prove it uses the shared arithmetic
@@ -1124,6 +1177,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/features/theme/color.test.ts` -- both written colour shapes round-trip UNCHANGED (a writer who opens the editor and saves without touching anything must not rewrite their palette), an unparseable value returns null rather than guessing (the hex box applies per keystroke, so a half-typed `#12` must leave the previous colour alone), and the contrast maths agrees to 1dp with the figures `App.css.test.ts` enforces -- otherwise the editor's warnings and the build gate would be measuring different things
   - `src/features/theme/CustomThemeEditor.test.tsx` -- the screen that repaints the app while it is open: live preview with nothing saved, revert on cancel (a cancelled edit must not leave a palette that vanishes on restart), the ink rows' live contrast, a warning that does NOT refuse, and a COMPLETE palette on save rather than a sparse set of overrides. Its `beforeEach` empties the module-level store on purpose -- a saved palette leaked into the next test and showed up as a wheel reading a colour a different test had chosen
   - `src/features/outline/outline.test.tsx` -- the Outline toolbar: presets grey from the buffer and un-grey on undo, a greyed one scrolls rather than dead-ends, insertion appends in one transaction, and Fill from Book Details touches only blank lines
+  - `src/components/ChapterOutlineView.test.tsx` -- the per-chapter plan's screen: Build Chapter Outline PROPOSES and Insert puts text in the buffer UNSAVED (an outline is not one of the designated AI fields, so a route that wrote it would breach the write boundary), manual save with the unsaved state visible, and an empty state that teaches
   - `src/components/editor/ThesaurusPopover.test.tsx` -- thesaurus popover
   - `src/components/sidebar/ActGroup.test.tsx` -- acts tree pieces (ActGroup + RowMenu)
   - `src/hooks/useProjectUiState.test.ts` -- per-book UI-state hook (load guard, debounce)
@@ -1169,6 +1223,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `src/features/codex/TieEditor.test.tsx` -- saying how two things relate: a connection is allowed to be UNTYPED and that is the default ("just connect them", say how later), the other end before the relation, only what means something between those two kinds, "nothing else fits" answered three ways, a flipped relation stored from the OTHER end, and connections read from the end being looked at
 : the other end before the relation, only what means something between those two kinds, "nothing fits" answered three ways (flip the pair, adopt a shipped relation, name your own), a flipped relation stored from the OTHER end, and connections read from the end being looked at
   - `src/features/codex/BindDot.test.tsx` -- saying what a bare dot is: the wording is load-bearing (a word MOVED, never merged or deleted), other placeholders are not offered as targets, standing alone is a real answer, and the label question says the entry keeps its own name
+  - `src/features/codex/RelationshipsSection.test.tsx` -- relationships on the character: the KIND of relationship rather than an importance, a typed name kept on the page, rows that never move while being used (the Milton/Kipling loss), and changing who a recorded row is with (PR #30) -- the card stays open while the name is retyped, the old connection is REMOVED by its saved address, a different character is POST-then-DELETE so a part-way failure duplicates rather than loses
+  - `src/features/codex/tieDeleteAnchor.test.ts` -- issue #31, read from source over every screen in the folder: a connection DELETE always sends `at`, empty for an undated stage. A missing `at` means EVERY stage to the backend, and three screens were leaving it off, so removing one row removed its siblings. SnagFixer has no component tests, which is how it went unnoticed
   - `src/features/codex/WeaveNav.test.tsx` -- the sidebar: three groups always, sections grow, and a typo'd section can be renamed or removed (a fixed one offers no menu at all)
   - `src/features/codex/StaleNotice.test.tsx` -- the walk admitting its evidence moved: it speaks when something changed and stays QUIET when nothing did, names the chapters rather than counting them, admits what a chapter-scoped re-check would leave out, and always offers the way back out of a narrowing
   - `src/features/codex/FactLayer.test.tsx` -- the fourth zoom level, and what it deliberately does not do: no control to edit anything (the Run editor owns that), a span that ends only where something SAYS it replaces this fact, and the last panel being what a model actually receives
@@ -1259,7 +1315,7 @@ Two storage systems work together:
 
 - **Markdown files** -- the permanent source of truth. Chapters, profiles, notes, and summaries all live as `.md` files in the project folder. These are human-readable and can be backed up or published to GitHub as-is.
 - **SQLite** (`<project>/.storythread/app.db`) -- a fast local cache. It holds Writing Progress events (`progress_event`) and, on `feature/the-weave`, the Weave's graph index (`codex_entity` / `codex_alias` / `codex_tie` / `codex_fact` / `codex_meta`). Settings live in `~/.storythread/settings.json`, NOT in this database. Anything stored here must be rebuildable from Markdown.
-- **The ONE exception under `.storythread/`**: `weave/runs/<run-id>.json` holds what the writer answered during a Weaving session (applied / deferred / retired / muted). That is not derivable from anything, so it is deliberately not in `app.db` -- deleting the cache must never cost the writer answers they already gave.
+- **The TWO exceptions under `.storythread/`**: `weave/runs/<run-id>.json` holds what the writer answered during a Weaving session (applied / deferred / retired / muted), and `chats/<chat-id>.json` holds a saved conversation (v2.0.6) -- a reply was paid for and cannot be rebuilt. Neither is derivable from anything, so neither is in `app.db` -- deleting the cache must never cost the writer answers they already gave or conversations they already paid for.
 
 Think of Markdown as the filing cabinet and SQLite as the index cards on your desk -- the cabinet is what matters; the index cards just make lookup faster.
 
@@ -1270,13 +1326,17 @@ Each writing project the user creates gets its own folder:
 ```
 MyNovel/
   project.json          <- project settings (model, content mode, series linkage)
-  manuscript/           <- chapter .md files
-  notes/                <- outline, style guide, themes
-  profiles/             <- characters, relationships, locations, lore
-    arcs/               <- (series projects only) per-book character/relationship arcs
+  manuscript/           <- chapter .md files, optional prologue/epilogue, structure.json
+  notes/                <- outline, style guide, themes, ai-notes.md, author-notes.md
+  codex/                <- the Weave: characters/, locations/, lore/, events/, and each
+                           other kind's folder on first use. `codex_native: true` in
+                           project.json says this is the project's home
+  outlines/chapters/    <- per-chapter plans, one <chapter-stem>.md each
   summaries/            <- AI summaries: chapters/ + scenes/<chapter-stem>/scene-NN.md
   exports/              <- combined manuscripts and dated snapshots
-  .storythread/         <- app.db, cache, logs (NOT source code)
+  .storythread/         <- app.db (cache), weave/runs/ and chats/ (NOT cache)
+  profiles/             <- LEGACY. Never created for a new project; still read for an
+                           older one that has not been converted. No arcs/ any more
 ```
 
 Full folder schema is in `docs/architecture.md`.
@@ -1290,7 +1350,7 @@ Full folder schema is in `docs/architecture.md`.
 AI output may only be written directly to these **designated generated-content fields** in Markdown:
 
 - `ai_profile_summary`
-- `ai_section_summary`
+- `ai_section_summary` -- retired in v2.0.6: nothing generates it any more; an existing value is kept on resave and still exports
 - `chapter_summary`
 - `scene_summary`
 
@@ -1404,6 +1464,9 @@ evidence of drift.
 | `docs/audiobook-converter-spec.md` | Source of truth for the Audiobook Converter (shipped v1.1.0); tests cite it by section number |
 | `docs/chapter-outline-spec.md` | **Source of truth for Chapter Outlines**: the per-chapter plan, why it is not a summary and not a scene Beat, how it reaches AI, and the rule that "planned in" is derived on read and never cached |
 | `docs/outline-spec.md` | Source of truth for the Outline (shipped v2.0.2): the worksheet format and parse rules, the ruling that Book Details stays the master, the preset catalog, the greying rule, the healing contract, the gauge weights |
+| `docs/long-context-spec.md` | Source of truth for AI Notes, saved conversations, the recap on resume and the materials budget (shipped v2.0.6) |
+| `docs/appearance-spec.md` | Source of truth for themes, contrast floors, Interface and Editor text size (shipped v2.0.4) |
+| `docs/connection-builder-spec.md` | **Specified, NOT built** (v2.1.0): the AI pass that proposes connections, `POST /api/codex/propose-ties`. Written before any code, on purpose |
 | `docs/product-scope.md` | Core goals, writing philosophy, locked product rules, in/out-of-scope |
 | `docs/architecture.md` | Three-layer architecture, dual storage model, folder layout, current API surface |
 | `docs/features.md` | What the product does today: editor, Profile Builder, Smart Advisor, Writing Companion, series, exports, settings |

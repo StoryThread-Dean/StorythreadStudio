@@ -12,6 +12,7 @@ This is a snapshot of what Storythread Studio does today. For where it is going 
 - **Passage / Dialogue Check** reads the selected passage aloud. Reading silently hides a passage's rhythm -- the writer supplies the pauses and emphasis without noticing, and an indifferent voice does not. It catches repeated words, sentences that only parse on the second read, and right-word-wrong-word errors no checker flags ("walked through the dessert" is perfectly spelled). Four voices, remembered per book, entirely local and free using the same engine as the Audiobook Converter; it saves nothing and applies no markers
 - Light and dark themes (app-wide, persisted), plus line spacing and paragraph spacing -- see Settings
 - Selection highlight persists when the writer moves focus into the chat or Smart Advisor panels
+- The window reopens at the size, position and maximised state it was left in; the config size is only the first-run default
 
 ## Project structure
 
@@ -41,6 +42,7 @@ The left panel presents Story > Act > Chapter > Scene > Beat:
   at those paths.
 - **Acts** — created with "+ New Act"; chapters move between acts and reorder via each row's hover "..." menu (Move up / Move down / Move to Act). Acts collapse, and the collapsed state is remembered per book. Moves never rename chapter files.
 - **Chapters** — double-click to rename. A rename updates the heading AND the filename (slug follows the title, `NN-` prefix kept), and carries the chapter's summary, scene summaries, act slot, and progress history along.
+- **+ Prologue / + Epilogue** — offered beside New Chapter while the book has neither. A prologue always sits first and an epilogue always last, whatever happens to acts. Neither is numbered or counted among the chapters, but their words count towards the book's total. Otherwise they behave like chapters: summaries, outlines, renaming, export and the Weave.
 - **Scenes** — expandable under each chapter (from scene summaries); each scene with beats shows a done/total badge and expandable read-only beat rows.
 - **Notes / Profiles** — collapsible sections; collapse state remembered per book across restarts and updates.
 - **Writing Progress** — pinned at the bottom of the panel, always visible no matter how much of the tree is expanded; the breakdown slide-over opens upward.
@@ -126,7 +128,9 @@ A guided workspace for authoring structured project context.
 
 ### Profile types
 
-Character, Location, Lore. Each type has its own section template (Overview, Personality Traits, History, Tone and Atmosphere, Rule or Concept, etc.) defined in code, not user-edited.
+Every kind opens here: Character, Location, Lore, Event, Creature, Culture, Faction, Religion, Ruling Authority, Deity, Object, Concept and Language, plus any kind the writer invents. Each kind's sections come from its registry entry, and every kind has the Profile Builder chat. (Before v2.0.6, eight of them opened in the Weave's simpler editor, with a different look and no chat.)
+
+A section name does not mean the same thing in every kind: a Creature's Appearance is not a Location's Physical Description, and healing an old heading is scoped to the kind it belongs to.
 
 **Relationship profiles are retired.** They were a separate entry holding one blob of prose about everything a character was to everyone else, and they were the wrong shape for the job: the same names were described twice (once there, once on the character), the prose entered every AI brief whole and was usually pruned before it arrived, almost nothing could legally connect to such an entry, and the app ended up instructing the model to reconcile the two copies at request time.
 
@@ -194,7 +198,7 @@ A **[Generate Overview]** button on the Overview section spins the filled-in fie
 
 | Tool | What it does |
 |---|---|
-| **Full profile summary** | Generates a multi-paragraph `# Full AI Summary` synthesizing all sections, weighted by importance. For characters, also reads `profiles/relationships/` and weaves in connected dynamics |
+| **Full profile summary** | Generates a multi-paragraph `# Full AI Summary` synthesizing all sections, weighted by importance. For characters, also reads any existing Relationship entries (a retired kind) from whichever folder the project keeps its world in, and weaves in connected dynamics |
 | **"How AI uses this" preview** | Sparkles button on a trait block; on-demand prose explanation of how that trait's importance level shapes AI behavior. Shown in a popover, not stored |
 | **AI Trim** | Scissors button that appears when a trait is in the Wordy/Bloated range; rewrites the description to a tighter target length |
 | **AI Importance Audit** | Profile-level pass that flags importance-level mismatches across all trait blocks |
@@ -414,8 +418,9 @@ there is a word to summarise.
 
 It has the manuscript's formatting toolbar — numbered lists, bullets,
 headings, bold — and the Writing Companion stays open beside it, so you can
-talk about the plan while you write it. Open chat is given the plan you are
-looking at (the context bar shows it and switches it off). Opening a
+talk about the plan while you write it. Open chat is given the chapter's plan whenever
+that chapter has one, not only while the outline is on screen (the context
+bar shows it, says what it costs, and switches it off). Opening a
 chapter's outline opens that chapter too, so everything on screen is about
 the same chapter.
 
@@ -492,7 +497,7 @@ to avoid (anything that filters hidden folders and so drops `.storythread/`).
 
 ## The Weave
 
-*In development on `feature/the-weave`, for v2.0.0. Not in a shipped release yet.*
+*Shipped in v2.0.0.*
 
 The Weave is one linked, time-aware world model. Every character, place, faction,
 object and idea is a **Thread**; the connections between them are **Ties**; and a
@@ -662,6 +667,21 @@ a large labelled edge that gives it away.
 
 Threads are ordinary Markdown files under `codex/`, so copying the project folder
 takes the whole world model with it.
+
+### Reading the map
+
+A line on the map names the KIND of connection -- "parent of", "rival of" --
+and the writer's own sentence about it is on the tooltip and on the entry,
+where there is room to read it. A connection written from both ends shows each
+label nearer the character who wrote it, so whose reading is whose is visible
+at a glance; one written from one end stays in the middle.
+
+Clicking a kind in the legend hides every entry of that kind and its
+connections; clicking again brings them back. Each kind shows how many there
+are, one with none is faded rather than clickable, the choice is remembered for
+that book only, and the map says how much it is holding back so nothing goes
+quietly missing. Zoom in, zoom out and reset sit on the map; zooming out reaches
+past the edges so a long name is readable, and dragging the background pans.
 
 ### Weaving
 
@@ -1054,6 +1074,12 @@ as it lands, so a failure at part four of five keeps the first three. The saved
 read survives closing the app; starting a new one says how many unreviewed
 proposals it would discard first, because those were paid for.
 
+**On a model that does not publish its limit** -- most local models -- a run
+over about 30,000 tokens of manuscript is REFUSED before anything is sent.
+Most local servers trim an oversize prompt and answer anyway, so the result
+would look fine and be built on half the book. Run it over fewer chapters, or
+assign a model whose limit is published.
+
 Requires Weaving to have been run first: the request carries a snippet of each
 established entry, so the entries have to exist.
 
@@ -1148,13 +1174,13 @@ Eight roles, each listing on screen exactly which features use it:
 | **Critique** | Smart Advisor pass, Writing Companion review categories, chapter and scene summaries, importance audit, AI Trim |
 | **Character reasoning** | Profile Builder chat, Interview mode, full profile summaries, dialogue speaker analysis |
 | **Brainstorming** | Writing Companion chat |
-| **Structural analysis** | Scene break suggestions |
+| **Structural analysis** | Scene break suggestions, Build Chapter Outline |
 | **Prose** | Draft mode, Enhance mode, Revise suggestion |
-| **Extraction** (cheap work) | Usage previews, Generate Overview, section summaries |
-| **Long-context analysis** | *nothing yet* -- arrives with the Weave's AI passes, which are deferred to v2.1.0 |
+| **Extraction** (cheap work) | Usage previews, Generate Overview |
+| **Long-context analysis** | Profile Extractor, recapping a saved conversation |
 | **Research transformation** | *nothing yet* |
 
-The last two are marked "not used yet" on screen with the reason, rather than presenting a control that silently does nothing.
+The last one is marked "not used yet" on screen with the reason, rather than presenting a control that silently does nothing.
 
 **The list is collapsed by default** — one line per role: name, the model currently chosen (or "Use Default Model"), and a one-line description that truncates rather than wrapping, so all eight fit on screen at once. Opening a row reveals the full explanation behind "What's this?" (what the job is, why it matters, and what a better model actually buys you there), the features it covers, and the two pickers. Only one row opens at a time, so the list never scrolls itself away. A broken assignment shows a warning icon on the collapsed row, so it is visible without opening anything.
 
@@ -1169,7 +1195,7 @@ Two behaviours matter more than the rest:
 - **Leaving a role unassigned is the supported default.** It falls through to the Default Model, exactly as the app behaved before roles existed. An upgrading install changes nothing until the writer changes something.
 - **An assigned role never silently substitutes.** If it cannot run — no key for that service, an unreachable local server, a model the provider does not offer — the feature refuses and says why. Without this, a writer could assign Claude to prose, hit a missing key, and unknowingly have their book drafted by a different model.
 
-Per-book role overrides are supported by the resolver but have no UI yet; today roles are app-wide.
+Roles are app-wide. A per-book role level was documented for a while and never reachable in practice; it was removed in v2.0.0 (R8.6). The per-book Default Model is separate and still works.
 
 ## Content mode and routing
 
