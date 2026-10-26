@@ -25,12 +25,16 @@ export function ChapterNavRow({
   isActiveChapter,
   isSummaryAncestor,
   isChapterSummaryActive,
+  isChapterOutlineActive,
+  hasChapterOutline,
   sceneSummaries,
   isScenesExpanded,
   activeSceneIndex,
   onToggleExpand,
   onOpenChapter,
   onOpenChapterSummary,
+  onOpenChapterOutline,
+  onDeleteChapterOutline,
   onRenameChapter,
   onDeleteChapter,
   onDeleteChapterSummary,
@@ -44,6 +48,11 @@ export function ChapterNavRow({
   isActiveChapter:        boolean;  // the chapter .md is open in the editor
   isSummaryAncestor:      boolean;  // this chapter's summary is the active view
   isChapterSummaryActive: boolean;  // the Chapter Summary child is currently active
+  // The chapter's plan. `hasChapterOutline` marks the row with a dot and is
+  // what decides whether a Delete is offered -- a delete for a file that does
+  // not exist would 404 at the writer for pressing a button the app drew.
+  isChapterOutlineActive: boolean;
+  hasChapterOutline:      boolean;
   // Scene Summaries subtree (Phase 6):
   //   sceneSummaries      = filled scene slots fetched from the backend (or
   //                         undefined if the writer hasn't expanded yet).
@@ -56,6 +65,8 @@ export function ChapterNavRow({
   onToggleExpand:         () => void;
   onOpenChapter:          () => void;
   onOpenChapterSummary:   () => void;
+  onOpenChapterOutline:   () => void;
+  onDeleteChapterOutline: () => void;
   onRenameChapter:        (newTitle: string) => void;
   onDeleteChapter:        () => void;
   onDeleteChapterSummary: () => void;
@@ -200,6 +211,42 @@ export function ChapterNavRow({
             >
               <Trash2 size={12} />
             </button>
+          </div>
+
+          {/* The chapter's PLAN. Listed FIRST of the three children because it
+              is the one that comes first in the work: what has to happen, then
+              the prose, then the summaries of what the prose turned out to be.
+              A dot marks a chapter that has one, so the sidebar answers "how
+              far have I planned" at a glance -- which is the question a writer
+              part-way through outlining actually has. */}
+          <div
+            className={`group mt-0.5 flex items-stretch rounded transition-colors ${
+              isChapterOutlineActive ? "bg-accent-fill/20" : "hover:bg-bg-raised"
+            }`}
+          >
+            <button
+              onClick={onOpenChapterOutline}
+              className={`flex-1 min-w-0 truncate px-2 py-1.5 text-left text-sm ${
+                isChapterOutlineActive ? "text-accent" : "text-text-primary"
+              }`}
+              title="Your plan for this chapter: the key events, in order"
+            >
+              Chapter Outline
+              {hasChapterOutline && (
+                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent-fill/70 align-middle"
+                      title="This chapter has an outline" />
+              )}
+            </button>
+            {hasChapterOutline && (
+              <button
+                onClick={onDeleteChapterOutline}
+                className="shrink-0 px-1.5 text-faint opacity-0 transition-all hover:text-danger-muted group-hover:opacity-100 focus:opacity-100"
+                title="Delete this chapter outline (keeps the chapter)"
+                aria-label="Delete chapter outline"
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
           </div>
 
           {/* Scene Summaries subtree. Separate expandable group so collapsing

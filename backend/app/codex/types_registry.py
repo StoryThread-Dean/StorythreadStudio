@@ -675,6 +675,23 @@ def default_registry() -> dict:
     }
 
 
+def default_section_folders(registry: dict | None = None) -> list[str]:
+    """
+    The world folders a project starts life with.
+
+    These are the kinds the sidebar shows even while they hold nothing --
+    `default_section` -- which today means characters, locations, lore and
+    events. Every other kind appears the moment the writer records their
+    first one, and its folder is created then (see _write_thread).
+
+    Read from the list that DEFINES those kinds rather than written down a
+    second time, so adding a fifth default kind moves the scaffold with it.
+    Same rule that already computes SECTION_CONFIGS and PROFILE_FOLDERS.
+    """
+    types = (registry or default_registry()).get("types", [])
+    return [t["folder"] for t in types if t.get("default_section")]
+
+
 # ── Validation ───────────────────────────────────────────────────────────────
 
 def _check_identifier(value, path: str) -> str:

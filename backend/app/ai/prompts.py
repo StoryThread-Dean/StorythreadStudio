@@ -264,6 +264,17 @@ _DRAFT_RESPONSE_RULES = (
     "The writer has asked you to write a scene or chapter segment. Treat their "
     "message as the premise or brief, and the attached profiles, outline, and "
     "location notes as canon for what you write.\n\n"
+    # TWO OUTLINES NOW EXIST and this used to name only one. A chapter outline
+    # is the plan for the chapter being written; the book outline is the shape
+    # of the whole story. A model handed both with one word for them will
+    # cheerfully draft the wrong scale.
+    "TWO KINDS OF OUTLINE MAY BE PRESENT, and they are not the same thing. "
+    "THE PLAN FOR THIS CHAPTER is the writer's intended sequence of events for "
+    "the chapter you are writing now: follow it as the shape of what you "
+    "produce, in the order given. A book outline attached as context is the "
+    "shape of the whole story and tells you where this chapter sits, not what "
+    "to put in it. Neither is prose that has already been written, so never "
+    "reproduce either one as your output.\n\n"
     "WHAT TO OUTPUT:\n"
     "- Write the actual story prose. Not a summary, not an outline, not a "
     "description of what the scene would contain, not notes about your choices.\n"
@@ -319,7 +330,11 @@ _ENHANCE_RESPONSE_RULES = (
     "after the passage. Use it for continuity. Do not rewrite, continue, or "
     "repeat it; your output replaces only the highlighted passage.\n"
     "- Attached profiles, outline, and locations follow the ATTACHMENT STANCE "
-    "stated separately in these instructions; use them accordingly.\n\n"
+    "stated separately in these instructions; use them accordingly.\n"
+    "- THE PLAN FOR THIS CHAPTER (when present) is what the writer intends the "
+    "chapter to do. Use it to know where this passage sits and what it has to "
+    "carry. Do not write the rest of the plan: your output replaces the "
+    "highlighted passage and nothing else.\n\n"
     "HOW TO REWRITE:\n"
     "- Follow the writer's direction faithfully. You MAY change wording, sentence "
     "structure, description, pacing, and dialogue, and you may reshape the moment "
@@ -1276,33 +1291,6 @@ def audit_importance_prompt() -> str:
     )
 
 
-def generate_section_summary_prompt() -> str:
-    """System prompt for the /generate-section-summary endpoint."""
-    return (
-        "You are converting a fiction writer's profile notes into an AI-prompt-friendly "
-        "summary that other AI writing tools will use as context.\n\n"
-        "YOUR JOB: Translate the writer's natural language into a concise instruction "
-        "set for AI. The output should tell an AI writing tool what to DO with this "
-        "information when generating prose, not just describe the information.\n\n"
-        "IMPORTANCE WEIGHTING:\n"
-        "- Traits marked 'core' or 'present' are defining. Lead with them.\n"
-        "- Traits marked 'background' or 'contextual' are supporting details. "
-        "  Mention them as influence, not as focus.\n"
-        "- If no importance markers are present, infer from the text: what does the "
-        "  writer clearly care about vs what is mentioned in passing? A detail "
-        "  described in one sentence is background. A detail explored across "
-        "  multiple sentences with emotional weight is core.\n\n"
-        "FORMAT: 2-4 sentences. Write as instructions to an AI tool:\n"
-        "  GOOD: 'When writing Morgana, foreground her tactical intelligence and "
-        "  suppressed rage. Her Catholic upbringing subtly shapes her moral reasoning "
-        "  but should not be treated as a defining trait.'\n"
-        "  BAD: 'Morgana is a Catholic queen who was imprisoned. She is intelligent "
-        "  and angry.'\n\n"
-        f"{PUNCTUATION_RULE}\n\n"
-        'Return ONLY valid JSON: {"section_summary": "your text here"}. No extra text.'
-    )
-
-
 def generate_full_summary_prompt() -> str:
     """System prompt for the /generate-full-summary endpoint."""
     return (
@@ -1473,6 +1461,148 @@ Quality check before finalizing:
 - Ensure every bullet adds new information.
 - Ensure the summary explains what changed, why it changed, and what must be remembered later.
 """
+
+
+# ── Build Chapter Outline ────────────────────────────────────────────────────
+#
+# The one AI pass whose output is a PLAN rather than prose or a review. Its
+# whole job is to turn what the writer says they want into the shape of a
+# chapter, in their terms.
+#
+# THE RULE THAT MATTERS MOST HERE IS THE ONE ABOUT NAMES, and it is not a style
+# preference. Slice 3 also teaches the Weaving scan to read chapter outlines as
+# a planning source: a capitalised name in an outline is raised as something
+# the writer has planned but not yet written. So a model that invents "the
+# Ashfall Compact" to make a line read better does not just add a word -- it
+# puts a faction the writer never chose into their world model, where the Weave
+# will ask them about it as though it were their own idea. The outline presets
+# have the same rule for the same reason.
+CHAPTER_OUTLINE_INSTRUCTIONS = """
+You build CHAPTER OUTLINES. A chapter outline is a short, ordered list of the
+key events that move one chapter along: the things that have to happen, in the
+order they happen.
+
+WHAT TO OUTPUT:
+- A numbered list, and nothing else. No preamble, no closing remark, no
+  explanation of your choices, no headings.
+- One line per event. A line is a sentence or two at most.
+- High level. Each line is something that HAPPENS and moves the chapter on:
+  a decision, a discovery, a confrontation, a change in what someone wants.
+- Aim for between four and ten lines unless the writer asks for a different
+  size. A chapter outline that runs to thirty lines has stopped being an
+  outline.
+
+WHAT NOT TO OUTPUT:
+- Not prose. Do not write the scene, do not write dialogue, do not describe
+  the weather. This is the plan the prose gets written from.
+- Not a summary. You are describing what is INTENDED to happen, not recapping
+  something already written.
+- Not scene headings, act labels, word counts or beat-sheet jargon unless the
+  writer asked for those.
+
+NAMES ARE THE WRITER'S TO INVENT:
+- Use ONLY proper nouns that appear in the material you were given -- the
+  writer's instruction, the chapter text, or the world context. Never invent a
+  character, place, faction, object or title of your own.
+- Where you need something the writer has not named, describe it instead: "the
+  older guard", "the northern settlement", "the rival crew". A description is
+  honest about being a gap; an invented name looks like a decision they made.
+- This is a hard rule. Names in an outline are read by the app as things the
+  writer has planned, so one you invented would come back to them later as
+  their own.
+
+FOLLOWING THE WRITER:
+- Their instruction is the brief. If they say what should happen, outline
+  that. If they ask for a shape (a slow build, a reversal in the middle, ends
+  on a decision), give them that shape.
+- If an outline already exists and they ask for a change, return the WHOLE
+  revised outline, renumbered, not just the changed lines. It replaces what is
+  there.
+- If they gave you very little, produce a short outline that follows plainly
+  from what they did say rather than inventing a plot around it.
+"""
+
+
+CHAT_RECAP_INSTRUCTIONS = """
+You are compressing the earlier part of a conversation between a fiction
+writer and their writing assistant, so the conversation can continue without
+resending every message.
+
+WHAT THIS IS FOR. The writer is picking up a conversation they had days ago.
+The recap you produce REPLACES those messages in what the assistant is given
+next. Anything you leave out is gone: the assistant will not have it, and the
+writer will not know it is missing.
+
+So keep, in this order of priority:
+
+1. DECISIONS THE WRITER MADE. "Vance is the traitor", "cut the prologue",
+   "her mother stays dead". These are the whole point -- they are what the
+   writer will assume is still understood.
+2. THINGS THE WRITER REJECTED, and why if they said. Without these the
+   assistant cheerfully suggests the same thing again, which is the single
+   most annoying way a resumed conversation can fail.
+3. WHAT THEY WERE WORKING ON and where it had got to.
+4. FACTS ABOUT THE STORY established during the conversation that are not
+   written down anywhere else.
+
+Leave out: pleasantries, the assistant's own explanations and reasoning,
+anything the writer can see for themselves in their manuscript, and prose the
+assistant drafted (the writer has it if they wanted it).
+
+WRITE IT AS NOTES, NOT AS A STORY. Short lines, one point each. No preamble
+and no closing summary -- the first line should be the first point.
+
+NEVER INVENT. If the conversation did not settle something, do not record it
+as settled. Where the writer was undecided, say that they were undecided --
+that is itself a fact worth keeping, and turning it into a decision would put
+words in their mouth that the assistant will then treat as canon.
+
+Aim for under 250 words. A recap longer than the conversation saves nothing.
+"""
+
+
+def build_chat_recap_prompt(content_mode: str) -> str:
+    """
+    System prompt for POST /api/chats/recap.
+
+    Composition:
+        [CONTENT MODE PREAMBLE]? + [CHAT_RECAP_INSTRUCTIONS] + [PUNCTUATION_RULE]
+
+    The transcript goes in the user message rather than here, so the system
+    prompt is byte-identical across every recap and a caching provider can
+    reuse it.
+
+    The content mode rides along because a recap of an explicit conversation
+    has to be able to say what the conversation was about. A recap that
+    sanitised itself would be a recap the writer cannot rely on.
+    """
+    parts: list[str] = []
+    mode = content_mode_instruction(content_mode)
+    if mode:
+        parts.append(mode)
+    parts.append(CHAT_RECAP_INSTRUCTIONS)
+    parts.append(PUNCTUATION_RULE)
+    return "\n\n".join(parts)
+
+
+def build_chapter_outline_prompt(content_mode: str) -> str:
+    """
+    System prompt for POST /api/ai/build-chapter-outline.
+
+    Composition:
+        [CONTENT MODE PREAMBLE]? + [CHAPTER_OUTLINE_INSTRUCTIONS] + [PUNCTUATION_RULE]
+
+    The writer's instruction and any existing outline go in the user message,
+    not here, so the system prompt is byte-identical across chapters and
+    providers that cache prompts can reuse it.
+    """
+    parts: list[str] = []
+    mode = content_mode_instruction(content_mode)
+    if mode:
+        parts.append(mode)
+    parts.append(CHAPTER_OUTLINE_INSTRUCTIONS)
+    parts.append(PUNCTUATION_RULE)
+    return "\n\n".join(parts)
 
 
 def generate_chapter_summary_prompt(content_mode: str) -> str:

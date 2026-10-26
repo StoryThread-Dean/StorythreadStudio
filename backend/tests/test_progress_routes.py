@@ -155,6 +155,106 @@ def test_summary_response_has_required_shape(client: TestClient, tmp_path: Path)
     assert "subsegments" in data["profiles"]
 
 
+# ── The Profiles breakdown, and which folder it counts ──────────────────
+#
+# The count is "info only" -- the weight is 0.0, because the expected_* lists
+# it used to be scored against are retired -- but it is still shown, and it was
+# still wrong. `_list_entry_names` joined `profiles/` itself, so on a converted
+# project (and now on every new one) it found nothing and the gauge told a
+# writer with twenty-two characters that they had "-no entry-" in every
+# category. Nothing errored: an empty list is a perfectly ordinary answer to
+# "how many characters have you written".
+
+ENTRY = """---
+type: character
+name: Kael Ashen
+---
+
+# Overview
+A thief.
+"""
+
+OUTLINE = """---
+expected_characters:
+  - Kael
+---
+# Outline
+
+Target Word Count: 90000
+"""
+
+
+def _gauge_project(tmp_path: Path, *, entries_in: str, settings: dict) -> dict:
+    (tmp_path / "project.json").write_text(
+        json.dumps({"story_type": "novel", **settings}), encoding="utf-8")
+    notes = tmp_path / "notes"
+    notes.mkdir()
+    (notes / "outline.md").write_text(OUTLINE, encoding="utf-8")
+
+    where = tmp_path / entries_in
+    where.mkdir(parents=True)
+    (where / "kael.md").write_text(ENTRY, encoding="utf-8")
+    return {"project_path": str(tmp_path)}
+
+
+def _characters(data: dict) -> dict:
+    return next(s for s in data["profiles"]["subsegments"]
+                if s["name"] == "characters")
+
+
+def test_the_breakdown_counts_the_codex_on_a_codex_project(
+        client: TestClient, tmp_path: Path):
+    params = _gauge_project(tmp_path, entries_in="codex/characters",
+                            settings={"codex_native": True})
+    data = client.get("/api/progress/summary", params=params).json()
+
+    row = _characters(data)
+    assert row["actual"] == 1
+    assert row["matched_names"] == ["Kael"]
+    assert row["unmatched_names"] == []
+
+
+def test_the_breakdown_still_counts_profiles_on_an_unconverted_project(
+        client: TestClient, tmp_path: Path):
+    # The other half, and the reason this is not just a swapped string: an
+    # unconverted project's world is still in profiles/ and must still be
+    # found. One question, asked through entries_home, exactly as the sidebar
+    # and the exports ask it.
+    params = _gauge_project(tmp_path, entries_in="profiles/characters",
+                            settings={})
+    data = client.get("/api/progress/summary", params=params).json()
+
+    row = _characters(data)
+    assert row["actual"] == 1
+    assert row["matched_names"] == ["Kael"]
+
+
+def test_fixing_the_count_did_not_start_scoring_it(
+        client: TestClient, tmp_path: Path):
+    # The Weave slice is COUNTED, NOT SCORED -- with no writer-declared cast
+    # there is no honest denominator. This is a display fix and must stay one.
+    params = _gauge_project(tmp_path, entries_in="codex/characters",
+                            settings={"codex_native": True})
+    data = client.get("/api/progress/summary", params=params).json()
+    assert data["profiles"]["weight"] == 0.0
+
+
+def test_every_kind_still_gets_a_row_even_with_nothing_in_it(
+        client: TestClient, tmp_path: Path):
+    # The breakdown UI renders "-no entry-" rows, so a missing folder must be
+    # a zero rather than an absent row -- and the row keeps its FOLDER name
+    # ("characters"), not the type id, so it reads the same on both dialects.
+    params = _gauge_project(tmp_path, entries_in="codex/characters",
+                            settings={"codex_native": True})
+    data = client.get("/api/progress/summary", params=params).json()
+    assert [s["name"] for s in data["profiles"]["subsegments"]] == [
+        "characters", "locations", "lore", "relationships",
+    ]
+    assert _characters(data)["actual"] == 1
+    lore = next(s for s in data["profiles"]["subsegments"] if s["name"] == "lore")
+    assert lore["actual"] == 0
+
+
 # ── /api/progress/daily ──────────────────────────────────────────────────────
 
 def test_daily_nonexistent_directory_returns_404(client: TestClient, tmp_path: Path):

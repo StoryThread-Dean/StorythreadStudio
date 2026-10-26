@@ -507,6 +507,88 @@ async def get_entity(project_path: str = Query(...), entity_id: str = Query(...)
     return thread
 
 
+# ── Which chapters PLAN to use this entry ────────────────────────────────────
+
+@router.get("/planned-in")
+async def get_planned_in(project_path: str = Query(...),
+                         entity_id: str = Query(...)):
+    """
+    The chapters whose outline names this entry.
+
+    COMPUTED ON EVERY CALL, AND DELIBERATELY NEVER STORED. This is the rule
+    that matters most about this endpoint, and it is written down because the
+    app has already made the opposite mistake once.
+
+    R8.5 deleted the `codex_mention` table for exactly this shape of bug:
+    mentions derived from the MANUSCRIPT while `ensure_fresh` fingerprints
+    `codex/`, so every chapter the writer edited left the rows silently wrong
+    with the freshness gate reporting the index current. A cache that answers
+    confidently and wrongly, with nothing in a position to notice.
+
+    "Planned in" derives from `outlines/`, which the index does not fingerprint
+    either. Caching it would rebuild that bug precisely. Forty small files read
+    per request is cheap; an answer that is quietly a fortnight out of date is
+    not.
+
+    NOT the same claim as `appears_in`, and the screen must not let them look
+    alike. `appears_in` is AUTHORED -- a statement the writer made about where
+    something appears. This is DERIVED -- the app noticing a name in a plan.
+    One is a decision, the other an observation.
+    """
+    project_path = validate_project_path(project_path)
+    registry = _registry(project_path)
+    row = await _locate(project_path, entity_id)
+    thread = _read_thread(project_path, registry, row)
+
+    # Every name this entry answers to. An alias is how the outline is most
+    # likely to refer to it: a writer planning chapter seven writes "Lexa",
+    # not "Alexandra Langford".
+    names = [str(thread.get("name") or "")]
+    names += [str(a) for a in (thread.get("aliases") or [])]
+    names += [str(thread.get("display_name") or "")]
+    patterns = [
+        re.compile(r"\b" + re.escape(n.strip()) + r"\b", re.IGNORECASE)
+        for n in names if n.strip()
+    ]
+    if not patterns:
+        return {"chapters": []}
+
+    outlines_dir = os.path.join(project_path, "outlines", "chapters")
+    if not os.path.isdir(outlines_dir):
+        return {"chapters": []}
+
+    from app.routers.documents import _title_from_file
+    from app.utils.structure_store import order_rank
+    manuscript = os.path.join(project_path, "manuscript")
+    rank = order_rank(project_path)
+    found: list[dict] = []
+    for name in sorted(os.listdir(outlines_dir)):
+        if not name.endswith(".md"):
+            continue
+        try:
+            with open(os.path.join(outlines_dir, name), "r", encoding="utf-8") as f:
+                text = f.read()
+        except (OSError, UnicodeDecodeError):
+            # One unreadable plan must not cost the whole answer. It is
+            # evidence, not data anything depends on.
+            continue
+        if not any(p.search(text) for p in patterns):
+            continue
+        chapter_filename = name
+        found.append({
+            "chapter_filename": chapter_filename,
+            "chapter_title": _title_from_file(
+                os.path.join(manuscript, chapter_filename), chapter_filename),
+        })
+
+    # Reading order, so "planned in chapters 3, 7 and 12" reads as the story
+    # runs rather than as the filesystem happens to sort.
+    found.sort(key=lambda r: (rank.get(r["chapter_filename"], len(rank)),
+                              r["chapter_filename"]))
+    return {"chapters": found}
+
+
+
 class SaveThreadRequest(BaseModel):
     project_path: str
     thread: dict
@@ -2743,14 +2825,35 @@ async def delete_pin(project_path: str = Query(...), phrase: str = Query(...)):
 
 # ── Weaving: the brief ───────────────────────────────────────────────────────
 
+# What to assume when the model's real window cannot be found out. The
+# number this endpoint used to hardcode -- kept so behaviour does not shift
+# under anyone whose lookup fails, but now REPORTED as an assumption rather
+# than presented as a measurement.
+_ASSUMED_WINDOW = 32_000
+
+
 class ContextBody(BaseModel):
     project_path: str
     at: str | None = None
     pov: str | None = None
     text: str = ""
-    # Budget inputs. The caller knows its own model and its own prompt; this
-    # endpoint refuses to guess at either.
-    model_context_limit: int = 32_000
+    # Budget inputs.
+    #
+    # `model_context_limit` USED TO DEFAULT TO 32,000 and no caller ever
+    # passed one, so every budget this endpoint has ever computed -- every
+    # refusal, every "where the room went" breakdown the writer read -- was
+    # measured against a number nobody chose, whatever model was selected.
+    # The comment above it said "the caller knows its own model", which was
+    # the mistaken premise: roles resolve on the BACKEND, so the frontend
+    # has no way to know which model will answer, let alone how big it is.
+    #
+    # 0 now means "work it out", which is what every real caller wants. An
+    # explicit value still wins, for a caller that genuinely knows better.
+    model_context_limit: int = 0
+    # Which job the brief is being assembled for, so the right model's
+    # window is used. Mirrors _editor_chat_role: an open chat and a Draft
+    # can be answered by very differently sized models.
+    category: str = "chat"
     output_reserve: int = 4_000
     system_prompt_tokens: int = 0
     fixed_request_overhead: int = 0
@@ -2761,6 +2864,35 @@ class ContextBody(BaseModel):
     exclude_types: list[str] = []
     enabled: bool = True
     include_on_request: bool = False
+
+
+async def _budget_limit(body: ContextBody) -> tuple[int, str, bool]:
+    """
+    (window in tokens, the model it belongs to, whether it was a guess).
+
+    Best-effort and never fatal: this endpoint transmits nothing and must
+    not refuse to assemble a brief because a catalog lookup failed. When
+    the window cannot be found the old 32,000 is used as an explicit,
+    REPORTED assumption rather than a silent one -- the difference between
+    this and what shipped before is not the number, it is that the writer
+    is now told it is a guess.
+    """
+    if body.model_context_limit > 0:
+        return body.model_context_limit, "", False
+
+    from app.ai.context_window import context_window
+    from app.routers.ai import _editor_chat_role, _resolve_model_and_key
+
+    try:
+        provider, api_key, model_id = _resolve_model_and_key(
+            _editor_chat_role(body.category))
+        window = await context_window(provider, api_key, model_id)
+    except Exception:                          # noqa: BLE001 - see docstring
+        return _ASSUMED_WINDOW, "", True
+
+    if not window:
+        return _ASSUMED_WINDOW, model_id, True
+    return window, model_id, False
 
 
 @router.post("/context")
@@ -2789,8 +2921,10 @@ async def post_context(body: ContextBody):
             if mention.bound and mention.entity_id:
                 mentioned.add(mention.entity_id)
 
+    limit, budget_model, assumed = await _budget_limit(body)
+
     budget = Budget(
-        model_context_limit=body.model_context_limit,
+        model_context_limit=limit,
         output_reserve=body.output_reserve,
         system_prompt_tokens=body.system_prompt_tokens,
         user_text_tokens=estimate_tokens(body.text),
@@ -2807,4 +2941,10 @@ async def post_context(body: ContextBody):
     )
     payload = brief.as_dict()
     payload["mentioned"] = sorted(mentioned)
+    # WHOSE WINDOW THIS WAS MEASURED AGAINST. The panel already shows the
+    # writer where the room went; without these it cannot say what the room
+    # WAS, and a budget whose limit is unexplained is a number to be
+    # believed rather than checked.
+    payload["budget_model"] = budget_model
+    payload["budget_assumed"] = assumed
     return payload

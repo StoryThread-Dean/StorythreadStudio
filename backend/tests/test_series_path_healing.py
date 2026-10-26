@@ -99,12 +99,19 @@ def test_the_repair_is_written_back_to_disk(client, tmp_path):
 
 def test_a_correct_path_is_left_completely_alone(client, tmp_path):
     # No rewrite, no churn in the writer's git diff, on the ordinary case.
+    #
+    # `codex_native` is in the fixture so this stays a test about HEALING.
+    # Opening a project also stamps that flag once, the first time it is
+    # opened with nothing in profiles/, and a fixture without it would fail
+    # here for a write that has nothing to do with series paths. The stamp has
+    # its own tests in test_codex_native.py, including that it happens once.
     series, book = _series_with_book(tmp_path, None)
     (book / "project.json").write_text(json.dumps({
         "project_id": "p-1", "title": "Book One", "description": "",
         "root_path": str(book), "story_type": "novel",
         "content_mode_default": "general", "default_model": None,
         "series_id": "s-1", "series_path": str(series),
+        "codex_native": True,
         "created_at": "2026-01-01T00:00:00+00:00",
         "updated_at": "2026-01-01T00:00:00+00:00",
     }), encoding="utf-8")

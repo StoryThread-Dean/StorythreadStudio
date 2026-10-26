@@ -183,13 +183,194 @@ bible. Any convenience that removes a click removes the whole protection --
 no accept-all, nothing pre-ticked, and a proposal for an entry that does not
 exist refuses rather than creating one.
 
+**2026-09-05: A NEW PROJECT IS BORN IN `codex/` AND NEVER GETS A `profiles/`
+FOLDER.** Creation was the last thing still pointed at the old world model:
+`PROJECT_FOLDERS` scaffolded six `profiles/*` directories and no `codex/` at
+all, and a new project only BEHAVED like a codex project by accident, because
+`entries_home` fell through to its last rule when the folders it had just made
+turned out to be empty. That is an inference, and one stray `.md` under
+`profiles/` reversed it silently -- the writer's whole world moved to the legacy
+home and nothing raised anything, because "you have no characters" is an
+ordinary answer. `project.json` carries `codex_native: true` now, read ABOVE the
+file-counting rule, and it is a positive claim only: no value of it can send a
+project back. **The same gap was walling writers out of the Weave entirely** --
+`migration_state` said "none" forever, `WeaveScreen` renders the conversion
+panel for "none", and that panel's "nothing to convert" branch has no button, so
+every new project's Weave tab was a dead end instead of the map. Fixed by the
+fourth state, `native`. `profiles/` is untouched for every project that has one;
+conversion is still an offer. Spec: `docs/weave-spec.md` amendment E.
+
+**2026-09-06: `notes/ai-notes.md`, AND THE REASON IT IS A REQUEST FIELD.**
+Standing guidance for the book -- decisions changed, habits not to copy, which
+of the Advisor's findings are deliberate -- sent with every request from
+`editor-chat`, `editor-pass`, `revise-suggestion` and `profile-chat`. **A route
+never opens the file**, and that is not fastidiousness: the locked context rule
+says the writer can inspect, remove and switch off anything automatic, and a
+route that reads a file has no idea the switch exists. A field can only be
+filled by a surface that has a control, so the rule enforces itself. Pinned by
+a source read over `routers/ai.py`. It renders FIRST in the materials block,
+ahead of chips: everything else there is material ordered narrowest-first, and
+this is instruction about how to read the material -- which cannot arrive after
+it. For the same reason it is NOT gated to Draft/Enhance the way the chapter
+outline is. Capped at 20k and REFUSED rather than trimmed, because unlike every
+other material this is not one expensive request, it is every request from now
+on. **Its name is the design**: `author-notes.md` was already the writer's
+private room, and putting its opposite next to it teaches both in one sentence
+-- which is also exactly the circumstance in which the old promise gets broken
+by accident, so `test_planning_sources.py`'s guard was widened from one
+function's body to every function in `scan.py` that opens `notes/`. That guard's
+comment had cited `test_author_notes_is_private.py`, **a file that has never
+existed**. Spec: `docs/long-context-spec.md`.
+
+**Two things that fell out of it.** The chat's Notes tab was a hardcoded pair
+while the backend shipped six, so Themes, Research and Brainstorming could be
+written in the sidebar and attached to nothing -- a duplicated list does not
+announce that it has drifted, it just shows less than there is. And
+`weavingApi.ts` defaults `model_context_limit` to **32000 with no caller
+passing it**, so the Weave's budget -- the reference implementation the
+long-context roadmap item is built on -- has never measured against the model
+the writer selected. Reported, not fixed here; it is the prerequisite for that
+item rather than a side task. `docs/product-scope.md`'s "no persistent AI memory
+across Profile Builder chat sessions" is REVERSED on the writer's request and
+struck through rather than deleted, because the reasoning is worth more than a
+tidy list: what is ruled out is the AI quietly remembering; what is being built
+is memory the writer owns and can switch off.
+
+**2026-09-06: CONVERSATIONS PERSIST, AND THE SUMMARY SWAP IS A CHAT FEATURE
+FIRST.** `.storythread/chats/<chat-id>.json`, `app/chat_sessions.py`, copied
+almost verbatim from `codex/findings.py` -- schema version, id regex,
+`replace_atomic`, corrupt-as-absent, newer-schema refusal, newest-first listing
+with an id tiebreak. NOT `app.db`: a transcript is paid for and not derivable,
+which is the same argument that keeps the Weaving ledger out.
+
+**The one decision worth keeping: a hidden materials turn is stored as a
+DESCRIPTOR, never its text.** It solves two unrelated problems with one line.
+Size -- a materials block can hold a 100k chapter plus a 60k brief, so verbatim
+storage means megabytes of duplicated manuscript per session. And STALENESS --
+it is a snapshot, so replaying a four-day-old one hands the model the chapter as
+it stood then and presents it as current. On resume the descriptors are dropped
+and `chapterEstablished`/`establishedChipKeys` come back EMPTY, so materials
+rebuild from today's files. `clearWritingCompanionChat` is the checklist for
+what a session must restore: whatever that function resets IS the session.
+
+**The recap is the roadmap's "summary swap", applied to a conversation.**
+`POST /api/ai/chat-recap`, `long_context` role (its second consumer -- declare
+it in `ROLE_INFO` or `test_role_call_sites.py` fails). Bought ONCE on first
+resume and kept; extended rather than rebuilt, folding the old recap in as
+context so covered turns are never re-read or re-charged. An empty answer is a
+502, never stored -- storing `""` would replace the older half of the
+conversation with nothing, silently, with every message still on screen. TWO
+INDICES are returned, `recap_through` (stored, includes hidden descriptors) and
+`recap_visible_through` (what a reopened panel holds); re-deriving the second
+on the frontend would copy `_RECAP_KEEP_VERBATIM` into a second language.
+
+**Two tests that were passing for the wrong reason, both found by reinstating
+the bug.** The traversal guard: the path is `f"{chat_id}.json"`, so
+`../../project.json` escapes to `project.json.json`, which never exists -- the
+test went green with the guard deleted. `../../project` is the real attack. And
+the picker rendered its error AND "nothing saved yet" together on a failed read,
+which is the Recent-Projects bug this repo has now shipped three times: an empty
+result and a failed one look identical unless the screen says which.
+
+**Also fixed: a conversation followed the writer into another book.**
+`handleProjectOpen` reset the chapters and the structure and never touched the
+chat, so Book A's messages sat in Book B's panel with chips still attached.
+Survivable while chats were session-only; with a session id in play it would
+append one book's turns to the other book's file.
+
+**2026-09-06: THE LONG-CONTEXT BUDGET, AND THREE BUGS OF THE KIND IT EXISTS TO
+STOP.** `app/ai/materials_budget.py` fits the chat/Draft/Enhance/Advisor path
+against the model's real window. It reuses `Budget` (pure arithmetic) and
+deliberately NOT `_fit`: `_fit` sorts `Piece`s, which need an `entity_id` and a
+rung on a ladder about how a Thread relates to a scene, and a chapter has
+neither. Documents get their own fitter -- putting two unrelated kinds of thing
+behind one sort order makes the ladder stop meaning what it says. Drop order:
+surrounding, then brief, then the passage SWAPPED for its chapter summary.
+Pinned: `ai_notes` and `outline`. Chips are never dropped -- the writer chose
+them by hand this turn.
+
+**`ran` IS NOT `engaged`, and conflating them is a real bug I wrote first.**
+`ran` means the budget evaluated; `engaged` means something changed. Reading
+`kept.get(key, original)` looks right and makes a DROPPED material fall
+straight back to the thing that did not fit. `_survived()` is the fix and the
+drop-order test is what caught it.
+
+**It engages only when the window is KNOWN.** An unknown window leaves the old
+behaviour untouched, because acting on a number we do not have is guessing with
+the writer's prose. The six flat caps stay as backstops -- nothing downstream
+checks size at all.
+
+**The three bugs.** (1) `weavingApi.ts` defaulted `model_context_limit` to
+32,000 and NO CALLER EVER PASSED ONE, so every Weave budget for three releases
+measured a number nobody chose; the field's comment said "the caller knows its
+own model", which was false because roles resolve server-side. (2)
+`context_length: 0` was read as unlimited by `if context_tokens and ...`, making
+every LOCAL model the one model that could never be refused -- while Ollama's
+default is to trim an oversize prompt and answer anyway, so the reply looks fine
+and is built on half the book. `fits()` returns THREE verdicts now. (3) The
+window cache stored a failed lookup forever; the TTL is applied at read time so
+an unknown is retried after a minute.
+
+**Both silent truncations are gone.** `_clip()` writes `[...trimmed, N more
+characters]` into the text, because a bare `text[:400]` reads to a model as a
+sentence that stops, and it fills the gap confidently from nothing.
+
+**2026-09-07: A SECTION NAME DOES NOT MEAN THE SAME THING IN EVERY KIND.**
+`_SECTION_ALIASES` in `codex/threads.py` healed a Location's old "Appearance"
+heading into its current "Physical Description" -- keyed by SECTION ID ALONE,
+with no notion of which kind it applied to. Three kinds have sections by those
+names legitimately: creature (Appearance), object (Appearance, Significance)
+and concept (Details). So a Creature's Appearance was filed under
+`physical_description`, an id the creature registry does not have; the editor
+asked for `appearance`, found nothing, and drew an empty box over prose sitting
+on disk under the wrong name -- and heal-on-save then made it permanent.
+Reported as "Creatures > Appearance doesn't appear after saved and coming
+back". Aliases are keyed by KIND now, **and the reverse mappings are in there
+too**: scoping alone stops new damage and does nothing for entries already
+rewritten, so creature/object/concept map the damaged headings back. Safe
+because those headings are not in those kinds' registries at all.
+
+**2026-09-07: ONE EDITOR FOR EVERY KIND.** Creatures, Cultures, Factions,
+Religions, Ruling Authorities, Deities, Objects and Languages opened in
+`ThreadEditor` -- a different look, and no Profile Chat -- because `App.tsx`
+routed on `PROFILE_KINDS`, a hand-written list of four. The Profile Builder
+could already draw them: `ProfileType` is `string`, sections come from the
+registry, every character-only extra is guarded, and `tabsFromSections` even
+offered them as tabs. Only the way IN disagreed. Same shape as the `NOTE_FILES`
+bug the day before: a duplicated list does not announce that it has drifted.
+`tabsFromSections` now covers every group but notes, and `ThreadEditor` has no
+route left -- **left in the tree deliberately rather than deleted, because
+deleting a component is the writer's call** (R8.6 was decided that way).
+
+**2026-09-07: PER-SECTION AI SUMMARIES WERE DEAD, AND THE FULL ONE IS NO
+LONGER ATTACHED.** Asked which of traits or summary is the better thing to
+attach, the answer came from checking every reader rather than from taste.
+Per-section `ai_summary` cost ONE AI CALL EACH and reached no model at all --
+not a chip, not profile-chat, not the Weave brief, not even as input to the
+Full AI Summary (`generate-full-summary` sends `formatProfileForAI`, which
+never emitted it). Removed: tile, endpoint, prompt. The RENDERER still writes
+an existing one, so nothing a writer paid for is deleted; what stopped is the
+`_Generated on demand_` placeholder under every section of every entry.
+**Traits beat the summary and it is not close**: a trait carries `[core]`,
+`SUBTEXT` and `ONLY IN CHAPTERS 2-9`, all three of which the prompts act on,
+and the summary is prose generated FROM those traits with none of them
+surviving -- so sending both paid twice and put a secret on the wire looking
+like an ordinary sentence. The `summary` bucket is gone from
+`ChipIncludeOptions` entirely rather than defaulted off, so it cannot be
+re-enabled by a flag. Full AI Summary is still generated, still on the page,
+still exported.
+
 **The Weave recovery is CLOSED as a work queue.** Every in-scope phase shipped
 in v2.0.0 and v2.0.1; phase 7 (scene identity) and phase 9 (the remaining AI
 passes) are deferred to v2.1.0, so the recovery plan is history now
 rather than a list to work from. Two items stay blocked on the same ruling and
 are not oversights: R1.5b and the R11.3 deletion both wait on `profiles/`
 ceasing to be a live home for unconverted projects, which is the writer's
-decision rather than a side effect of a task.
+decision rather than a side effect of a task. **R1.5b went on 2026-09-05, and
+the stated blocker turned out not to apply to it**: the entry claimed
+`merge_profile_with_arc` was "still doing real work for exactly the projects the
+ruling was protecting", and it had no caller at all. R11.3 is still blocked and
+genuinely so -- both profile dialects are still live.
 
 Why: the Weave was built for weeks against a specification that was never in
 the repository (it sat in gitignored `local/updateplan.md`). Nothing was ever
@@ -674,9 +855,8 @@ Context chips, ai_usage_example generation (removed in 5A), section/full summari
 
 ### Phase 5C -- Series/Book Structure -- Complete
 - **series.py router**: `/api/series/create`, `/open`, `/list-books` for managing book series
-- **Book-in-series creation**: `/api/projects/create-in-series` with arcs/ subfolder, series_id/series_path in project.json
-- **Arc files**: `/api/profiles/arc/list`, `/arc/profile`, `/arc/create`, `/arc/save` for per-book character arcs
-- **Profile merge**: `merge_profile_with_arc()` overlays book arc on canonical profile, `/api/profiles/merged` endpoint
+- **Book-in-series creation**: `/api/projects/create-in-series`, series_id/series_path in project.json
+- ~~**Arc files** and **Profile merge**~~ -- DELETED 2026-09-05. Four `/arc/*` routes, `/api/profiles/merged` and `merge_profile_with_arc()`, all with zero frontend callers from the day they shipped: nothing in the app could put a file in `profiles/arcs/`, so every book in a series got two empty folders and the overlay never ran once. The Weave answers the same question with a fact anchored to a chapter. `_absorb_arcs` stays and still reads arc files during a conversion
 - **Story context injection**: `_build_story_context()` reads series.json + project.json, auto-injects into AI system prompts
 - **ProjectHome.tsx rebuilt**: series creation, browsing, book-in-series flows
 
@@ -836,6 +1016,8 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_db_migrations.py` -- the app.db migration ladder, and the only thing that finds this class of bug: an UPGRADE. Every other test builds its database from scratch, where an ALTER smuggled into an already-applied migration looks perfectly correct -- which is how a real project came to die on `no such column`. Pins that a v2 or v3 database ends up byte-identical to a fresh one, and that each rung runs on the one before it
   - `test_explain_costs.py` -- does the help text tell the truth about MONEY: Python reads the TypeScript explanation registry, finds each named route's handler, and fails if one that calls `_resolve_model_and_key` is described as free (or the reverse). A "free" claim is a promise about the writer's credit, and the `universal` incident proved a frontend claim about the backend is only as good as something checking it
   - `test_yaml_frontmatter.py` -- the YAML frontmatter parser. Renamed from `test_outline_frontmatter.py` in v2.0.2 because the module was never outline-specific: `progress.py` uses it to read a PROFILE's `name:` field, which is why the outline rebuild could not simply delete it
+  - `test_chapter_outline_ai.py` -- what AI does with a plan, in both directions, and the rule that connects them. Build Chapter Outline **writes nothing** (an outline is human-authored, not one of the four designated generated fields, so the proposal reaches disk only via Insert then Save); the Weaving scan reads outlines as a planning source and labels each by CHAPTER; and the prompt forbids inventing proper nouns, because a name the model made up would be raised back to the writer later as their own planned decision. Also pins that "planned in" is RECOMPUTED, not cached -- editing an outline with no reindex changes the answer, which is the R8.5 bug refusing to be rebuilt
+  - `test_chapter_outline.py` -- the per-chapter PLAN, `outlines/chapters/<stem>.md`. The chapter and scene summaries have no test file at all, so this is the first per-chapter document to get one and it pins the things that break silently: `exists` distinguishing "nobody has planned this" from an error, the containment guard on a filename that arrives over HTTP, the file surviving a chapter rename and going with a chapter delete, and "nothing to move counts as success" so a chapter with no outline does not report a failed rename step. Also that what the writer typed comes back byte for byte -- it is NEVER parsed, which is what separates it from a scene Beat
   - `test_outline_worksheet.py` -- the worksheet and the healer. The healing tests are the ones that matter: the transform is a text edit rather than a parse-and-reconstruct, every original line survives in order, an injected post-condition failure leaves the file BYTE-IDENTICAL, malformed YAML is refused rather than guessed at, and healing twice produces the same bytes. Also the guard on the guard -- the no-line-lost check excused whatever the seed-comment regex matched, so an over-matching regex would have approved deleting the whole outline
   - `test_outline_presets.py` -- the nineteen presets: no invented proper nouns (a model would adopt one as canon and the scan would raise it), no em dashes, ids and headings unique
   - `test_outline_sections.py` -- outline section parsing / reconstruction (Planner corruption regressions)
@@ -849,6 +1031,7 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_scene_breaks.py` -- scene break suggestions
   - `test_chapter_progress.py` -- per-chapter word-target matching
   - `test_structure_manifest.py` -- acts/order manifest: synthesis, healing, PUT, ordering consumers
+  - `test_front_matter.py` -- a prologue is not chapter zero. The manifest's `front` and `back` lists, and the two failures that would have been silent: an act reorder sweeping the prologue into `unassigned` (the PUT rebuilds from a payload that deliberately does not carry front matter, so it is carried across from storage like `chapter_ids`), and an unnumbered file advancing the chapter sequence so the next chapter skips a number. Also that its WORDS count towards the manuscript total while it is not one of "thirty chapters"
   - `test_rename_chapter_cascade.py` -- file-renaming chapter rename + cascade (summaries, structure, progress)
   - `test_scene_beats.py` -- `## Beats` parsing, preservation on AI regen, /scene-beats
   - `test_story_context_fields.py` -- Book Details fields in _build_story_context
@@ -862,6 +1045,14 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
   - `test_nanogpt_models.py` -- tolerant /models normalization for thin catalogs
   - `test_provider_errors.py` -- provider-templated error translation (NanoGPT messages)
   - `test_settings_routes.py` -- ai_provider / NanoGPT key / prompt_caching over the Settings API
+  - `test_context_window.py` -- three verdicts rather than two. `fits()` answers FITS / TOO_BIG / **UNKNOWN**, because the old `if context_tokens and ...` short-circuited on 0 and made a model with no published window the one model that could never be refused -- which is EVERY local model, while Ollama's default is to trim an oversize prompt and answer anyway. Also pins the cache TTL: a failed lookup used to be kept forever, so one flaky call at startup left a model unknown until the app was restarted
+  - `test_budget_window.py` -- the Weave's budget measures a real model. `weavingApi.ts` defaulted `model_context_limit` to 32,000 and **no caller ever passed one**, so every refusal and every "where the room went" breakdown for three releases was computed against a number nobody chose. Nothing failed, because a budget cannot tell it is wrong. All eight tests fail if the hardcoded window is put back
+  - `test_materials_budget.py` -- the document fitter, and its two rules: pinned content that will not fit is REFUSED rather than trimmed (a model handed half a chapter cannot tell, and answers confidently about a book that stops mid-sentence), and everything dropped is NAMED. Plus the swap: a chapter too big to send goes as its summary
+  - `test_chat_budget.py` -- the same over HTTP, on the path that carries real prose. The load-bearing pair: it engages ONLY when the window is known (an unknown one leaves the old behaviour untouched, which is what makes this safe for local models), and a request that fits says NOTHING. Its drop-order test is what caught `kept.get(key, original)` -- which reads fine and makes a dropped material fall straight back to the thing that did not fit
+  - `test_ai_notes.py` -- the writer's standing guidance (`notes/ai-notes.md`): that it reaches four endpoints, that it renders FIRST because it is instruction rather than material, that it is not gated to Draft/Enhance the way the chapter outline is, and that an oversize file is refused rather than trimmed (it is sent on EVERY request, so a trim leaves guidance in force that was cut off mid-sentence). The load-bearing one is `test_no_route_reads_the_notes_file_itself`, a comment-stripped source read: the off switch lives on a screen, so a route that opens the file has no idea it exists, and a field can only be filled by a surface that has a control
+  - `test_chat_sessions.py` -- the session store. Four things fail silently and get one test each: a `chat_id` off the wire is a PATH, a hidden materials turn is stored as a DESCRIPTOR rather than its text (size AND staleness, one fix), a corrupt file is absent rather than fatal, and a file from a NEWER build is refused rather than round-tripped with fields dropped. **The traversal test was passing for the wrong reason** and reinstating the bug found it: the path is `f"{chat_id}.json"`, so `../../project.json` escapes to `project.json.json`, which never exists -- `../../project` is the real attack
+  - `test_chat_routes.py` -- the HTTP surface, and the one piece of protocol everything rests on: a first save mints an id and HANDS IT BACK, or the frontend sends null again next turn and every turn becomes its own one-turn session. Also that an id which no longer resolves mints a new session rather than refusing -- the writer's turn already cost money, so the cheapest wrong answer is an extra row in the picker
+  - `test_chat_recap.py` -- the summary swap, applied to a conversation. The money rules are the tests: bought ONCE at first resume (not at put-away, which buys recaps nobody reads; not per resume, which re-buys what was paid for), EXTENDED rather than rebuilt so covered turns are never re-read, nothing bought at all below ten messages, and an empty answer refused with a 502 rather than stored -- storing `""` replaces the older half of the conversation with nothing, silently, with every message still on screen. Also pins the two indices (`recap_through` counts stored messages, `recap_visible_through` counts what a reopened panel holds) with a fixture where they genuinely differ
   - `test_custom_theme.py` -- what a writer's own palette may contain. Every value goes straight into a `style` attribute on `<html>`, and the way in is not only the colour picker: `settings.json` is hand-editable and a "theme pack" shared as JSON is an obvious next step for people. So a colour must be `#RGB`/`#RRGGBB`/`#RRGGBBAA`/`rgb(R G B / A)` and a key must look like `--st-*`, checked on the way in AND out. Malformed entries drop INDIVIDUALLY -- the screen has 56 inputs and one typo must not cost the other 55. The backend deliberately does not hold the list of 56 token names; that would be a second cross-language list to keep in step, and the frontend's registry is already pinned to App.css
   - `test_appearance_bounds.py` -- the three appearance numbers that live in two languages, every one of which fails SILENTLY on drift. The PUT ignores an unknown `ui_scale` rather than rejecting it (so an older backend is not broken by a newer client), which means a step the frontend offers and `_UI_SCALES` omits returns 200 and stores NOTHING -- the writer picks it, watches it apply, restarts, and it is gone with nothing to diagnose. Python reads `useUiScale.ts` and `useEditorFontSize.ts` and pins the scale list, the 9-24pt clamp and the 12pt default. Also pins that `parseUiScale` tests membership against `UI_SCALE_PX` rather than a hand-written list, which is the shape the old ternary-chain bug had
   - `test_prompt_caching.py` -- cache_control payload shapes, provider gating, NanoGPT headers
@@ -922,6 +1113,9 @@ Two automated test suites plus a manual checklist. All three are wired into `/pr
 - `app/src/**/*.test.{ts,tsx}` -- vitest + `@testing-library/react`, runs in jsdom. Current files:
   - `src/components/progress/ProjectCompletionGauge.test.tsx` -- compact bar, slide-over, serial mode
   - `src/App.css.test.ts` -- the design system's own contract: both themes declare the same `--st-*` tokens, the audiobook block overrides every one of them, an inset surface is never lighter than the panel holding it, and NO raw Tailwind palette class survives ANYWHERE -- `features/audiobook/` was exempt for two releases and is not any more, because giving the Converter a theme switch meant converting its 940 shade classes onto role tokens (a literal `bg-zinc-900` cannot follow a theme; the conversion was near zero-delta because `.audiobook-theme` was built FROM those shades). Since v2.0.4 it also **computes WCAG contrast from the stylesheet** -- every ink token against every surface it is painted on, in all three palettes, failing the build under 4.5:1, with `.audiobook-theme`'s `bg-raised` a named and reasoned exemption (no grey clears it without inverting the ladder). Plus two gates for the ways a colour goes wrong silently: a `text-<role>` class whose `--color-<role>` does not exist emits NO rule and inherits its parent (eight such call sites shipped in DialogueCheck), and an unprefixed `opacity-` on already-dim ink multiplies a measured token into something no check can see -- `disabled:` and `group-hover:` variants are deliberately allowed, because low contrast is the correct rendering of a control you cannot use. It reads App.css off disk with `readFileSync` rather than `import.meta.glob(..., "?raw")`, which returns an empty string for stylesheets and would have passed every assertion vacuously
+  - `src/aiNotesSeams.test.ts` -- the wiring in App.tsx that no component test can see, all of it silent when it breaks: that the payload carries the GATED value rather than the raw file (or the off switch toggles and changes nothing, the shape of the useUiScale and line-height bugs), that Save to AI Notes opens a composer instead of writing, that a failed read of the notes file ABORTS the append (POST /note is a whole-file overwrite, so falling through would replace the writer's whole guidance file with one line), that a reopened conversation clears `chapterEstablished` so materials rebuild from today, and that the recap swap takes the LATER of the two cuts. It opens with a guard on itself -- `?raw` returns an empty string for some file types, which is how App.css.test.ts once passed vacuously
+  - `src/utils/chatSessions.test.ts` -- mostly `relativeDay`, because it is the only decision in the file and the way it fails is one nobody reports: a picker that says "today" beside last night's conversation is merely confusing, so the writer works around it. CALENDAR days at LOCAL midnight, not a duration divided by 86,400,000; plain day counts out to 90 days because that is what was asked for ("4 days ago", "23 days ago") where a date library would round to "3 weeks"; and "" rather than "in -3 days" for a future stamp, because clocks do go backwards
+  - `src/components/chat/ChatSessions.test.tsx` -- the picker. That an empty list and a FAILED read never look the same (this repo has shipped that confusion three times now, and the test found it in this very component); that deleting asks first; that a long conversation says it may be summarised BEFORE it is opened rather than after the request is paid for; and that a profile conversation about somebody else is still SHOWN but says which character to open instead of quietly mixing two transcripts
   - `src/hooks/useEditorFontSize.test.ts` -- the size of the writer's own prose. The pin that matters is `resolveEditorFontPx(12) === 16`: the editor hardcoded `fontSize: "16px"` in its CodeMirror theme from the day it was written, which no setting could reach (useUiScale moves rem utilities via `html { font-size }`), so the manuscript rendered at one size forever while three separate comments claimed the toolbar's font picker handled it -- that picker chooses a FAMILY and does not persist. 12pt is exactly 16px, which is what lets the control ship without reflowing a single existing book. Also: Infinity clamps and NaN falls back to the DEFAULT, and Settings is read as source to prove it uses the shared arithmetic
   - `src/components/editorSpacing.test.tsx` -- line spacing and paragraph spacing reach the editor: each named option maps to its documented multiplier, Multiple clamps at both ends and rejects garbage, and the values land on `.cm-content` and `.cm-line` rather than the editor root, where CodeMirror's own baseTheme overrides them
   - `src/components/icons/icons.test.tsx` -- the app's own marks keep lucide's contract (24x24, `fill="none"`, `stroke="currentColor"`, `aria-hidden`), so they drop into the existing tinting call sites unchanged. Also pins that the favicon and the `NeedleThread` component draw the same paths -- two copies of one drawing, because a favicon is a static file and cannot import a component
@@ -1208,6 +1402,7 @@ evidence of drift.
 | `docs/local-model-spec.md` | Source of truth for local model support: the transport, model discovery, context windows, what a local role spends. Appendix: the 2026-07-13 provider research |
 | `docs/character-spine-spec.md` | Source of truth for the Profile Builder's spines: personality facets, story roles, what is stored |
 | `docs/audiobook-converter-spec.md` | Source of truth for the Audiobook Converter (shipped v1.1.0); tests cite it by section number |
+| `docs/chapter-outline-spec.md` | **Source of truth for Chapter Outlines**: the per-chapter plan, why it is not a summary and not a scene Beat, how it reaches AI, and the rule that "planned in" is derived on read and never cached |
 | `docs/outline-spec.md` | Source of truth for the Outline (shipped v2.0.2): the worksheet format and parse rules, the ruling that Book Details stays the master, the preset catalog, the greying rule, the healing contract, the gauge weights |
 | `docs/product-scope.md` | Core goals, writing philosophy, locked product rules, in/out-of-scope |
 | `docs/architecture.md` | Three-layer architecture, dual storage model, folder layout, current API surface |

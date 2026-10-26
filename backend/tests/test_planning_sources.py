@@ -158,15 +158,60 @@ def test_every_other_note_is_still_read(project):
 
 
 def test_no_corpus_builder_reads_the_private_file():
-    # A source read, because the risk is a NEW reader added later rather than
-    # this one changing. Anything that walks notes/ has to skip it.
+    """
+    A source read, because the risk is a NEW reader added later rather than
+    this one changing. Anything that walks notes/ has to skip it.
+
+    WIDENED IN v2.0.6, and the reason is the change that prompted it: the app
+    now ships notes/ai-notes.md, a note file whose whole purpose is to BE sent
+    to an AI, sitting in the same folder as the one that must never be. That
+    is exactly the circumstance in which a future reader of this folder gets
+    written without the skip.
+
+    The old version read only `_writer_vocabulary`'s body, so a second
+    notes-walking function anywhere else in the module would have sailed past
+    it. This finds every function that opens the folder and requires each one
+    to name PRIVATE_NOTES.
+    """
     from app.codex import scan
 
     with open(scan.__file__, "r", encoding="utf-8") as f:
         source = f.read()
-    start = source.index("def _writer_vocabulary")
-    end = source.index("\ndef ", start + 10)
-    assert "PRIVATE_NOTES" in source[start:end]
+
+    # Split the module into top-level functions, then keep the ones that go
+    # looking in notes/ at all.
+    starts = [i for i in range(len(source))
+              if source.startswith("\ndef ", i)]
+    starts = [i + 1 for i in starts]
+    bounds = list(zip(starts, starts[1:] + [len(source)]))
+
+    walkers = [source[a:b] for a, b in bounds
+               if 'os.path.join(project_path, "notes")' in source[a:b]]
+
+    # If this is zero the test has stopped testing anything -- the folder is
+    # read somewhere, and a guard that guards nothing is worse than none.
+    assert walkers, "no function reads notes/ any more; this guard needs rewriting"
+
+    for body in walkers:
+        name = body.split("(", 1)[0].removeprefix("def ").strip()
+        assert "PRIVATE_NOTES" in body, (
+            f"{name}() walks notes/ without skipping PRIVATE_NOTES. "
+            f"author-notes.md is the writer's own room and must not reach an AI."
+        )
+
+
+def test_the_ai_facing_note_is_not_treated_as_private():
+    """
+    The other direction, and it matters as much.
+
+    notes/ai-notes.md is standing guidance the writer WANTS sent. If it ever
+    landed in PRIVATE_NOTES it would be excluded silently -- their guidance
+    would stop reaching the model with nothing on screen changing, which is
+    the exact shape of the bugs this codebase keeps finding.
+    """
+    from app.codex.scan import PRIVATE_NOTES
+
+    assert "ai-notes.md" not in PRIVATE_NOTES
 
 
 # ── What the writer marked on purpose ────────────────────────────────────────

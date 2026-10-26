@@ -139,14 +139,24 @@ export function labelsFromRegistry(types: TypeEntry[]): Record<string, string> {
  * between "Governments turns up in both screens when you add it" and "the two
  * screens disagree about your world".
  *
- * Filtering on the Profiles group alone would put ten tabs on a page whose main
- * problem is already crowding, including six kinds the writer has never used.
- * The Other group (objects, concepts, events, languages) stays in the Weave's
- * own editor.
+ * EVERY KIND OF ENTRY, not just the Profiles group. This used to stop at
+ * Profiles, on the reasoning that ten tabs would crowd the page -- but the
+ * crowding never happens, because the rule above already hides a kind the
+ * writer has not used. What DID happen is that Objects and Languages opened
+ * in a different editor from Creatures and Factions, with a different look
+ * and no Profile Chat, which is the inconsistency the writer reported:
+ *
+ *     "Interface for Creatures, Culture, Factions, Religions, Ruling
+ *      Authorities, Dieties, Objects, Languages is visually different than
+ *      Characters, Locations, Lore."
+ *
+ * Notes are still excluded -- they are documents the writer authors, edited
+ * in the editor, and they are not entries about anything.
  */
 export function tabsFromSections(tree: SectionsTree): string[] {
-  const profiles = tree.groups.find(group => group.id === "profiles");
-  return (profiles?.sections ?? [])
+  return tree.groups
+    .filter(group => group.id !== "notes")
+    .flatMap(group => group.sections)
     .filter(section => section.kind === "type")
     .map(section => section.id);
 }

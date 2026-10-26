@@ -188,7 +188,7 @@ def test_a_thread_added_on_disk_appears_without_a_reindex_call(project):
 def test_health_reports_state_without_doing_the_work(project):
     body = client.get("/api/codex/health", params={"project_path": project}).json()
     assert body["registry_ok"] is True
-    assert body["migration_state"] in {"none", "done", "incomplete"}
+    assert body["migration_state"] in {"none", "done", "incomplete", "native"}
     # It reported dirty and did NOT quietly rebuild -- a status call a UI
     # polls must stay cheap.
     assert body["index_dirty"] is True

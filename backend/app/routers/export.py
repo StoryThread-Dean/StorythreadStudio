@@ -55,10 +55,17 @@ class ExportRequest(BaseModel):
     #                        manuscript, or copy summaries/chapters/ into the
     #                        snapshot folder.
     #   scene_summaries   -> same, but for summaries/scenes/<stem>/*.md
+    #   chapter_outlines  -> the PLAN for each chapter, outlines/chapters/*.md.
+    #                        A separate flag from the summaries because it is
+    #                        the opposite document: a summary says what the
+    #                        chapter turned out to be, an outline says what it
+    #                        was meant to do. A writer sending someone their
+    #                        manuscript usually wants one and not the other.
     #   notes             -> copy notes/*.md (outline, style guide, themes)
     #   profiles          -> copy profiles/ (characters, relationships, etc.)
     include_chapter_summaries: bool = False
     include_scene_summaries:   bool = False
+    include_chapter_outlines:  bool = False
     include_notes:             bool = False
     include_profiles:          bool = False
     # THE WEAVE ITSELF, which is a different thing from the entries.
@@ -218,17 +225,9 @@ def _entries_root(folder_path: str) -> tuple[str, dict]:
     folder from the editor would hand the writer a book with the wrong world
     attached to it.
     """
-    from app.codex.migrate import entries_home
-    from app.codex.types_registry import TypesError, default_registry, load_registry
+    from app.codex.migrate import entries_root
 
-    home = entries_home(folder_path)
-    try:
-        registry, _ = load_registry(folder_path)
-    except TypesError:
-        # A broken types.json is reported by the screen that owns it. Here it
-        # means "use the shipped kinds", not "export nothing".
-        registry = default_registry()
-    return os.path.join(folder_path, home), registry
+    return entries_root(folder_path)
 
 
 def _collect_md_files(folder: str) -> list[tuple[str, str]]:
@@ -704,6 +703,16 @@ async def export_full_manuscript(request: ExportRequest):
             appendices.append("\n".join(section))
             extras_summary_parts.append(f"{len(scene_rows)} scene summaries")
 
+    if request.include_chapter_outlines:
+        outlines = _collect_md_files(os.path.join(folder_path, "outlines", "chapters"))
+        if outlines:
+            section = ["# Chapter Outlines"]
+            for name, body in outlines:
+                section.append(f"\n## {name.removesuffix('.md')}\n")
+                section.append(body.strip())
+            appendices.append("\n".join(section))
+            extras_summary_parts.append(f"{len(outlines)} chapter outlines")
+
     if request.include_notes:
         notes = _collect_md_files(os.path.join(folder_path, "notes"))
         if notes:
@@ -964,6 +973,14 @@ async def export_snapshot(request: ExportRequest):
         )
         if n:
             extras_parts.append(f"{n} scene summary files")
+
+    if request.include_chapter_outlines:
+        n = _copy_tree(
+            os.path.join(folder_path, "outlines", "chapters"),
+            os.path.join(snapshot_dir, "outlines", "chapters"),
+        )
+        if n:
+            extras_parts.append(f"{n} chapter outlines")
 
     if request.include_notes:
         n = _copy_tree(

@@ -54,6 +54,8 @@ import { SpinePickers } from "../components/profiles/SpinePickers";
 import { QuickBuildPanel } from "../components/profiles/QuickBuildPanel";
 import { NameGeneratorPanel } from "../components/profiles/NameGeneratorPanel";
 import { Dices } from "lucide-react";
+import { fetchChat, saveChat } from "../utils/chatSessions";
+import { ChatSessions } from "../components/chat/ChatSessions";
 import { RolePicker } from "../components/profiles/RolePicker";
 import { AliasEditor } from "../components/profiles/AliasEditor";
 import type { CharacterKind } from "../types/profile";
@@ -93,9 +95,10 @@ import { RETIRED_TYPES } from "../features/codex/lexicon";
 import { findUnshownSections, foldIntoNotes, renameSection } from "./profileRepair";
 import { RunEditor } from "../features/codex/RunEditor";
 import { AppearsIn } from "../features/codex/AppearsIn";
+import { PlannedIn } from "../features/codex/PlannedIn";
 import { TraitWindow } from "../components/profiles/TraitWindow";
-import { fetchAnchors, fetchThreads, type ChapterAnchor } from "../features/codex/api";
-import type { EntriesHome, ProfileSource } from "./profileSource";
+import { fetchAnchors, fetchThread, fetchThreads, type ChapterAnchor } from "../features/codex/api";
+import type { EntriesHome, ProfileSource, WeaveThread } from "./profileSource";
 
 const API_BASE = "http://localhost:8000";
 
@@ -368,12 +371,28 @@ function AutoTextarea({
     autoSizeTextarea(el, { minH });
   }, [value, minRows]);
 
-  // Always tag with .text-entry so profile description and notes fields
-  // pick up the writer-facing font-size set by useUiScale, regardless of
-  // what the caller passed in className. Caller classes still win for
-  // colors / padding / borders -- only the font-size is dictated here.
-  const mergedClassName = ["text-entry", className].filter(Boolean).join(" ");
-
+  // -- THE CALLER'S FONT SIZE WINS, AND THAT IS A BUG FIX ----------------
+  //
+  // This used to force `.text-entry` on, above whatever the caller passed:
+  //
+  //     "in Profile Builder > Characters > Full AI Summary. This text is a
+  //      size larger than the rest of the text within this profile. All of
+  //      the AI generated text boxes have larger font."
+  //
+  // Correct, and the cause is a cascade detail rather than a wrong number.
+  // `.text-entry` is a plain class in App.css, OUTSIDE Tailwind's cascade
+  // layer, so it beats `text-sm` however the caller orders their classes --
+  // 16px against 14px at the default Interface size, and 28 against 16.6 at
+  // Maximum, where the two are half a page apart.
+  //
+  // The comment here claimed it was for "profile description and notes
+  // fields". It is not: those are plain textareas at `text-sm`, and the only
+  // two things this component renders are the two AI summary boxes. So it did
+  // not enlarge the writer's prose, it enlarged the machine's -- backwards,
+  // and it made the field a writer edits least the loudest thing on the page.
+  //
+  // `text-sm` is rem-based, so these boxes still follow the Interface size
+  // setting; they now follow it in step with the boxes beside them.
   return (
     <textarea
       ref={ref}
@@ -382,7 +401,7 @@ function AutoTextarea({
       placeholder={placeholder}
       rows={minRows}
       style={{ resize: "none", overflow: "hidden" }}
-      className={mergedClassName}
+      className={className}
       data-pb-field={dataField}
     />
   );
@@ -428,7 +447,7 @@ export function ProfileBuilder({
   // opposite explanations, and without this the screen told a writer whose
   // migration had died that it had never started.
   const [migrationState, setMigrationState] =
-    useState<"none" | "incomplete" | "done">("none");
+    useState<"none" | "incomplete" | "done" | "native">("none");
   // The writer's own chapters, in order, for every "when" question the Run
   // asks. Never a date and never a number they have to work out.
   const [chapters, setChapters] = useState<ChapterAnchor[]>([]);
@@ -488,6 +507,20 @@ export function ProfileBuilder({
 
   // Chat state -- session-only, no server persistence
   const [chatMessages, setChatMessages] = useState<ProfileChatMessage[]>([]);
+  // THE BOOK'S STANDING NOTES (notes/ai-notes.md).
+  //
+  // This screen has no Weave context bar, so it carries its own small
+  // version of the same obligation: what is sent automatically has to be
+  // visible and switchable. Read per book rather than per profile, and
+  // deliberately NOT cleared when the writer moves between profiles --
+  // it is a fact about the book, not about who is on screen.
+  const [aiNotesText, setAiNotesText] = useState("");
+  const [aiNotesOff, setAiNotesOff] = useState(false);
+  // The saved conversation this chat is writing to. Null until the first
+  // turn -- the backend mints the id and hands it back.
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [chatSessionsKey, setChatSessionsKey] = useState(0);
+  const [restoringChat, setRestoringChat] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -656,6 +689,9 @@ export function ProfileBuilder({
     setChatMessages([]);
     setChatInput("");
     setChatError(null);
+    // A conversation here is ABOUT somebody. Carrying the session pointer
+    // to the next profile would append Frodo's turns to Gandalf's file.
+    setCurrentChatId(null);
     setBehaviorMode("chat");
     setBehaviorPanelOpen(false);
     setFocusedSection(null);
@@ -669,6 +705,90 @@ export function ProfileBuilder({
     // way.
     setOpenTraits(new Set());
   }, [profile?.filename]);
+
+
+  // Read the book's standing notes once. Keyed on the PROJECT, so moving
+  // between profiles neither re-reads them nor clears them -- the effect
+  // above wipes everything that belongs to one profile, and this belongs
+  // to the book.
+  useEffect(() => {
+    const root = project?.root_path;
+    if (!root) return;
+    let cancelled = false;
+    const params = new URLSearchParams({
+      folder_path: root, filename: "ai-notes.md",
+    });
+    fetch(`${API_BASE}/api/documents/note?${params}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(body => { if (!cancelled && body) setAiNotesText(String(body.content ?? "")); })
+      .catch(() => { /* no notes is the ordinary state of a new book */ });
+    return () => { cancelled = true; };
+  }, [project?.root_path]);
+
+
+  // ── Saving and reopening a conversation ────────────────────────────────
+  //
+  // Simpler than the Writing Companion's, because this chat has far less
+  // state: no chips, no chapter, no established flags. The profile itself is
+  // re-serialised and re-sent on every turn anyway (see sendChatMessage), so
+  // a reopened conversation is grounded in the profile AS IT IS NOW rather
+  // than as it was -- which is what the writer wants after editing it.
+  const persistProfileChat = useCallback(async (messages: ProfileChatMessage[]) => {
+    const root = project?.root_path;
+    if (!root || !profile || messages.length === 0) return;
+    try {
+      const saved = await saveChat({
+        projectPath: root,
+        surface: "profile",
+        chatId: currentChatId,
+        // WHO it was about. This is what makes the picker readable: the
+        // writer asked for "4 days ago - Frodo Baggins - relationships
+        // buildout", and the name is the half that makes it findable.
+        subject: profile.name,
+        messages,
+        setup: { behaviorMode },
+      });
+      setCurrentChatId(saved.chat_id);
+      setChatSessionsKey(n => n + 1);
+    } catch {
+      // Silent on purpose: the reply is on screen, and an error about
+      // bookkeeping would read as the reply having failed.
+    }
+  }, [project?.root_path, profile, currentChatId, behaviorMode]);
+
+  const startFreshProfileChat = useCallback(() => {
+    setChatMessages([]);
+    setChatError(null);
+    setChatInput("");
+    setCurrentChatId(null);
+    setChatSessionsKey(n => n + 1);
+  }, []);
+
+  const openProfileChat = useCallback(async (chatId: string) => {
+    const root = project?.root_path;
+    if (!root) return;
+    setRestoringChat(true);
+    try {
+      const chat = await fetchChat(root, chatId);
+      // No hidden materials on this surface -- the profile is sent as an
+      // ordinary leading message and rebuilt each turn -- but filtered
+      // anyway, so a session saved by a future version cannot leak one in.
+      setChatMessages((chat.messages ?? [])
+        .filter(m => !m.hidden)
+        .map(m => ({ role: m.role, content: String(m.content ?? "") })));
+      const mode = (chat.setup as { behaviorMode?: string })?.behaviorMode;
+      if (mode) setBehaviorMode(mode as ProfileBehaviorMode);
+      setCurrentChatId(chat.chat_id);
+      setChatError(null);
+      setChatInput("");
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "auto" }), 50);
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message
+        : "That conversation could not be opened.");
+    } finally {
+      setRestoringChat(false);
+    }
+  }, [project?.root_path]);
 
 
   // ── Data Operations ──────────────────────────────────────────────────────
@@ -759,6 +879,63 @@ export function ProfileBuilder({
       setEditorLoading(false);
     }
   }, [source]);
+
+  /**
+   * RE-READ WHAT THE RELATIONSHIPS SECTION JUST WROTE TO THIS ENTRY'S OWN FILE.
+   *
+   * Nearly everything on this page waits for Update. A relationship with an
+   * entry on the other end does NOT -- it is a shared record, so pressing
+   * Record writes a connection into this character's Markdown then and there.
+   * That leaves the open page holding two things that are now out of date, and
+   * both of them fail silently in their own way:
+   *
+   *   1. `revision`, which is the fingerprint the save is checked against. The
+   *      file moved, so the writer's next Update is refused as a conflict --
+   *      "This entry changed on disk since you opened it" -- for a change they
+   *      made themselves, thirty seconds earlier, on this screen. That is the
+   *      reported bug: record a linked relationship, type a second one that has
+   *      no profile to link to, press Update, and the typed one cannot be saved
+   *      at all. It lives in the page buffer, and a refused save never writes
+   *      the buffer, so leaving the profile loses it with nothing to recover.
+   *
+   *   2. `weave`, the whole Thread carried through a load so a save can hand
+   *      back everything this form does not display (see profileSource.ts).
+   *      Its `ties` list is the one from BEFORE the record. Get past the
+   *      conflict without refreshing it and the next ordinary save quietly
+   *      deletes the connection the writer just made -- the failure the
+   *      conflict check exists to prevent, arriving by the other door.
+   *
+   * So both are taken again from disk, and NOTHING ELSE is: the sections, the
+   * name, the Run and every other field stay exactly as the writer has them in
+   * the buffer. This is a resync of the parts the page does not own, not a
+   * reload of the page.
+   */
+  const resyncWeave = useCallback(async () => {
+    const p = profileRef.current;
+    if (!p || !source || source.home !== "codex" || !p.entity_id) return;
+    try {
+      // Read as the loose blob it is on the wire. `ThreadDetail` names the few
+      // fields the Weave's own screens read; what this needs is everything the
+      // file holds, `ties` included, and enumerating them here would be a
+      // second list of the format to keep in step. See WeaveThread.
+      const fresh = await fetchThread(project.root_path, p.entity_id) as
+        unknown as WeaveThread & { entity_id?: string; revision?: string };
+      setProfile(prev => {
+        // The writer may have switched entries while this was in flight. A
+        // resync that landed on the wrong profile would give it another
+        // entry's connections.
+        if (!prev || prev.entity_id !== fresh.entity_id) return prev;
+        return {
+          ...prev,
+          revision: fresh.revision ? String(fresh.revision) : prev.revision,
+          weave: { ...(prev.weave ?? {}), ...fresh },
+        };
+      });
+    } catch {
+      // A failed re-read leaves the page exactly as it was. The save may then
+      // be refused, which is the old behaviour -- never worse than it.
+    }
+  }, [source, project.root_path]);
 
   const handleSave = useCallback(async () => {
     const p = profileRef.current;
@@ -1265,52 +1442,6 @@ export function ProfileBuilder({
     }
   }
 
-  async function generateSectionSummary(sectionKey: string, sectionHeading: string) {
-    if (!profile) return;
-    setGeneratingField(sectionKey);
-    setError(null);
-
-    const section = profile.sections[sectionKey];
-    const cfg = sections.find(c => c.key === sectionKey);
-
-    let contentText = "";
-    if (cfg?.hasTraitBlocks && section.trait_blocks.length > 0) {
-      contentText = section.trait_blocks
-        .map(b => `- ${b.trait} [${b.importance}]: ${b.description}`)
-        .join("\n");
-    } else {
-      contentText = section.content;
-    }
-
-    if (!contentText.trim()) {
-      setError("Section is empty -- add some content before generating a summary.");
-      setGeneratingField(null);
-      return;
-    }
-
-    try {
-      const res = await fetch(`${API_BASE}/api/ai/generate-section-summary`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profile_name: profile.name,
-          profile_type: profile.type,
-          section_heading: sectionHeading,
-          section_content: contentText,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail ?? "Generation failed.");
-      }
-      const data = await res.json();
-      updateSection(sectionKey, { ai_summary: data.section_summary });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not generate section summary.");
-    } finally {
-      setGeneratingField(null);
-    }
-  }
 
   async function generateFullSummary() {
     if (!profile) return;
@@ -1445,6 +1576,7 @@ export function ProfileBuilder({
           content_mode: project.content_mode_default ?? "general",
           section_labels: sections.map(c => c.heading),
           project_path: project.root_path,
+          ai_notes: aiNotesOff ? "" : aiNotesText,
         }),
       });
 
@@ -1459,7 +1591,13 @@ export function ProfileBuilder({
 
       const data = await res.json();
       if (data.model_used) setChatModelUsed(data.model_used);
-      setChatMessages([...newMessages, { role: "assistant", content: data.reply }]);
+      const nextHistory: ProfileChatMessage[] = [
+        ...newMessages, { role: "assistant", content: data.reply }];
+      setChatMessages(nextHistory);
+
+      // Keep it. Written only after the reply arrived, so a failed request
+      // never leaves a session claiming an answer that never came.
+      void persistProfileChat(nextHistory);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setChatError("Request timed out. The model may be overloaded -- try again or switch to a faster model.");
@@ -2491,6 +2629,21 @@ export function ProfileBuilder({
                       + "brought into the Weave first."
                     : undefined}
                 />
+                {/* DIRECTLY UNDER "Appears in", because the two answer nearly
+                    the same question and the difference between them is the
+                    point: that one is what the writer DECLARED, this is what
+                    the app NOTICED in their chapter plans. Apart, they would
+                    read as unrelated; together, the contrast is the
+                    explanation. Renders nothing when no plan names this. */}
+                {home === "codex" && profile.entity_id && (
+                  <div className="mt-2">
+                    <PlannedIn
+                      projectPath={project.root_path}
+                      entityId={profile.entity_id}
+                      name={profile.name || "this entry"}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="mb-6">
@@ -2535,6 +2688,11 @@ export function ProfileBuilder({
                     entityId={profile.entity_id}
                     type={profile.type}
                     name={profile.name}
+                    // Same seam as the Relationships section below: connecting
+                    // from here writes this entry's file straight away, so the
+                    // open page has to take the new fingerprint and the new
+                    // connections or its next Update is refused.
+                    onChanged={() => void resyncWeave()}
                   />
                 </div>
               )}
@@ -2566,19 +2724,15 @@ export function ProfileBuilder({
                     profileName={profile.name}
                     profileType={profile.type}
                     onContentChange={content => updateSection(cfg.key, { content })}
-                    onAiSummaryChange={ai_summary => updateSection(cfg.key, { ai_summary })}
                     onAddTraitBlock={() => addTraitBlock(cfg.key)}
                     onUpdateTraitBlock={(id, updates) => updateTraitBlock(cfg.key, id, updates)}
                     onRemoveTraitBlock={id => removeTraitBlock(cfg.key, id)}
                     chapters={chapters}
-                    onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
-                    generatingField={generatingField}
                     openTraits={openTraits}
                     onToggleTrait={toggleTrait}
                     colour={sectionColour(cfg.key, allSections.findIndex(c => c.key === cfg.key))}
                     shadowed={isShadowed(cfg.key)}
                     onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
-                    showAiSummary={!isSideCharacter}
                     onGenerateOverview={
                       isSideCharacter && cfg.key === "overview" ? generateQuickOverview : undefined
                     }
@@ -2716,7 +2870,7 @@ export function ProfileBuilder({
                           trait: block.trait,
                           description: block.description,
                           importance: block.importance,
-                          rel: (block as { rel?: string }).rel,
+                          rel: block.rel,
                         }))}
                         onBlocksChange={next => updateSection(cfg.key, {
                           trait_blocks: next.map(block => ({
@@ -2727,6 +2881,13 @@ export function ProfileBuilder({
                             ...(block.rel ? { rel: block.rel } : {}),
                           })) as TraitBlock[],
                         })}
+                        // RECORDING A CONNECTION WRITES THIS ENTRY'S OWN FILE
+                        // while the page is still open. Without this the page
+                        // holds a stale fingerprint and a stale copy of the
+                        // connections, and the writer's next Update is either
+                        // refused for a change they made themselves or, worse,
+                        // accepted and deletes it. See resyncWeave.
+                        onChanged={() => void resyncWeave()}
                       />
                     </div>
                   );
@@ -2750,19 +2911,15 @@ export function ProfileBuilder({
                     profileName={profile.name}
                     profileType={profile.type}
                     onContentChange={content => updateSection(cfg.key, { content })}
-                    onAiSummaryChange={ai_summary => updateSection(cfg.key, { ai_summary })}
                     onAddTraitBlock={() => addTraitBlock(cfg.key)}
                     onUpdateTraitBlock={(id, updates) => updateTraitBlock(cfg.key, id, updates)}
                     onRemoveTraitBlock={id => removeTraitBlock(cfg.key, id)}
                     chapters={chapters}
-                    onGenerateSectionSummary={() => generateSectionSummary(cfg.key, cfg.heading)}
-                    generatingField={generatingField}
                     openTraits={openTraits}
                     onToggleTrait={toggleTrait}
                     colour={sectionColour(cfg.key, allSections.findIndex(c => c.key === cfg.key))}
                     shadowed={isShadowed(cfg.key)}
                     onFocus={() => setFocusedSection({ key: cfg.key, heading: cfg.heading })}
-                    showAiSummary={!isSideCharacter}
                     onGenerateOverview={
                       isSideCharacter && cfg.key === "overview" ? generateQuickOverview : undefined
                     }
@@ -2886,6 +3043,49 @@ export function ProfileBuilder({
               )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              {/* THE SAME OBLIGATION THE EDITOR'S CONTEXT BAR CARRIES, in the
+                  space this screen has. The book's standing notes are sent
+                  with every message from here too, and the rule is that the
+                  writer can see that and stop it -- so a surface that sends
+                  them and cannot say so is not allowed to send them.
+
+                  Only shown when there is something to send: a switch for an
+                  empty file does nothing, and reads as broken. */}
+              {aiNotesText.trim() && (
+                <button
+                  onClick={() => setAiNotesOff(v => !v)}
+                  aria-pressed={!aiNotesOff}
+                  data-testid="profile-ai-notes-toggle"
+                  title={aiNotesOff
+                    ? "Your AI Notes are not being sent with these messages"
+                    : "Your AI Notes are sent with every message here"}
+                  className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-micro ${
+                    aiNotesOff
+                      ? "border-border text-faint hover:text-text-primary"
+                      : "border-accent-fill bg-accent-soft/40 text-accent-strong"
+                  }`}
+                >
+                  <Bot size={10} />
+                  {aiNotesOff ? "AI Notes off" : "AI Notes on"}
+                </button>
+              )}
+              {project && profile && (
+                <ChatSessions
+                  projectPath={project.root_path}
+                  surface="profile"
+                  currentChatId={currentChatId}
+                  refreshKey={chatSessionsKey}
+                  onOpen={id => void openProfileChat(id)}
+                  onStartFresh={startFreshProfileChat}
+                  busy={restoringChat}
+                  /* A conversation here is ABOUT somebody. Opening one
+                     for a different character would put their transcript
+                     beside this profile and send both. The row says where
+                     to go instead of quietly doing the wrong thing. */
+                  blockedReason={c => (c.subject && c.subject !== profile.name
+                    ? `open ${c.subject} to carry on` : "")}
+                />
+              )}
               {chatMessages.length > 0 && (
                 <button
                   onClick={() => { setChatMessages([]); setChatError(null); }}
@@ -3149,17 +3349,10 @@ interface ProfileSectionEditorProps {
   profileName: string;
   profileType: string;
   onContentChange: (content: string) => void;
-  onAiSummaryChange: (ai_summary: string) => void;
   onAddTraitBlock: () => void;
   onUpdateTraitBlock: (id: string, updates: Partial<TraitBlock>) => void;
   onRemoveTraitBlock: (id: string) => void;
-  onGenerateSectionSummary: () => void;
-  generatingField: string | null;
   onFocus: () => void;
-  // Side-character template: per-section AI Summary tiles are hidden (the
-  // sections are short single fields -- summarizing them adds nothing; the
-  // Full AI Summary at the bottom covers the whole profile).
-  showAiSummary?: boolean;
   // Side-character Overview only: the [Generate Overview] button. A
   // writer-clicked exception to the no-ghostwriting stance, scoped to fast
   // side-character assembly -- output stays editable and unsaved.
@@ -3184,24 +3377,17 @@ function ProfileSectionEditor({
   profileName,
   profileType,
   onContentChange,
-  onAiSummaryChange,
   onAddTraitBlock,
   onUpdateTraitBlock,
   onRemoveTraitBlock,
-  onGenerateSectionSummary,
-  generatingField,
   onFocus,
-  showAiSummary = true,
   onGenerateOverview,
   generatingOverview = false,
   chapters,
 }: ProfileSectionEditorProps) {
   // Open state for the walkthrough offered beside the heading.
   const [guideOpen, setGuideOpen] = useState(false);
-  // Closed on arrival. See the note beside the summary itself.
-  const [summaryOpen, setSummaryOpen] = useState(false);
 
-  const isGeneratingSummary = generatingField === sectionKey;
 
   return (
     <div
@@ -3384,60 +3570,6 @@ function ProfileSectionEditor({
           </p>
         )}
         </>
-      )}
-
-      {/* AI Summary sub-section (hidden on the side-character template) */}
-      {/* THE AI SUMMARY, CLOSED UNTIL ASKED FOR.
-          It is a derived restatement of the section above it, so on a page the
-          writer is reading it is the same words twice. Open, several at once
-          doubled the length of every profile. Closed, it is one line -- and it
-          says whether there is anything in it, so the writer never has to open
-          one to find out.
-
-          Local state, and that is deliberate: the wrapper is keyed by filename,
-          so switching profiles remounts these and every summary starts closed
-          again, which is what "upon opening the profile" asks for. Several stay
-          open at once while the writer is in one profile. */}
-      {showAiSummary && (
-      <div className="rounded border border-border bg-bg-primary p-3">
-        <div className="flex items-center justify-between gap-2">
-          <button
-            onClick={() => setSummaryOpen(v => !v)}
-            aria-expanded={summaryOpen}
-            className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-medium text-text-muted hover:text-text-primary"
-          >
-            {summaryOpen ? <ChevronDown size={11} className="shrink-0" />
-                         : <ChevronRight size={11} className="shrink-0" />}
-            <span className="truncate">
-              AI Summary: {heading}
-              {!summaryOpen && (
-                <span className="ml-1.5 text-faint">
-                  {section.ai_summary.trim() ? "written" : "empty"}
-                </span>
-              )}
-            </span>
-          </button>
-          <button
-            onClick={() => { setSummaryOpen(true); onGenerateSectionSummary(); }}
-            disabled={isGeneratingSummary}
-            className="flex shrink-0 items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs text-faint transition-colors hover:border-accent-fill hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-            title="Generate this section summary using AI"
-          >
-            <Sparkles size={10} />
-            {isGeneratingSummary ? "Generating..." : "Generate"}
-          </button>
-        </div>
-        {summaryOpen && (
-          <AutoTextarea
-            value={section.ai_summary}
-            onChange={e => onAiSummaryChange(e.target.value)}
-            placeholder="Click Generate to create an AI summary, or write one manually."
-            className="mt-1.5 w-full rounded border border-border bg-bg-panel px-2 py-1.5 text-xs text-text-muted placeholder-faint outline-none focus:border-accent-fill"
-            minRows={2}
-            dataField={`section:${sectionKey}:ai_summary`}
-          />
-        )}
-      </div>
       )}
     </div>
   );

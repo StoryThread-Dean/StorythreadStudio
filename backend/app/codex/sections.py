@@ -59,6 +59,14 @@ NOTE_SECTIONS = [
     # thought without adding anything first.
     {"id": "author_notes", "label": "Author Notes", "filename": "author-notes.md",
      "icon": "NotebookPen", "default_section": True},
+    # THE OPPOSITE OF THE ONE ABOVE, and deliberately next to it. Author Notes
+    # is the writer's own room, excluded from AI by name (see PRIVATE_NOTES in
+    # codex/scan.py). AI Notes is the room they SHARE: standing guidance about
+    # how the book is going, sent with every AI request from a surface that can
+    # show it and switch it off. Two files, adjacent, opposite promises -- which
+    # is the whole explanation a writer needs for either of them.
+    {"id": "ai_notes", "label": "AI Notes", "filename": "ai-notes.md",
+     "icon": "Bot", "default_section": False},
     {"id": "outline", "label": "Outline", "filename": "outline.md",
      "icon": "ListTree", "default_section": False},
     {"id": "style_guide", "label": "Style Guide", "filename": "style-guide.md",

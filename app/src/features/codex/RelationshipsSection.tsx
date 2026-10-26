@@ -574,7 +574,11 @@ export function RelationshipsSection({
         <Explain of="profile.relationships" />
       </div>
 
-      {rows.length === 0 && (
+      {/* NOTHING HERE means nothing of EITHER kind. Counting only the
+          connections told a writer whose relationships are all hand-typed
+          names that they had recorded nothing, directly above the list of
+          what they had recorded. */}
+      {rows.length === 0 && unlistedRows.length === 0 && (
         <p className="mb-2 rounded border border-dashed border-border px-3 py-3 text-mini text-faint">
           Nothing recorded yet. Add the people {entityName} deals with and say
           what each one is to them -- a parent, a mentor, a rival -- and what

@@ -343,6 +343,105 @@ export const EXPLAIN: Record<string, Explains> = {
         + "replaced.",
     ],
   },
+  // Key charset is [a-z0-9.-] only -- hyphens, never underscores. Python
+  // reads this file (test_explain_costs.py) and its entry regex cannot see a
+  // key with an underscore in it.
+  "chat-sessions.what": {
+    what: "Every conversation you have here is kept, so you can reopen one "
+      + "instead of starting over.",
+    why: "Chats used to vanish when you closed the app -- including replies "
+      + "you had paid for, and the setup that produced them: which profiles "
+      + "were attached, whether the chapter had been sent, where one ask "
+      + "ended and the next began. Coming back to a thread of thought two "
+      + "days later meant rebuilding all of it from memory.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Pick a conversation from the list to reopen it. It comes back with "
+        + "everything on screen and the attachments it had.",
+      "Start fresh puts the current one away without deleting it. It stays "
+        + "in the list.",
+      "Names come from your first message and can be changed. Profile chats "
+        + "are named after the character.",
+      "Reopening a long conversation may send a short recap of the older "
+        + "messages instead of all of them -- cheaper, and it keeps the "
+        + "model's attention on what you are asking now. The list says which "
+        + "ones are long enough for that, and you can always choose to send "
+        + "everything.",
+      "Deleting one cannot be undone.",
+    ],
+  },
+  "ai-notes.what": {
+    what: "Your running notes on how this book is going, sent to the AI with "
+      + "every request.",
+    why: "Everything else you attach is about one thing -- a character, a "
+      + "chapter, a place. This is the standing stuff that keeps having to be "
+      + "repeated: a decision you changed your mind about, a habit you do not "
+      + "want copied, a rule your world runs on. Without somewhere to put it "
+      + "you end up retyping it into every conversation, and forgetting on "
+      + "the ones where it mattered most.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "Write one line per thing worth remembering. Short: it goes with every "
+        + "request, so length is a cost you pay again each time.",
+      "Good entries are decisions and corrections -- \"Vance is the traitor "
+        + "now, changed in ch 12\", \"she never swears\", \"the fragments are "
+        + "deliberate\".",
+      "You can also press Save to AI Notes under any AI reply. That opens a "
+        + "box with the reply in it for you to cut down; nothing is saved "
+        + "until you confirm.",
+      "The context bar above the chat shows what it costs and switches it "
+        + "off. Off is remembered for this book only.",
+      "Author Notes is the opposite file and sits next to this one: nothing "
+        + "in it is ever sent to an AI unless you attach it yourself.",
+    ],
+  },
+  "chapter-outline.what": {
+    what: "A list of the key events in one chapter, in the order they happen.",
+    why: "Your chapter and scene summaries are written AFTER the prose and "
+      + "say what the chapter turned out to be. This is the other direction: "
+      + "what has to happen, written before there is anything to summarise. "
+      + "It is also what the AI reads when you ask it to draft or enhance "
+      + "this chapter, so a plan written here is a plan it works to.",
+    needed: "optional",
+    cost: FREE,
+    how: [
+      "List the events that move the chapter along, one line each. High "
+        + "level: the things without which the chapter does not work.",
+      "Type it however you like. Numbered, dashes or paragraphs all keep "
+        + "exactly the shape you gave them -- nothing here is read as a form.",
+      "Save with Ctrl+S, the same as a chapter. Nothing saves on its own.",
+      "Your book outline's chapter-by-chapter plan is a different thing and "
+        + "stays as it is. That one is the shape of the whole book; this is "
+        + "the play-by-play inside one chapter.",
+    ],
+  },
+  "chapter-outline.build": {
+    what: "Describe what you want the chapter to do, and it drafts the outline "
+      + "for you to edit.",
+    why: "It exists for the chapter you have not worked out yet. If you "
+      + "already know what happens, type it and skip this entirely -- you "
+      + "will be faster than any round trip. It earns its place when you are "
+      + "finding the story as you write it and want something concrete to "
+      + "argue with.",
+    needed: "optional",
+    cost: spends("One AI request each time you press Build. It reads what you "
+      + "typed, the outline you already have, whatever prose is in the "
+      + "chapter, and your world context, so a chapter with a lot written in "
+      + "it costs more than an empty one."),
+    how: [
+      "Say what the chapter has to do, in your own words. Be as rough as you "
+        + "like; it is working from your description, not a template.",
+      "Read what comes back. It lands nowhere until you say so.",
+      "Insert puts it in the editor unsaved, so you can rewrite any line "
+        + "before you press Save. Discard throws it away and changes nothing.",
+      "Ask again with a correction to revise it. It rewrites the whole "
+        + "outline rather than patching lines, so what you see replaces what "
+        + "you had.",
+    ],
+    endpoint: "/api/ai/build-chapter-outline",
+  },
   "weaving.what": {
     what: "Weaving: four passes over your book and your world, each asking a "
       + "different question.",

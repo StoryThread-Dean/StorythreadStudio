@@ -26,6 +26,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.codex.migrate import entries_root
+from app.codex.types_registry import folder_for_type
 from app.yaml_frontmatter import parse_yaml_frontmatter
 from app.outline_worksheet import (
     STORY_TYPE_DEFAULT_WORDS, WORKSHEET_FIELDS, read_targets,
@@ -33,7 +35,7 @@ from app.outline_worksheet import (
 from app.progress_store import count_words, local_date_for, open_db
 from app.routers.documents import _title_from_file
 from app.settings_store import get_rollover_hour, load_settings
-from app.utils.structure_store import order_rank
+from app.utils.structure_store import front_matter_filenames, order_rank
 
 
 router = APIRouter(prefix="/api/progress", tags=["progress"])
@@ -60,11 +62,20 @@ SKILL_TARGETS: dict[str, tuple[int, int]] = {
 # weight is split equally across whichever sub-segments are "active" (i.e.
 # the writer has populated the outline's expected_* list for them).
 PROFILE_SUBSEGMENTS: tuple[tuple[str, str], ...] = (
-    # (expected_field_name_in_frontmatter, filesystem_subfolder)
-    ("expected_characters",    "characters"),
-    ("expected_locations",     "locations"),
+    # (expected_field_name_in_frontmatter, WEAVE TYPE ID)
+    #
+    # The second half used to be a folder name, spelled here and assumed to
+    # sit under profiles/. It is a type id now and the folder is looked up in
+    # the project's own registry, because the two folders are not always the
+    # same name and, more to the point, they are not always in the same place:
+    # a converted or codex-native project keeps its world in codex/.
+    #
+    # `relationship` is a retired kind -- no new ones are made -- but existing
+    # entries still live in its folder, so the row stays.
+    ("expected_characters",    "character"),
+    ("expected_locations",     "location"),
     ("expected_lore",          "lore"),
-    ("expected_relationships", "relationships"),
+    ("expected_relationships", "relationship"),
 )
 
 
@@ -215,15 +226,25 @@ def _profile_name_from_file(filepath: str) -> str | None:
     return str(name).strip() if isinstance(name, str) and name.strip() else None
 
 
-def _list_profile_names(project_path: str, subfolder: str) -> list[str]:
+def _list_entry_names(entries_root_path: str, subfolder: str) -> list[str]:
     """
-    Return the `name:` field for every profile in profiles/<subfolder>/.
+    Return the `name:` field for every entry in <entries root>/<subfolder>/.
+
+    THE ROOT IS PASSED IN, and that is the bug fix. This used to join
+    `profiles/` itself, so on any project whose world lives in codex/ -- every
+    converted one, and now every new one -- it found nothing and the
+    completion gauge told a writer with twenty-two characters that they had
+    "-no entry-" in every category. No error, no failing test: an empty list
+    is a perfectly ordinary answer to "how many profiles are there".
+
+    Both dialects put `name:` in the frontmatter on the same line, so the
+    parser below reads a Thread and a legacy profile equally well.
 
     Falls back to the filename stem (sans .md, sans trailing ID) when a
-    profile file has no name field -- still better than nothing for the
+    file has no name field -- still better than nothing for the
     loose-match check.
     """
-    folder = os.path.join(project_path, "profiles", subfolder)
+    folder = os.path.join(entries_root_path, subfolder)
     if not os.path.isdir(folder):
         return []
 
@@ -397,7 +418,15 @@ async def get_summary(project_path: str) -> SummaryResponse:
     # The per-chapter list also feeds the slide-over's chapter breakdown.
     chapter_counts = _manuscript_chapter_counts(project_path)
     manuscript_actual = sum(words for _, _, words in chapter_counts)
-    chapter_count = len(chapter_counts)
+    # WORDS COUNT, CHAPTERS DO NOT. A prologue is prose the writer wrote, so
+    # every word of it is theirs and belongs in the total. It is not a chapter,
+    # so it must not be one of the "12 of 30" -- a writer who sets a target of
+    # thirty and writes a prologue plus thirty chapters has written thirty
+    # chapters, and being told they have written thirty-one would be the app
+    # disagreeing with them about their own book.
+    front_and_back = set(front_matter_filenames(project_path))
+    chapter_count = sum(1 for name, _t, _w in chapter_counts
+                        if name not in front_and_back)
     chapter_progress = _chapter_progress_list(chapter_counts, frontmatter)
     # read_targets prefers the worksheet line and falls back to the OLD yaml
     # block, so a book that has not been opened since the upgrade still
@@ -416,28 +445,42 @@ async def get_summary(project_path: str) -> SummaryResponse:
     # own gauge segment).
     notes_present, notes_count = _notes_present(project_path)
 
-    # Profiles bucket -- match each outline expectation against the actual
-    # profile files. Even sub-segments without expectations are reported so
-    # the breakdown UI can show "-no entry-" rows.
+    # Profiles bucket -- match each outline expectation against the entries the
+    # writer actually has. Even sub-segments without expectations are reported
+    # so the breakdown UI can show "-no entry-" rows.
+    #
+    # Asked ONCE, outside the loop, and asked the same way the sidebar, the
+    # Profile Builder, the exports and the chip picker ask it: entries_root
+    # says which folder this project keeps its world in and hands back the
+    # registry that names the subfolders inside it. Before this, the count
+    # here read profiles/ unconditionally and reported zero for every
+    # converted project in the app.
+    entries_path, registry = entries_root(project_path)
+
     profile_subsegments: list[ProfileSubsegment] = []
-    for expected_field, subfolder in PROFILE_SUBSEGMENTS:
+    for expected_field, type_id in PROFILE_SUBSEGMENTS:
         expected_list = frontmatter.get(expected_field, []) or []
         if not isinstance(expected_list, list):
             expected_list = []
         # Stringify and de-dup expected names so weird YAML doesn't crash us.
         expected_names = [str(n).strip() for n in expected_list if str(n).strip()]
-        profile_names = _list_profile_names(project_path, subfolder)
+        # A writer can rename a kind, and its folder moves with it -- so the
+        # folder name comes from their registry rather than from this file.
+        folder = folder_for_type(registry, type_id) or type_id
+        entry_names = _list_entry_names(entries_path, folder)
 
         matched: list[str] = []
         unmatched: list[str] = []
         for name in expected_names:
-            hit = _loose_name_match(name, profile_names)
+            hit = _loose_name_match(name, entry_names)
             (matched if hit else unmatched).append(name)
 
         profile_subsegments.append(ProfileSubsegment(
-            name=subfolder,
+            # The FOLDER, not the type id, so the row reads the same as it
+            # always has ("characters", not "character") on both dialects.
+            name=folder,
             expected=len(expected_names),
-            actual=len(profile_names),
+            actual=len(entry_names),
             matched_names=matched,
             unmatched_names=unmatched,
         ))

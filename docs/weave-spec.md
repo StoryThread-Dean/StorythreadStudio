@@ -177,7 +177,7 @@ Ten places the build went against this document. All ten ruled 2026-08-11.
 | 4 | Two teaching registries; body wants one | **KEEP TWO, BIND THEM.** A term has an icon and a definition; a screen has a cost, a necessity and steps. One type would give every term a meaningless cost field. A contract test asserts they cannot contradict each other |
 | 5 | `PROFILE_FOLDERS` / `SECTION_CONFIGS` duplicated rather than replaced | **COLLAPSE INTO THE REGISTRY.** The body is right and the drift already shipped as a bug (Locations with "Physical Description" and Locations with "Appearance") |
 | 6 | A parallel Markdown parser; body says the profile parser is "reused nearly whole" | **CONVERGE ON ONE -- THE CODEX PARSER.** Same destination, opposite route: the codex format is a strict superset, so bending the profile parser to it was the wrong direction. Port its legacy-YAML repair across, then delete it once nothing calls it |
-| 7 | Two deletion orders ignored | **CARRY BOTH OUT, SEQUENCED.** The false comment at `profiles.py:125` goes immediately -- it is a lie in the code and the migration exists because it is one. `merge_profile_with_arc` goes when the route that calls it goes |
+| 7 | Two deletion orders ignored | **CARRY BOTH OUT, SEQUENCED.** The false comment at `profiles.py:125` goes immediately -- it is a lie in the code and the migration exists because it is one. `merge_profile_with_arc` goes when the route that calls it goes. **BOTH DONE** -- the comment in v2.0.0, and the function with its five routes on 2026-09-05, alongside the ruling that a new project is born in `codex/` |
 | 8 | Unplaced and Loose thread walked one at a time; body wants a multi-select list and "all at once" | **BODY WINS.** Forty unplaced facts should be a tick-list, not forty screens. Folded into one piece of work with the Unwoven domain board, since it is the same interaction |
 | 9 | Frayed fill shows every missing section, with no prose-derived suggestions | **SPLIT.** "From what the prose already says" is right and missing -- build it. "One field at a time" is overruled by the writer: it is the same force-march that ruling 8 removes |
 | 10 | Nine stop kinds where this document's table names five | **KEEP BOTH ADDITIONS, AMEND THE TABLE.** `pinned` (the writer's own mark -- the one stop that is not a rule firing) and `early_mention` |
@@ -241,6 +241,170 @@ no weight at all, and every one of them is listed for the writer to weigh
 properly rather than a value being guessed and hidden.
 
 Recovery tasks R2.12a-e.
+
+---
+
+## E. Amendment of 2026-09-05: a new project is born in `codex/`
+
+**Approved by the writer**, in these words:
+
+> "We need to permanantly point to codex/ as the source for all files going
+>  forward. We still need to recognize the old path for those story projects
+>  that haven't converted over in the Weaving yet ... all new story projects
+>  will not have /profiles directory even show up."
+
+### What changed
+
+A project created by this version gets `codex/` and **never gets a `profiles/`
+directory at all**. `PROJECT_FOLDERS` scaffolds the four kinds the sidebar
+shows while empty -- characters, locations, lore, events -- read from the type
+registry rather than listed a second time. No `codex/types.json` is written: the
+shipped kinds are the fallback, and a project that has never customised a kind
+must not carry a file claiming it did.
+
+`project.json` gains `codex_native: true`, and `entries_home()` reads it above
+the rule that counts files in `profiles/`.
+
+### Why a flag, when the answer was already right
+
+It was right by ACCIDENT. `entries_home` reached `codex/` for a new project
+through its last rule -- nobody had put a file in `profiles/` yet -- and that is
+an inference, not a statement. One stray `.md` appearing under `profiles/` at
+any depth reversed it, moved the writer's entire world to the legacy home, and
+raised nothing, because "you have no characters" is an ordinary answer for this
+app to give. A statement outranks an inference about the same question.
+
+The flag is a **positive claim only**. It is read as a plain truth test, so a
+hand-edited `false` falls through exactly as an absent key does, and there is
+deliberately no value of it that means `profiles/`. It is only ever written when
+`profiles/` holds nothing, so it can never be what hides existing work.
+
+### The wall it also removed
+
+`migration_state` gained a fourth value, `native`, rather than reporting `done`.
+`done` claims a conversion RAN -- a backup on disk, a report to open -- and a
+project born here has neither. More to the point, `WeaveScreen` renders the
+conversion panel for `none`, and every new project reported `none` forever,
+so the Weave tab showed an offer to convert a world the project did not have
+INSTEAD of the map -- and the panel renders that case as one sentence with no
+button. A wall on the headline feature, on every new project, produced by a
+value that was simply never written.
+
+### What did NOT change
+
+- `profiles/` is still a live home for every project that has one. It is read,
+  edited, searched and exported exactly as before, and conversion remains an
+  offer rather than a toll gate.
+- **A series folder keeps its own `profiles/`.** It has no `project.json`, so it
+  can never be converted and can never answer which home it uses; the chip
+  picker's "Series Profiles" toggle reads it through the legacy API for that
+  reason. This ruling was about book projects. Moving the shared series world is
+  a separate change with a live reader to repoint.
+- R11.3, the duplicate `influence` parser, stays blocked. It needs both profile
+  dialects to stop being live, and unconverted projects keep theirs.
+
+---
+
+## F. Amendment of 2026-09-05: what the map draws, and how much of it
+
+**Approved by the writer**, from a screenshot of their own forty-two entry
+world in which nothing at all was legible -- dots, names and forty overlapping
+sentences in one space.
+
+### A line says what it IS, not why
+
+The map labelled every line with `reason` -- the writer's own sentence about
+the connection. That was a deliberate decision and it was wrong at scale.
+Measured on the writer's real project: 71 connections carrying 6,201 characters
+of label text, the longest 131 characters, all of it overlapping.
+
+A line is labelled with the RELATION now, in the world's own wording:
+"parent of", "rival of", "feuding with". Same world, 936 characters, longest
+35. The reason is not lost -- it is the line's hover title, and it is on the
+entry, where a sentence has room to be read. What a line needs at a glance is
+its kind; what a reason needs is somewhere to be read properly.
+
+### Both readings of a pair, on one line
+
+A relationship is written from EACH end and the two ends may disagree -- that
+asymmetry is why a connection lives on the character rather than between two of
+them. Kipling is "mentored by" Milton; Milton "mentors" Kipling. Both are drawn
+on the one line between them, and both used to land on its midpoint, printed
+through each other.
+
+Not a corner case. On the writer's own book, **26 of 45 connected pairs are
+written from both ends** -- more than half the map was stacking two labels.
+
+The rule, from the writer's own diagram:
+
+    ProfileA ------------connection1---connection2------------ProfileB
+
+One connection on a pair sits at the midpoint. Two, and **each label sits 40%
+of the way from the end that wrote it** -- which puts A's reading at the 40%
+mark and B's at the 60% mark, and means a writer can tell whose statement is
+whose without reading either. One sentence produces both halves of the spec.
+
+Three or more is handled rather than specified: a pair gains a third record
+once frames are used (the objective truth plus one character's view of it), and
+three on the midpoint would be the same bug from a different cause. They spread
+evenly instead, always strictly between the two dots. `labelFractions` in
+`layout.ts`; the order the graph route happens to emit edges in does not change
+where anything lands.
+
+### The legend is the filter
+
+It named the symbols and did nothing, which on a crowded map is the wrong half
+of the job. Each kind is now a toggle with three states:
+
+| State | Reads as | Clickable |
+|---|---|---|
+| has entries, shown | its own colour, with a count | yes |
+| has entries, hidden | struck through and dimmed | yes |
+| no entries at all | faded | **no** |
+
+Hiding a kind takes its dots AND every line touching them, because a line to a
+dot that is not there is a line to nowhere. Empty kinds are shown but not
+clickable: switching off nothing would do nothing, and a control that does
+nothing is one the writer decides is broken. Every kind stays listed whatever
+its state -- a legend that dropped the empty ones would answer "what am I
+looking at" and stop answering "what could I have".
+
+Stored per BOOK, as `weaveHiddenTypes` in `.storythread/ui-state.json`,
+alongside the dragged positions and for the same reason: "leave the lore out
+while I sort out who knows whom" is a decision about this world. Stored as what
+is HIDDEN rather than what is shown, so a kind added next week arrives visible.
+
+What is filtered out is COUNTED in the same notice as everything else the map
+does not draw. The writer chose it, so it is a reminder rather than a warning --
+but the choice outlives the session, and "why is half my world missing" is a
+fair question a fortnight later.
+
+### Zoom moves the viewBox
+
+Zoom in, zoom out, and a reset that returns to the whole board centred, with
+the level stated as a percentage. Done by moving the svg's `viewBox` rather
+than by scaling the drawing: a transform would shrink the names along with
+everything else, and the names are the reason to zoom out. Moving the viewBox
+changes only which part of the coordinate space is on screen, so text stays the
+size it was.
+
+It is also what answers "even if icons move outside the visual box range" --
+zooming out reaches PAST the 1000x620 board, which the frame otherwise clips.
+Mostly that is NAMES: a label is centred under its dot, so a long one on a dot
+near the edge runs off it. A drag and a spread both clamp to the board, so
+nothing new lands outside -- but a position saved before that clamp existed
+may still be out there, and is now reachable rather than lost.
+
+Dragging the background pans, because zoom without pan lets a writer look at
+the middle of their world and nowhere else. The mouse WHEEL is deliberately not
+bound: the map sits in a scrolling page, and a wheel that sometimes scrolls and
+sometimes zooms depending on where the cursor is would be worse than one that
+always scrolls.
+
+`getScreenCTM()` maps the cursor through whatever viewBox is current, so
+dragging a dot keeps working at any zoom for free in a browser. The hand-rolled
+fallback in `pointAt` -- the path jsdom and any future non-DOM renderer take --
+had the board's dimensions written into it and has been told about the viewBox.
 
 ---
 
@@ -813,6 +977,7 @@ The Weave — a story-aware world model, and Model Roles
  useProjectUiState hook (.storythread/ui-state.json).
  - Layers as described above: Constellation → Neighborhood → Thread card → Fact, each a zoom.
  - Legend is the Lexicon, rendered from the same registry, each entry with its WhatsThis.
+   AMENDED 2026-09-05: the legend is also the FILTER. See amendment F.
  - Every empty state teaches: an empty map says what a Thread is and offers to make the first one.
 
  Routes
@@ -861,9 +1026,15 @@ The Weave — a story-aware world model, and Model Roles
  1. Copy profiles/ → profiles.backup-<date>/ first. Never auto-delete.
  2. Convert: profile_id → entity_id, folders → Weave types, importance: hidden →
  ai_scope: on-request.
- 3. Absorb profiles/arcs/ into anchor-scoped facts. merge_profile_with_arc() (profiles.py:1071)
- is built, tested, and has zero frontend callers — delete it rather than maintain a second
+ 3. Absorb profiles/arcs/ into anchor-scoped facts. merge_profile_with_arc() is built,
+ tested, and has zero frontend callers — delete it rather than maintain a second
  overlay mechanism.
+    DONE 2026-09-05. The absorption shipped in v2.0.0 (`_absorb_arcs`) and stays,
+    because it is the only thing carrying an existing writer's arc files through a
+    conversion. The function and its five routes were deleted on 2026-09-05, still
+    with no caller. The line number in the original text was `profiles.py:1071` and
+    had already drifted to 1385 by then, which is its own small argument for citing
+    names rather than lines.
  4. Repoint chip sources (ChipPicker, App.tsx:3658), export appendices, search exclusions.
  5. Summarize; leave profiles/ until the writer confirms.
 

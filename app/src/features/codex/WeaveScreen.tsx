@@ -31,10 +31,14 @@ interface WeaveScreenProps {
    *  without them, it just cannot remember where you put things. */
   pinned?: Record<string, Point>;
   onPin?: (positions: Record<string, Point>) => void;
+  /** Kinds switched off in the map's legend, remembered per book. */
+  hiddenTypes?: string[];
+  onHiddenTypes?: (ids: string[]) => void;
   onOpenThread?: (entityId: string) => void;
 }
 
-export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveScreenProps) {
+export function WeaveScreen({ projectPath, pinned, onPin, hiddenTypes,
+                              onHiddenTypes, onOpenThread }: WeaveScreenProps) {
   const [view, setView] = useState<"map" | "list">("map");
   const [health, setHealth] = useState<WeaveHealth | null>(null);
   const [loading, setLoading] = useState(true);
@@ -156,6 +160,13 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
         // used to be a paragraph with nothing to press. The panel does the
         // dry run, itemises it, and offers the choice -- including resume or
         // restore when a previous attempt stopped part way.
+        //
+        // "native" IS DELIBERATELY ABSENT FROM THIS TEST, and it is the whole
+        // reason that state exists. A project created in the Weave has no
+        // legacy world, so the panel would offer to convert nothing -- and
+        // it renders that case as one sentence with no button, which walls
+        // the writer out of their own map. Before "native" existed, every
+        // new project reported "none" and met exactly that wall.
         <MigrationPanel
           projectPath={projectPath}
           state={health.migration_state}
@@ -183,6 +194,7 @@ export function WeaveScreen({ projectPath, pinned, onPin, onOpenThread }: WeaveS
 
           {view === "map"
             ? <WeaveMap projectPath={projectPath} pinned={pinned} onPin={onPin}
+                        hiddenTypes={hiddenTypes} onHiddenTypes={onHiddenTypes}
                         onOpenThread={onOpenThread}
                         onOpenListView={() => setView("list")} />
             : <WeaveList projectPath={projectPath} onOpenThread={onOpenThread} />}

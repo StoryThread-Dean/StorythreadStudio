@@ -73,8 +73,11 @@ export interface HomeReport {
    *  that was never converted (the writer made entries in the Weave directly),
    *  and one whose conversion stopped part way. Reported by the same /health
    *  call as the two fields above -- it was already in the response and being
-   *  dropped here, which is why the screen could not tell them apart. */
-  migrationState: "none" | "incomplete" | "done";
+   *  dropped here, which is why the screen could not tell them apart.
+   *
+   *  "native" is the fourth: the project was CREATED in the Weave, so there
+   *  is no legacy world behind it and nothing to convert. */
+  migrationState: "none" | "incomplete" | "done" | "native";
 }
 
 export async function fetchEntriesHome(rootPath: string): Promise<HomeReport> {
@@ -84,6 +87,16 @@ export async function fetchEntriesHome(rootPath: string): Promise<HomeReport> {
     // A health check that cannot answer must not decide. profiles/ is the older
     // home and the safe assumption: it is where an unconverted project's work
     // is, and reading it can lose nothing.
+    //
+    // KEPT AS profiles/ EVEN NOW THAT A NEW PROJECT HAS NO SUCH FOLDER, and
+    // the reasoning is worth writing down because the answer looks wrong.
+    // This only fires when /health is unreachable or erroring, and in that
+    // state /api/profiles/list fails identically -- so the fallback picks
+    // which ERROR the writer sees, not which world they get. Guessing "codex"
+    // instead would show an unconverted writer an empty Profile Builder, and
+    // an empty list is indistinguishable from having lost everything.
+    // Guessing "profiles" on a codex-native project shows a 404 naming the
+    // folder, which is a question, not a fright.
     return { home: "profiles", elsewhere: 0, migrationState: "none" };
   }
   const body = await res.json();
@@ -91,7 +104,8 @@ export async function fetchEntriesHome(rootPath: string): Promise<HomeReport> {
     home: body?.entries_home === "codex" ? "codex" : "profiles",
     elsewhere: Number(body?.elsewhere ?? 0) || 0,
     migrationState: body?.migration_state === "incomplete" ? "incomplete"
-      : body?.migration_state === "done" ? "done" : "none",
+      : body?.migration_state === "done" ? "done"
+      : body?.migration_state === "native" ? "native" : "none",
   };
 }
 
@@ -267,6 +281,14 @@ function sectionsFromThread(thread: WeaveThread,
         ...(block.ai_scope
           ? { ai_scope: block.ai_scope as "always" | "on-request" | "never" }
           : {}),
+        // WHAT KIND OF RELATIONSHIP, on a Relationships block whose other end
+        // has no entry -- "her parents... they do not have a charcter profile
+        // and won't". The section editor writes it, both Python parsers carry
+        // it, and this loader did not read it back: the writer chose "mother
+        // of", saved, and the wording was gone when they returned, with the
+        // name and the description still there so nothing looked broken.
+        // Exactly the shape of the `subtext` bug two paragraphs up.
+        ...(block.rel ? { rel: String(block.rel) } : {}),
         // WHEN IT IS TRUE. `!= null` rather than a truthiness check, and the
         // reason is worth stating precisely because the obvious reason is
         // wrong: an empty array is TRUTHY in JavaScript, so `block.true_in ?`
@@ -364,6 +386,10 @@ function threadFromProfile(profile: Profile,
         // Written back for the same reason it is now read: the card edits it.
         ...(block.subtext ? { subtext: true } : {}),
         ...(block.ai_scope ? { ai_scope: block.ai_scope } : {}),
+        // Written back for the same reason it is now read: the Relationships
+        // section edits it. Dropping it here silently threw away the writer's
+        // wording on every save of an unlinked relationship.
+        ...(block.rel ? { rel: block.rel } : {}),
         // Absent means always; `[]` means true nowhere. Both kept as found.
         ...(block.true_in != null ? { true_in: block.true_in } : {}),
       })),

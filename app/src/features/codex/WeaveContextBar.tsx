@@ -40,7 +40,7 @@
 // convention every "What's this?" already uses.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Globe, Loader, RotateCw, Undo2, X } from "lucide-react";
+import { Bot, Check, Globe, ListOrdered, Loader, RotateCw, Undo2, X } from "lucide-react";
 
 import { BriefShape } from "./BriefShape";
 import { Explain } from "../../components/learn/Explain";
@@ -56,6 +56,17 @@ export interface WeaveContextPrefs {
   excludedIds?: string[];
   /** Whole kinds dropped, by type id. */
   excludedTypes?: string[];
+  /** The chapter's own plan, switched off. Absent means on, so a writer who
+   *  has never thought about it gets their outline used -- which is the point
+   *  of having written it. Separate from `off`, because switching the WORLD
+   *  off is not a statement about the plan for the chapter in front of them. */
+  chapterOutlineOff?: boolean;
+  /** The book's standing notes, switched off. Absent means on, for the
+   *  same reason as the outline above: a writer who went to the trouble
+   *  of writing guidance meant it to be used. Its own switch rather than
+   *  riding on `off`, because the world and the writer's instructions are
+   *  different things to want or not want. */
+  aiNotesOff?: boolean;
 }
 
 interface WeaveContextBarProps {
@@ -76,11 +87,26 @@ interface WeaveContextBarProps {
   onPrefsChange: (next: WeaveContextPrefs) => void;
   /** The assembled brief, handed up so the send path can carry it. */
   onBriefChange: (brief: string) => void;
+  /** THE PLAN FOR THIS CHAPTER, already read from disk by the caller.
+   *
+   *  Displayed here rather than anywhere else because this bar is already the
+   *  answer to "what will be sent that I did not attach myself" -- and the
+   *  locked context rule requires every part of that answer to be readable,
+   *  removable and switchable off. A second panel saying the same kind of
+   *  thing would be a second place to look.
+   *
+   *  The bar does not decide whether it is SENT: the caller reads the same
+   *  pref and builds the payload. One owner of what goes on the wire. */
+  chapterOutline?: string;
+  /** The book's standing notes (notes/ai-notes.md). Same contract as
+   *  chapterOutline above: shown and switchable here, put on the wire by
+   *  the caller, which reads the same pref. */
+  aiNotes?: string;
 }
 
 export function WeaveContextBar({
   projectPath, chapterFilename, text, pinnedTokens, prefs, onPrefsChange,
-  onBriefChange,
+  onBriefChange, chapterOutline = "", aiNotes = "",
 }: WeaveContextBarProps) {
   const [brief, setBrief] = useState<Brief | null>(null);
   const [busy, setBusy] = useState(false);
@@ -179,8 +205,28 @@ export function WeaveContextBar({
   useEffect(() => { void load(); }, [load]);
 
   function setPrefs(patch: Partial<WeaveContextPrefs>) {
-    onPrefsChange({ off, excludedIds, excludedTypes, ...patch });
+    // Every remembered field is carried through. A patch that dropped one
+    // would reset it on the next unrelated toggle -- a writer switching the
+    // world off would find their outline preference quietly restored.
+    onPrefsChange({
+      off, excludedIds, excludedTypes,
+      chapterOutlineOff: prefs.chapterOutlineOff === true,
+      aiNotesOff: prefs.aiNotesOff === true,
+      ...patch,
+    });
   }
+
+  // ── The chapter's own plan ────────────────────────────────────────────
+  const outlineOff = prefs.chapterOutlineOff === true;
+  const outlineText = chapterOutline.trim();
+  // The same rough arithmetic the chip picker shows, so two numbers about the
+  // same kind of thing do not disagree on screen.
+  const outlineTokens = Math.ceil(outlineText.length / 4);
+
+  // ── The book's standing notes ─────────────────────────────────────────
+  const notesOff = prefs.aiNotesOff === true;
+  const notesText = aiNotes.trim();
+  const notesTokens = Math.ceil(notesText.length / 4);
 
   const threads = brief?.threads ?? [];
   const tokens = brief?.token_estimate ?? 0;
@@ -271,6 +317,81 @@ export function WeaveContextBar({
           {off ? "Turn on" : "On"}
         </button>
       </div>
+
+      {/* THE BOOK'S STANDING NOTES, first on the bar because they are the
+          broadest thing being sent and the only one that is INSTRUCTION
+          rather than material. Same obligation as the two rows below: sent
+          without being attached, so it must be readable and switchable.
+
+          Shown only when the file has something in it. A row offering to
+          switch off an empty document is a control that does nothing, and
+          the writer has no way to tell that from one that is broken. */}
+      {notesText && (
+        <div className="mt-1 flex items-center gap-2" data-testid="context-ai-notes-row">
+          <Bot size={12} className={notesOff ? "text-faint" : "text-accent"} />
+          <span className="min-w-0 flex-1 truncate text-mini text-text-muted">
+            {notesOff ? (
+              "Your AI Notes are not being sent."
+            ) : (
+              <>
+                Sending{" "}
+                <span className="text-text-primary">your AI Notes</span>
+                , about {notesTokens.toLocaleString()} tokens, with every request
+              </>
+            )}
+          </span>
+          <button
+            onClick={() => setPrefs({ aiNotesOff: !notesOff })}
+            aria-pressed={!notesOff}
+            aria-label="Send your AI Notes"
+            className={`shrink-0 rounded px-1.5 py-0.5 text-micro ${
+              notesOff ? "border border-border text-faint hover:text-text-primary"
+                       : "border border-accent-fill bg-accent-soft/40 text-accent-strong"
+            }`}
+          >
+            {notesOff ? "Turn on" : "On"}
+          </button>
+          {/* Icon-only: the row is already crowded, and this is the one
+              piece of automatic context whose whole point needs saying
+              out loud -- including that Author Notes is its opposite. */}
+          <Explain of="ai-notes.what" compact />
+        </div>
+      )}
+
+      {/* THE PLAN FOR THIS CHAPTER, on the same bar as the world and for the
+          same reason: it is sent without the writer attaching it, so the rule
+          that they can read it, drop it and switch it off applies to it too.
+          Shown only when the chapter HAS one -- a row offering to switch off
+          a document that does not exist is a control that does nothing. */}
+      {outlineText && (
+        <div className="mt-1 flex items-center gap-2" data-testid="context-outline-row">
+          <ListOrdered size={12}
+                       className={outlineOff ? "text-faint" : "text-accent"} />
+          <span className="min-w-0 flex-1 truncate text-mini text-text-muted">
+            {outlineOff ? (
+              "This chapter's outline is not being sent."
+            ) : (
+              <>
+                Sending{" "}
+                <span className="text-text-primary">this chapter&rsquo;s outline</span>
+                , about {outlineTokens.toLocaleString()} tokens, with Draft and
+                Enhance
+              </>
+            )}
+          </span>
+          <button
+            onClick={() => setPrefs({ chapterOutlineOff: !outlineOff })}
+            aria-pressed={!outlineOff}
+            aria-label="Send this chapter's outline"
+            className={`shrink-0 rounded px-1.5 py-0.5 text-micro ${
+              outlineOff ? "border border-border text-faint hover:text-text-primary"
+                         : "border border-accent-fill bg-accent-soft/40 text-accent-strong"
+            }`}
+          >
+            {outlineOff ? "Turn on" : "On"}
+          </button>
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="mt-1 text-micro text-danger">{error}</p>
@@ -500,6 +621,23 @@ export function WeaveContextBar({
                       </li>
                     ))}
                   </ul>
+                  {/* WHOSE WINDOW THIS IS. Without it the numbers above
+                      are a budget against an unnamed limit, which the
+                      writer can only believe or ignore -- and the Weave
+                      measured against a hardcoded 32,000 for three
+                      releases with nothing on screen to reveal it. */}
+                  {brief.budget_model && (
+                    <p className="mt-1 text-micro text-faint">
+                      Measured against {brief.budget_model}.
+                    </p>
+                  )}
+                  {brief.budget_assumed && (
+                    <p className="mt-1 text-micro text-warn" data-testid="budget-assumed">
+                      This model does not publish how much it can hold, so the
+                      limit above is an assumption rather than a measurement.
+                      Local models usually do not say.
+                    </p>
+                  )}
                 </details>
               )}
 

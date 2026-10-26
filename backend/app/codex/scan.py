@@ -1656,8 +1656,16 @@ def _unspun_why(name: str, count: int, written_in: list[str],
 # was wrong in three places.
 #
 # So it is excluded BY NAME here, where the app reads the writer's other
-# documents, and `test_author_notes_is_private.py` fails the build if any
-# AI-facing corpus builder starts including it.
+# documents, and `test_planning_sources.py` fails the build if any function in
+# this module opens notes/ without skipping it. (That file used to be named
+# here as `test_author_notes_is_private.py`, which has never existed -- a
+# comment citing a guard that is not there is worse than no comment, because
+# it stops the next person looking for one.)
+#
+# NOTE the neighbour: notes/ai-notes.md is standing guidance the writer wants
+# sent with every request. Two files, one folder, opposite promises -- which
+# is precisely why the guard is a source read over the whole module rather
+# than a check on one function.
 #
 # Note what this does NOT claim. The file is still theirs to attach to a chat by
 # hand, and still theirs to export. What it means is that nothing in this app
@@ -1702,6 +1710,29 @@ def _writer_vocabulary(project_path: str,
             except (OSError, UnicodeDecodeError):
                 continue
 
+    # THE PER-CHAPTER PLANS, which are planning documents like the notes above
+    # and are read for the same reason. A faction the writer has only ever
+    # named in chapter twelve's outline is a name they DECIDED on -- better
+    # evidence that a word is a name than any frequency count of the prose.
+    #
+    # Walked explicitly rather than by making the notes/ loop recursive: these
+    # live in their own folder, and each one is labelled with its CHAPTER so a
+    # stop can say "you use this in chapter 12's outline" instead of the vague
+    # "your notes". A label that names the document is most of what makes the
+    # reason convincing.
+    outlines_dir = os.path.join(project_path, "outlines", "chapters")
+    if os.path.isdir(outlines_dir):
+        for name in sorted(os.listdir(outlines_dir)):
+            if not name.endswith(".md"):
+                continue
+            try:
+                with open(os.path.join(outlines_dir, name), "r",
+                          encoding="utf-8") as f:
+                    corpora.append((_outline_label(name),
+                                    _strip_planning_chrome(_strip_chrome(f.read()))))
+            except (OSError, UnicodeDecodeError):
+                continue
+
     entries: list[str] = []
     for thread in threads:
         for section in (thread.get("sections") or {}).values():
@@ -1719,6 +1750,23 @@ def _writer_vocabulary(project_path: str,
 def _note_label(filename: str) -> str:
     """'style-guide.md' -> 'style guide', so a stop reads like a sentence."""
     return filename[:-3].replace("-", " ").replace("_", " ")
+
+
+def _outline_label(filename: str) -> str:
+    """
+    '07-seven-to-one.md' -> "chapter 7's outline".
+
+    Named by CHAPTER rather than by file, because "you use this in chapter 7's
+    outline" is a reason a writer can act on and "you use this in
+    07-seven-to-one" is a filename read out loud. Falls back to the stem when
+    there is no leading number to read, which is what a chapter the writer
+    named by hand looks like.
+    """
+    stem = filename[:-3]
+    number = stem.split("-", 1)[0]
+    if number.isdigit():
+        return f"chapter {int(number)}'s outline"
+    return f"{stem.replace('-', ' ').replace('_', ' ')}'s outline"
 
 
 def _early_mentions(prose: str, alias_map: dict, display: dict,

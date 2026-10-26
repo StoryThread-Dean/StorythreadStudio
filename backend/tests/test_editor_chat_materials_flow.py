@@ -288,3 +288,152 @@ def test_an_oversized_brief_is_refused_with_the_control_that_fixes_it(client,
     })
     assert resp.status_code == 400
     assert "Remove some Threads" in resp.json()["detail"]
+
+
+# ── The plan for the chapter being written ───────────────────────────────────
+#
+# The one material both Draft and Enhance have always ASSUMED was here.
+# _DRAFT_RESPONSE_RULES and _ENHANCE_RESPONSE_RULES have told the model for
+# releases to treat "the attached profiles, outline, and location notes as
+# canon" -- and nothing delivered an outline unless the writer hand-attached
+# the BOOK outline as a note chip.
+#
+# It is its own field rather than a chip (a chip is what the writer chose for
+# one turn; this is standing context for the chapter) and rather than part of
+# weave_brief (the brief is Thread-shaped end to end -- every piece has an
+# entity_id and a relevance score, and a document has neither).
+
+_OUTLINE = ("1. The column is spotted at dusk.\n"
+            "2. Vance argues for withdrawal, and is overruled.")
+
+
+def _send(client, **body):
+    base = {"category": "draft", "text_content": "",
+            "messages": [{"role": "user", "content": "write the opening"}]}
+    return client.post("/api/ai/editor-chat", json={**base, **body})
+
+
+def test_the_plan_reaches_the_model_when_drafting(client, monkeypatch):
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+
+    assert _send(client, chapter_outline=_OUTLINE).status_code == 200
+    sent = "\n".join(m["content"] for m in captured["messages"])
+    assert "Vance argues for withdrawal" in sent
+    assert "BEGIN CHAPTER OUTLINE" in sent
+
+
+def test_it_is_framed_as_intent_rather_than_as_something_written(client, monkeypatch):
+    # It describes what has NOT been written yet. A model told to treat it as
+    # established fact would draft as though the chapter were already done, or
+    # summarise the plan back instead of writing the scene.
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+
+    _send(client, chapter_outline=_OUTLINE)
+    sent = "\n".join(m["content"] for m in captured["messages"])
+    assert "what the writer intends to happen" in sent
+    assert "rather than finished prose" in sent
+
+
+def test_it_sits_between_the_writers_chips_and_the_world(client, monkeypatch):
+    # The order is the honest description of what each thing is: a chip is
+    # what they chose for this turn, the outline is what this chapter is meant
+    # to do, the brief is the world it happens in.
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+
+    _send(client, context_chips=[_CHIP], weave_brief=_BRIEF,
+          chapter_outline=_OUTLINE)
+    sent = "\n".join(m["content"] for m in captured["messages"])
+    assert (sent.index("ATTACHED CONTEXT")
+            < sent.index("THE PLAN FOR THIS CHAPTER")
+            < sent.index("FROM YOUR WORLD"))
+
+
+def test_a_plan_alone_is_enough_to_build_materials(client, monkeypatch):
+    # Turn 2+ with nothing new but the plan: no selection, no fresh chips, no
+    # brief. Without the outline counting as materials it would be silently
+    # dropped -- the same bug the brief had, which is why that test exists.
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+
+    _send(client, messages=[
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": "ok"},
+        {"role": "user", "content": "carry on"},
+    ], chapter_outline=_OUTLINE)
+    sent = "\n".join(m["content"] for m in captured["messages"])
+    assert "Vance argues for withdrawal" in sent
+
+
+def test_enhance_gets_it_too(client, monkeypatch):
+    # Enhance rewrites one passage, and knowing where that passage sits in the
+    # chapter is exactly what stops it drifting off the plan.
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+
+    _send(client, category="enhance", text_content="He waited.",
+          chapter_outline=_OUTLINE)
+    sent = "\n".join(m["content"] for m in captured["messages"])
+    assert "BEGIN CHAPTER OUTLINE" in sent
+
+
+def test_the_reviewing_passes_do_not_get_it(client, monkeypatch):
+    # Readability, Structure and Context are reading prose that EXISTS. A plan
+    # is not evidence about how what was written reads, so sending it would
+    # charge the writer tokens on every pass to tell the model something it
+    # has no use for. Same rule as WEAVE_BRIEF_PASS.
+    #
+    # OPEN CHAT IS NO LONGER IN THIS LIST (v2.0.6) -- see the test below.
+    _patch_auth(monkeypatch)
+
+    for category in ("readability", "structure", "context"):
+        captured = _capture_run_chat(monkeypatch)
+        _send(client, category=category, text_content="Some prose.",
+              chapter_outline=_OUTLINE)
+        sent = "\n".join(m["content"] for m in captured["messages"])
+        assert "CHAPTER OUTLINE" not in sent, category
+        assert "Vance argues" not in sent, category
+
+
+def test_open_chat_does_get_it(client, monkeypatch):
+    """
+    The Chapter Outline screen has the chat panel beside it now, so a writer
+    looking at their plan and asking whether it holds together is the most
+    likely question there is to ask. A chat that could not see the document
+    on screen would be a chat panel-shaped disappointment.
+
+    Still inspectable: the context bar shows the row, its token cost and an
+    off switch remembered per book.
+    """
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+    _send(client, category="chat", text_content="",
+          chapter_outline=_OUTLINE)
+    sent = "\n".join(m["content"] for m in captured["messages"])
+    assert "BEGIN CHAPTER OUTLINE" in sent
+    assert "Vance argues" in sent
+
+
+def test_no_plan_means_no_block_at_all(client, monkeypatch):
+    # An empty header would tell the model the context failed to load, which
+    # is worse than saying nothing.
+    _patch_auth(monkeypatch)
+    captured = _capture_run_chat(monkeypatch)
+
+    _send(client, text_content="Write something.", chapter_outline="")
+    sent = "\n".join(m["content"] for m in captured["messages"])
+    assert "CHAPTER OUTLINE" not in sent
+    assert "THE PLAN FOR THIS CHAPTER" not in sent
+
+
+def test_the_two_outlines_are_told_apart_in_the_instructions(client, monkeypatch):
+    # Both prompt rule sets said "outline" and meant the book one. With two in
+    # play, one word for both is how a model comes to draft the wrong scale --
+    # a chapter's worth of plot in one scene, or the book's shape restated.
+    from app.ai.prompts import _DRAFT_RESPONSE_RULES, _ENHANCE_RESPONSE_RULES
+
+    assert "THE PLAN FOR THIS CHAPTER" in _DRAFT_RESPONSE_RULES
+    assert "shape of the whole story" in _DRAFT_RESPONSE_RULES
+    assert "THE PLAN FOR THIS CHAPTER" in _ENHANCE_RESPONSE_RULES

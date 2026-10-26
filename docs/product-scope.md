@@ -68,6 +68,16 @@ and theme notes. The four original profile folders (characters, relationships,
 locations, lore) remain a live home for projects that have not been converted --
 conversion is an offer, not a toll gate.
 
+**And alongside both, `notes/ai-notes.md`.** The Weave records what is true in
+the story; this records what the writer has decided ABOUT writing it -- a plot
+point changed in chapter twelve, a habit they do not want copied, which of the
+things the Advisor keeps flagging are deliberate. It is the one thing sent with
+every AI request, so it carries the locked context rule in full: a row on the
+context bar showing what it costs, an off switch remembered per book, and no
+route that reads the file behind the writer's back. Its neighbour
+`notes/author-notes.md` is the exact opposite and always has been -- the
+writer's own room, never sent unless they attach it themselves.
+
 ## Out of scope
 
 These are intentional non-goals. Items here will not be added without revisiting the product's identity:
@@ -78,7 +88,15 @@ These are intentional non-goals. Items here will not be added without revisiting
 - Auto-generated canon updates from drafts
 - Auto-applied AI rewrites
 - Autonomous, multi-step agent workflows
-- Persistent AI memory across Profile Builder chat sessions
+- ~~Persistent AI memory across Profile Builder chat sessions~~ — **reversed
+  2026-09-06, on the writer's request.** Kept visible rather than deleted,
+  because the reasoning behind an intentional non-goal is worth more than a
+  tidy list. It was ruled out as "the AI quietly remembering things you did not
+  tell it", which remains ruled out. What is being built instead is memory the
+  writer OWNS and can see: `notes/ai-notes.md`, which they write and can switch
+  off, and named chat sessions they choose to reopen. Nothing is carried from
+  one conversation into another without them asking for it. See
+  `docs/long-context-spec.md`.
 - Semantic search across the whole project
 - Client-side AI calls (API keys held in the WebView) — every AI request stays backend-mediated, permanently
 

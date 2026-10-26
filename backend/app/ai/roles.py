@@ -120,7 +120,12 @@ ROLE_INFO: dict[str, dict] = {
         # have it do nothing at all. The Profile Extractor is the pass it was
         # waiting for: it reads an entire manuscript in one request, which is
         # exactly the strength this role exists to buy.
-        "features": ["Profile Extractor"],
+        # Second consumer, v2.0.6: compressing an older conversation so it can
+        # be picked up days later without resending every message. Same
+        # strength for the same reason -- it reads a whole conversation at once
+        # and has to keep what was DECIDED in it, which a small window would
+        # lose from the middle without saying so.
+        "features": ["Profile Extractor", "Recapping a saved conversation"],
         "reserved": False,
     },
     "brainstorm": {
@@ -145,7 +150,7 @@ ROLE_INFO: dict[str, dict] = {
                   "so it rewards a model that is good at holding a plan in mind. "
                   "You can leave this on your Default Model without much loss "
                   "until you are working at chapter scale.",
-        "features": ["Scene break suggestions"],
+        "features": ["Scene break suggestions", "Chapter outline builder"],
         "reserved": False,
     },
     "research": {

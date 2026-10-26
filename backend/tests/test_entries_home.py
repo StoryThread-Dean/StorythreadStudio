@@ -10,17 +10,29 @@
 # surface asks it. These tests are about the RULES it applies, and each one
 # exists because getting it wrong hides some of the writer's world:
 #
-#   converted           -> codex/       (that is what conversion means)
 #   interrupted         -> profiles/    (what a restore puts back)
+#   converted           -> codex/       (that is what conversion means)
+#   born in the Weave   -> codex/       (it says so; see below)
 #   unconverted, in use -> profiles/    (never hide a world behind placeholders)
 #   nothing yet         -> codex/       (a new project starts in the new world)
+#
+# THE THIRD RULE IS A STATEMENT AND THE FOURTH IS AN INFERENCE, which is why
+# the order between those two is the whole point rather than an accident. A
+# project created in the Weave used to reach codex/ only by the last rule --
+# by nobody having put a file in profiles/ yet -- so one stray .md appearing
+# there at any depth silently moved the writer's entire world to the legacy
+# home. Nothing errored, nothing failed a test, and every codex entry simply
+# stopped being listed.
 
 import json
 import os
 
 from fastapi.testclient import TestClient
 
-from app.codex.migrate import MIGRATION_VERSION, entries_home, journal_path
+from app.codex.migrate import (
+    CODEX_NATIVE_KEY, MIGRATION_VERSION, entries_home, journal_path,
+    migration_state,
+)
 from app.codex.sections import build_sections
 from app.main import app
 
@@ -29,12 +41,20 @@ client = TestClient(app)
 ENTRY = "---\ntype: character\nname: Elara Voss\n---\n\n# Overview\nA tall woman.\n"
 
 
-def _project(tmp_path, *, profiles=0, codex=0, converted=False, interrupted=False):
-    root = tmp_path / "MyNovel"
+def _project(tmp_path, *, profiles=0, codex=0, converted=False,
+             interrupted=False, native=None, name="MyNovel"):
+    # `name` so one test can build two projects and compare them. Without it
+    # the second call collides on mkdir and the failure reads like a bug in
+    # the thing under test.
+    root = tmp_path / name
     (root / "manuscript").mkdir(parents=True)
     settings = {"title": "N"}
     if converted:
         settings["codex_migration_version"] = MIGRATION_VERSION
+    # `native` takes any value, not just True, because half of what these
+    # tests are for is what the flag does when it is NOT true.
+    if native is not None:
+        settings[CODEX_NATIVE_KEY] = native
     (root / "project.json").write_text(json.dumps(settings), encoding="utf-8")
 
     for count, folder in ((profiles, "profiles"), (codex, "codex")):
@@ -82,6 +102,85 @@ def test_a_project_with_nothing_in_profiles_starts_in_the_codex(tmp_path):
 
 def test_an_empty_project_starts_in_the_codex(tmp_path):
     assert entries_home(_project(tmp_path)) == "codex"
+
+
+# ── Born in the Weave ─────────────────────────────────────────────
+
+def test_a_stray_file_cannot_move_a_project_born_in_the_weave(tmp_path):
+    """
+    THE ONE THIS FLAG EXISTS FOR.
+
+    Without it, the two tests above are the whole story: a new project reaches
+    codex/ by the LAST rule, because nobody has put anything in profiles/ yet.
+    That is an inference from a file count, and it reverses itself the moment
+    the count changes -- an export saved to the wrong folder, a backup unzipped
+    a level too high, one note. The writer's three codex entries stop being
+    listed, the sidebar agrees with the editor that there is nothing there, and
+    nothing anywhere errors, because "you have no characters" is an ordinary
+    thing for this app to say.
+
+    Reinstating the bug is how this was checked: drop `"native"` out of the
+    rule at migrate.py and this test goes red while every other test in the
+    suite stays green.
+    """
+    project = _project(tmp_path, native=True, codex=3, profiles=1)
+    assert entries_home(project) == "codex"
+
+
+def test_no_value_of_the_flag_can_send_a_project_back_to_profiles(tmp_path):
+    """
+    The guarantee is narrow and it is the one that matters: this key can say
+    "codex", and it can say nothing. It can never say "profiles".
+
+    That asymmetry is deliberate rather than tidy. project.json is a file a
+    person can open, and a key that could route a project to the legacy home
+    could hide a world that is really there -- an empty Profile Builder is
+    indistinguishable from having lost everything. A key that can only ever
+    point at codex/ has no such failure: if work does turn up in profiles/,
+    GET /health counts it as `elsewhere` and the screen says so out loud.
+
+    It is read with a plain truth test, so falsy falls through to the ordinary
+    rules exactly as an absent key does, and any truthy junk reads as "yes,
+    born here" -- which is the harmless direction.
+    """
+    # Falsy: falls through, and the writer's profiles/ world is found.
+    assert entries_home(
+        _project(tmp_path, native=False, profiles=2, name="a")) == "profiles"
+    # Falsy with nothing in profiles/: the last rule still says codex/.
+    assert entries_home(
+        _project(tmp_path, native=False, codex=2, name="b")) == "codex"
+    # Truthy junk: read as "yes". Never as "profiles", which is the point.
+    assert entries_home(
+        _project(tmp_path, native="profiles", profiles=2, name="c")) == "codex"
+
+
+def test_an_interrupted_conversion_outranks_the_flag(tmp_path):
+    # A journal can only exist on a project that ran a conversion, which a
+    # project born here cannot have done -- so if these two ever contradict
+    # each other on disk, the contradiction came from a hand edit. The answer
+    # that loses has to be the one that cannot lose files, and profiles/ is
+    # what a restore puts back.
+    project = _project(tmp_path, native=True, codex=2, profiles=5,
+                       interrupted=True)
+    assert entries_home(project) == "profiles"
+
+
+def test_the_state_says_native_rather_than_converted(tmp_path):
+    # "done" is a claim that a conversion RAN: it implies a backup on disk and
+    # a report to open. A project born here has neither, and the screen that
+    # offers to show "what the conversion did" would have nothing to show.
+    assert migration_state(_project(tmp_path, native=True, name="a")) == "native"
+    assert migration_state(_project(tmp_path, converted=True, name="b")) == "done"
+    assert migration_state(_project(tmp_path, profiles=2, name="c")) == "none"
+
+
+def test_a_real_conversion_still_outranks_the_flag(tmp_path):
+    # Both keys present is a state nothing in the app produces, but a file a
+    # person can edit is a file a person can edit. Converted wins, because it
+    # is the claim with a backup behind it.
+    project = _project(tmp_path, native=True, converted=True, codex=2)
+    assert migration_state(project) == "done"
+    assert entries_home(project) == "codex"
 
 
 def test_an_interrupted_conversion_stays_out_of_the_codex(tmp_path):

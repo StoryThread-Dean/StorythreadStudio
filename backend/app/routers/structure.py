@@ -47,8 +47,13 @@ class ActOut(BaseModel):
 
 class StructureResponse(BaseModel):
     exists:     bool               # False = synthesized (no file on disk yet)
+    # Front and back matter -- a prologue, an epilogue. Reported so the
+    # sidebar can draw them in their places, and deliberately NOT accepted on
+    # the way back in; see PutStructureRequest.
+    front:      list[ChapterRef] = []
     acts:       list[ActOut]
     unassigned: list[ChapterRef]
+    back:       list[ChapterRef] = []
 
 
 class ActIn(BaseModel):
@@ -61,6 +66,16 @@ class PutStructureRequest(BaseModel):
     folder_path: str
     acts:        list[ActIn] = []
     unassigned:  list[str] = []
+    # NO `front` OR `back`. This payload is the acts tree, which is what the
+    # writer drags things around in, and front matter is not in that tree --
+    # a prologue's position is the one thing about it that is not up for
+    # rearrangement. They are carried across from what is stored, exactly as
+    # chapter_ids are, so an act reorder cannot disturb them.
+    #
+    # Leaving them out of the payload is what makes that safe rather than
+    # merely intended: a frontend that forgot to send them would otherwise
+    # demote the writer's prologue to an unfiled chapter on the next drag,
+    # and nothing would report it.
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -93,11 +108,13 @@ def _decorate(folder_path: str, manifest: dict, exists: bool) -> StructureRespon
 
     return StructureResponse(
         exists=exists,
+        front=[ref(n) for n in (manifest.get("front") or [])],
         acts=[
             ActOut(id=a["id"], title=a["title"], chapters=[ref(n) for n in a["chapters"]])
             for a in manifest["acts"]
         ],
         unassigned=[ref(n) for n in manifest["unassigned"]],
+        back=[ref(n) for n in (manifest.get("back") or [])],
     )
 
 
@@ -149,6 +166,9 @@ async def put_structure(request: PutStructureRequest):
         ],
         "unassigned": list(request.unassigned),
         "chapter_ids": dict(existing.get("chapter_ids") or {}),
+        # Carried, not received. See PutStructureRequest.
+        "front": list(existing.get("front") or []),
+        "back": list(existing.get("back") or []),
     }
 
     # Heal instead of 400 on stale filenames: the writer may have deleted a

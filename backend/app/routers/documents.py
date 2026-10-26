@@ -33,6 +33,7 @@ from app.settings_store import get_rollover_hour
 from app.utils.structure_store import (
     order_rank,
     sync_add_chapter,
+    sync_add_front_matter,
     sync_remove_chapter,
     sync_rename_chapter,
 )
@@ -83,6 +84,14 @@ class CreateChapterRequest(BaseModel):
     """What the frontend sends when the writer creates a new chapter."""
     folder_path: str   # The project's root directory
     title: str         # e.g. "The Storm" -- used for filename and heading
+    # "chapter" | "front" | "back".
+    #
+    # A prologue is not chapter zero and an epilogue is not the last chapter.
+    # They carry no number, they sit outside the acts, and they are not what
+    # the writer means by "thirty chapters" -- but their POSITION is the one
+    # certain thing about them, and only the manifest can record that. See
+    # structure_store's header.
+    kind: str = "chapter"
 
 
 class CreateChapterResponse(BaseModel):
@@ -113,6 +122,7 @@ class RenameChapterResponse(BaseModel):
     path:         str    # absolute path after the rename
     summary_moved:     bool = False   # summaries/chapters/<stem>.md followed
     scenes_moved:      bool = False   # summaries/scenes/<stem>/ followed
+    outline_moved:     bool = False   # outlines/chapters/<stem>.md followed
     structure_updated: bool = False   # structure.json entry swapped in place
     progress_migrated: bool = False   # progress history rows repointed
 
@@ -324,6 +334,173 @@ async def list_chapter_summaries(folder_path: str):
     # picker matches the sidebar's chapter ordering.
     rank = order_rank(folder_path)
     results.sort(key=lambda r: (rank.get(r.chapter_filename, len(rank)), r.summary_filename))
+    return results
+
+
+# ── Chapter Outline read/write (plain Markdown) ──────────────────────────────
+#
+# THE ONE PER-CHAPTER DOCUMENT THAT LOOKS FORWARD.
+#
+# Chapter and scene summaries are written FROM prose that already exists: they
+# describe what the chapter turned out to be. A Chapter Outline is the other
+# direction -- the play-by-play of what has to happen in this chapter, written
+# before there is anything to summarise. The writer's words for it: "the main
+# key events that take place that move the scenes, dialogue, action, events
+# along."
+#
+# It lives at outlines/chapters/<chapter-stem>.md, keyed off the manuscript
+# stem exactly as the summary is, so the rename and delete cascade already
+# knows the shape. A separate top-level folder rather than a file inside
+# summaries/, because a plan is not a summary and the folder name would be
+# lying about half its contents.
+#
+# NEVER PARSED. `docs/outline-spec.md` ruled against re-creating machine-read
+# structure inside a writer's file, and this is a writer's file. The app reads
+# it as text and sends it as text: no line ids, no checkbox state, no required
+# numbering. A writer who prefers dashes or paragraphs gets what they typed.
+# That is also what separates it from a scene Beat, which IS parsed and lives
+# one rung down. See docs/chapter-outline-spec.md section 2.
+
+class ChapterOutlineResponse(BaseModel):
+    """Returned from the GET endpoint. `exists` distinguishes empty-but-present
+    from not-yet-created so the UI can show the right empty-state message."""
+    filename: str
+    content:  str
+    exists:   bool
+
+
+class SaveChapterOutlineRequest(BaseModel):
+    folder_path:      str
+    chapter_filename: str     # the manuscript filename; its stem is used
+    content:          str
+
+
+class SaveChapterOutlineResponse(BaseModel):
+    filename: str
+    message:  str
+
+
+def _chapter_outline_paths(folder_path: str, chapter_filename: str) -> tuple[str, str]:
+    """
+    Returns (outline_dir, outline_file) for a given chapter, so
+    01-landing.md pairs with outlines/chapters/01-landing.md.
+
+    Same containment guard as _chapter_summary_paths, and for the same reason:
+    the chapter filename arrives over HTTP, so the resolved path has to be
+    checked AFTER .. and symlinks are resolved rather than before.
+    """
+    stem = os.path.splitext(chapter_filename)[0]
+    outline_dir  = os.path.realpath(os.path.join(folder_path, "outlines", "chapters"))
+    outline_file = os.path.realpath(os.path.join(outline_dir, f"{stem}.md"))
+    if not outline_file.startswith(outline_dir + os.sep) and outline_file != outline_dir:
+        raise HTTPException(status_code=400, detail="Invalid chapter filename.")
+    return outline_dir, outline_file
+
+
+# --- GET /api/documents/chapter-outline ---
+@router.get("/chapter-outline", response_model=ChapterOutlineResponse)
+async def load_chapter_outline(folder_path: str, chapter_filename: str):
+    """
+    Read the plain-Markdown chapter outline for one chapter.
+
+    Returns {exists: false, content: ""} when nothing has been written yet.
+    The flag is what lets the screen teach in the empty state instead of
+    showing an error for the ordinary case of a chapter nobody has planned.
+    """
+    _outline_dir, outline_file = _chapter_outline_paths(folder_path, chapter_filename)
+
+    stem = os.path.splitext(chapter_filename)[0]
+    filename = f"{stem}.md"
+
+    if not os.path.isfile(outline_file):
+        return ChapterOutlineResponse(filename=filename, content="", exists=False)
+
+    with open(outline_file, "r", encoding="utf-8") as f:
+        return ChapterOutlineResponse(filename=filename, content=f.read(), exists=True)
+
+
+# --- POST /api/documents/chapter-outline ---
+@router.post("/chapter-outline", response_model=SaveChapterOutlineResponse)
+async def save_chapter_outline(request: SaveChapterOutlineRequest):
+    """
+    Save a chapter outline. Overwrites, or creates on the first save.
+
+    The only writer of this file. There is deliberately no AI path that writes
+    here: Build Chapter Outline returns text and the writer presses Insert,
+    which lands it in the unsaved editor buffer. Nothing reaches disk without
+    a writer's save, which is what keeps this inside the AI write boundary.
+    """
+    outline_dir, outline_file = _chapter_outline_paths(
+        request.folder_path, request.chapter_filename)
+    os.makedirs(outline_dir, exist_ok=True)
+
+    # Exactly one trailing newline, the same normalisation the summaries use.
+    content = request.content.rstrip() + "\n"
+    with open(outline_file, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    stem = os.path.splitext(request.chapter_filename)[0]
+    return SaveChapterOutlineResponse(filename=f"{stem}.md", message="Outline saved.")
+
+
+# --- DELETE /api/documents/chapter-outline ---
+@router.delete("/chapter-outline")
+async def delete_chapter_outline(folder_path: str, chapter_filename: str):
+    """
+    Remove a chapter's outline. The folder is left in place: an empty
+    outlines/chapters/ costs nothing and removing it would race the next save.
+    """
+    _outline_dir, outline_file = _chapter_outline_paths(folder_path, chapter_filename)
+    if not os.path.isfile(outline_file):
+        raise HTTPException(status_code=404, detail="No outline to delete for this chapter.")
+    try:
+        os.remove(outline_file)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not delete outline: {e}")
+    return {"deleted": True}
+
+
+# --- GET /api/documents/chapter-outlines (list) ---
+
+class ChapterOutlineListItem(BaseModel):
+    chapter_filename: str   # the manuscript file, e.g. "07-seven-to-one.md"
+    chapter_title:    str   # human-readable; same logic as the chapter list
+    outline_filename: str   # the file under outlines/chapters/
+
+
+@router.get("/chapter-outlines", response_model=list[ChapterOutlineListItem])
+async def list_chapter_outlines(folder_path: str):
+    """
+    Every chapter outline on disk, in reading order.
+
+    For the context picker, which would otherwise need one request per chapter
+    to find out which of them have been planned. Empty list when the folder
+    does not exist yet -- not having planned anything is the ordinary state of
+    a new book, not an error.
+    """
+    outline_dir = os.path.realpath(os.path.join(folder_path, "outlines", "chapters"))
+    manuscript  = _manuscript_dir(folder_path)
+    if not os.path.isdir(outline_dir):
+        return []
+
+    results: list[ChapterOutlineListItem] = []
+    with os.scandir(outline_dir) as entries:
+        for entry in entries:
+            if not entry.is_file() or not entry.name.endswith(".md"):
+                continue
+            stem = entry.name.removesuffix(".md")
+            chapter_filename = f"{stem}.md"
+            chapter_path     = os.path.join(manuscript, chapter_filename)
+            results.append(ChapterOutlineListItem(
+                chapter_filename = chapter_filename,
+                chapter_title    = _title_from_file(chapter_path, chapter_filename),
+                outline_filename = entry.name,
+            ))
+
+    # Reading order, so the picker matches the sidebar rather than sorting
+    # alphabetically and putting chapter 10 before chapter 2.
+    rank = order_rank(folder_path)
+    results.sort(key=lambda r: (rank.get(r.chapter_filename, len(rank)), r.outline_filename))
     return results
 
 
@@ -939,22 +1116,38 @@ async def create_chapter(request: CreateChapterRequest):
     # prefix, not the file count. Counting files breaks after a delete:
     # with 01- and 03- on disk, count+1 would produce another "03-" and
     # collide. max(prefix)+1 always steps past every file that exists.
+    kind = request.kind if request.kind in ("front", "back") else "chapter"
+
     existing = [
         f for f in os.listdir(manuscript)
         if f.endswith(".md") and os.path.isfile(os.path.join(manuscript, f))
     ]
-    highest = 0
-    for f in existing:
-        m = re.match(r"^(\d+)-", f)
-        if m:
-            highest = max(highest, int(m.group(1)))
-    next_num = max(highest, len(existing)) + 1
 
     # Convert the title to a filename-safe slug: "The Storm" -> "the-storm"
     slug = re.sub(r"[^a-z0-9]+", "-", request.title.lower()).strip("-")
     if not slug:
         slug = "untitled"
-    filename = f"{next_num:02d}-{slug}.md"
+
+    if kind == "chapter":
+        # NUMBERED ONLY IF IT IS A CHAPTER. The prefix is what gives reading
+        # order to a project with no manifest and what "Chapter 2" is read
+        # from; a prologue has neither a number nor a place in that sequence.
+        highest = 0
+        numbered = 0
+        for f in existing:
+            m = re.match(r"^(\d+)-", f)
+            if m:
+                highest = max(highest, int(m.group(1)))
+                numbered += 1
+        # `numbered` rather than len(existing): counting every file meant a
+        # prologue on disk pushed the next chapter's number up by one, so a
+        # book with a prologue and chapter 1 offered "03" next and silently
+        # skipped 02. Unnumbered files are not in the sequence and must not
+        # advance it.
+        next_num = max(highest, numbered) + 1
+        filename = f"{next_num:02d}-{slug}.md"
+    else:
+        filename = f"{slug}.md"
 
     chapter_path = os.path.join(manuscript, filename)
 
@@ -972,10 +1165,17 @@ async def create_chapter(request: CreateChapterRequest):
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Could not create file: {e}")
 
-    # Keep the structure manifest in step (no-op for projects without one).
-    # New chapters land in the "unassigned" bucket until the writer files
-    # them into an act.
-    sync_add_chapter(request.folder_path, filename)
+    # Keep the structure manifest in step. A new CHAPTER lands in the
+    # "unassigned" bucket until the writer files it into an act, and that sync
+    # is a no-op for a project with no manifest.
+    #
+    # Front and back matter is different in both respects: it goes into its own
+    # list, and it FORCES the manifest to exist, because without one the
+    # reading order is a filename sort and nothing can say "this goes first".
+    if kind == "chapter":
+        sync_add_chapter(request.folder_path, filename)
+    else:
+        sync_add_front_matter(request.folder_path, filename, kind)
 
     return CreateChapterResponse(
         filename=filename,
@@ -1043,6 +1243,21 @@ async def delete_chapter(folder_path: str, filename: str):
     except OSError:
         pass
 
+    # Best-effort: remove the chapter's plan too. Same reasoning again -- a
+    # plan for a chapter that no longer exists is clutter nothing will ever
+    # open, and it would be silently re-adopted by the next chapter that
+    # happened to take the same stem.
+    outline_removed = False
+    try:
+        _outline_dir, outline_file = _chapter_outline_paths(folder_path, filename)
+        if os.path.isfile(outline_file):
+            os.remove(outline_file)
+            outline_removed = True
+    except HTTPException:
+        pass
+    except OSError:
+        pass
+
     # Keep the structure manifest in step (no-op for projects without one).
     sync_remove_chapter(folder_path, filename)
 
@@ -1050,6 +1265,7 @@ async def delete_chapter(folder_path: str, filename: str):
         "filename":        filename,
         "summary_removed": summary_removed,
         "scenes_removed":  scenes_removed,
+        "outline_removed": outline_removed,
         "message":         f"Deleted {filename}.",
     }
 
@@ -1209,6 +1425,21 @@ async def rename_chapter(request: RenameChapterRequest):
     except (HTTPException, OSError):
         pass
 
+    # The chapter's PLAN, which is keyed by the same stem as its summary and
+    # would otherwise be orphaned by a rename -- still on disk, belonging to a
+    # chapter that no longer exists under that name, and invisible.
+    outline_moved = False
+    try:
+        _dir, old_outline = _chapter_outline_paths(request.folder_path, request.filename)
+        _dir, new_outline = _chapter_outline_paths(request.folder_path, new_filename)
+        if os.path.isfile(old_outline) and not os.path.exists(new_outline):
+            os.rename(old_outline, new_outline)
+            outline_moved = True
+        elif not os.path.isfile(old_outline):
+            outline_moved = True   # nothing to move counts as success
+    except (HTTPException, OSError):
+        pass
+
     structure_updated = False
     try:
         structure_updated = sync_rename_chapter(
@@ -1237,6 +1468,7 @@ async def rename_chapter(request: RenameChapterRequest):
         path=new_path,
         summary_moved=summary_moved,
         scenes_moved=scenes_moved,
+        outline_moved=outline_moved,
         structure_updated=structure_updated,
         progress_migrated=progress_migrated,
     )

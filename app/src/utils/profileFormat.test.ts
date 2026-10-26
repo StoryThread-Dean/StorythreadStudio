@@ -106,3 +106,57 @@ describe("what goes on a trait line", () => {
     expect(text).toContain("stubborn");
   });
 });
+
+
+// ── The Full AI Summary is no longer sent ────────────────────────────────────
+//
+// THE RULING (v2.0.6), after the writer asked which of the two was the better
+// thing for an AI to receive:
+//
+//     "Need to discuss the need for AI Generated Traits vs AI Generated
+//      Summary. Which is more efficient and effective for an AI to reach if
+//      attached in an AI Chat? We should remove one of them."
+//
+// Traits win, and it is not close. A trait goes on the wire carrying three
+// markers the prompts act on -- the importance weight, SUBTEXT (know this and
+// never say it out loud), and the chapter window. The summary is prose
+// generated FROM those traits with none of the markers surviving, so sending
+// both paid twice for the same facts and put a secret on the wire looking like
+// an ordinary sentence.
+//
+// It is still generated, still on the profile page, still exported. It is not
+// attached.
+
+function withSummary(summary: string): Profile {
+  const p = profileWith([trait("Hazel eyes")]);
+  return { ...p, full_ai_summary: summary } as Profile;
+}
+
+describe("what an attached profile carries", () => {
+  it("never sends the Full AI Summary", () => {
+    const out = formatProfileForAI(withSummary("Serena is a cautious thief."));
+    expect(out).not.toContain("Serena is a cautious thief");
+    expect(out).not.toContain("## AI Summary");
+  });
+
+  it("still sends the traits", () => {
+    expect(formatProfileForAI(withSummary("ignored"))).toContain("Hazel eyes");
+  });
+
+  it("keeps the markers that made traits the one worth keeping", () => {
+    const p = profileWith([
+      trait("Killed her brother", { importance: "core", subtext: true }),
+    ]);
+    const out = formatProfileForAI(p);
+    // Weight and secrecy, both of which the summary cannot express.
+    expect(out).toContain("[core, SUBTEXT]");
+  });
+
+  it("has no way to ask for the summary any more", () => {
+    // The bucket is gone from the type, so a caller cannot re-enable it by
+    // passing a flag -- which is what keeps this from coming back by accident.
+    const out = formatProfileForAI(withSummary("Serena is a cautious thief."),
+      { traits: true, overview: true, details: true, notes: true });
+    expect(out).not.toContain("cautious thief");
+  });
+});

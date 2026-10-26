@@ -15,15 +15,29 @@ import { headingFromKey } from "../types/sectionRegistry";
 
 
 // Which slices of a profile to include when serializing for the AI.
-// Maps to the four checkboxes in ChipPicker:
-//   summary  -> the synthesized "## AI Summary" block (full_ai_summary field)
+// Maps to the checkboxes in ChipPicker.
+//
+// THE FULL AI SUMMARY IS NOT ONE OF THEM, as of v2.0.6, and the reason is
+// that it cannot carry what the traits carry. A trait goes on the wire as
+//
+//     - Hazel eyes [core, SUBTEXT, ONLY IN CHAPTERS 2-9]: ...
+//
+// and all three markers are load-bearing: `core` is how the prompt weighs
+// it, SUBTEXT is the app's ONLY mechanism for "know this and never say it",
+// and the window is what keeps a trait from being treated as true in a
+// chapter where it is not. The summary is prose generated FROM those
+// traits with none of the markers surviving -- so attaching it alongside
+// them spent tokens restating what was already there, in a form where a
+// secret reads as an ordinary sentence.
+//
+// It is still generated, still on the page, still exported. It is no
+// longer sent.
 //   traits   -> all sections that use trait blocks (Physical, Personality, etc.)
 //   overview -> the "overview" section specifically (free-text intro)
 //   details  -> all OTHER non-trait prose sections (Notes, Relationships
 //               Overview, History, Current Dynamic, Hidden Tensions,
 //               Physical Description, Rule or Concept, etc.)
 export interface ChipIncludeOptions {
-  summary:  boolean;
   traits:   boolean;
   overview: boolean;
   details:  boolean;
@@ -50,7 +64,6 @@ export interface ChipIncludeOptions {
 // AI summary. This matches the previous formatter exactly so existing
 // calls keep working without any change.
 const LEGACY_INCLUDE: ChipIncludeOptions = {
-  summary:  false,
   traits:   true,
   overview: true,
   details:  true,
@@ -64,7 +77,6 @@ const LEGACY_INCLUDE: ChipIncludeOptions = {
  * Convert a Profile object into a plain-text block suitable for AI context.
  *
  * Sections are grouped into four buckets controlled by `include`:
- *   - summary  -> profile.full_ai_summary (the synthesized gist)
  *   - traits   -> sections where hasTraitBlocks=true (importance-labeled)
  *   - overview -> the "overview" section specifically
  *   - details  -> all other non-trait prose sections
@@ -141,16 +153,7 @@ export function formatProfileForAI(
   }));
   const lines: string[] = [`Profile: ${p.name} (${p.type})`, `Role: ${p.role || "unspecified"}`, ""];
 
-  // 1. AI Summary first -- when the writer chose to include it, the model
-  //    sees the gist before it sees the trait detail. The base prompt tells
-  //    the AI to use the summary to orient and the traits to act.
-  if (include.summary && p.full_ai_summary && p.full_ai_summary.trim().length > 0) {
-    lines.push("## AI Summary");
-    lines.push(p.full_ai_summary.trim());
-    lines.push("");
-  }
-
-  // 2. Walk each configured section and decide whether it goes in based on
+  // Walk each configured section and decide whether it goes in based on
   //    its type (trait vs prose) and key (overview vs other prose).
   for (const cfg of configs) {
     const section = p.sections[cfg.key];
@@ -202,13 +205,11 @@ export function formatProfileForAI(
 }
 
 
-// Default include flags for newly-attached chips. Most writer use cases
-// (dialogue checks, voice consistency, continuation drafting) want both
-// the orienting gist and the operational trait detail. Overview and
-// Details are off by default so light tasks stay token-cheap; the writer
-// can opt in when they need richer context.
+// Default include flags for newly-attached chips. Traits carry the weight,
+// the secrecy and the chapter windows the prompts act on, so they are the
+// default. Overview and Details are off so light tasks stay token-cheap;
+// the writer can opt in when they need richer context.
 export const DEFAULT_CHIP_INCLUDE: ChipIncludeOptions = {
-  summary:  true,
   traits:   true,
   overview: false,
   details:  false,

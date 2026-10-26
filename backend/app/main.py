@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Import routers -- each router handles one area of the API.
 # As we build more features, we'll add more routers here.
-from app.routers import projects, documents, profiles, settings, ai, series, export, progress, search, structure, names, audiobook, codex, extractor
+from app.routers import projects, documents, profiles, settings, ai, series, export, progress, search, structure, names, audiobook, codex, extractor, chats
 from app.utils.names_store import seed_names_db
 
 
@@ -111,6 +111,10 @@ app.include_router(codex.router)
 # Weave's entries should SAY. Its own router because codex.py is already
 # 2,400 lines, and because this one calls a model where that one never does.
 app.include_router(extractor.router)
+# Saved conversations. Its own router because a session is not an AI call:
+# nothing in here talks to a model, it reads and writes files under
+# .storythread/chats/. Keeping it out of ai.py keeps that obvious.
+app.include_router(chats.router)
 
 
 # --- Seed the name-generator database ---

@@ -24,8 +24,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, Eye, EyeOff, Link2, Loader, Pencil, RotateCcw, Shuffle,
-  Wrench,
+  AlertTriangle, Eye, EyeOff, Link2, Loader, Maximize, Pencil, RotateCcw,
+  Shuffle, Wrench, ZoomIn, ZoomOut,
 } from "lucide-react";
 
 import { WhatsThis } from "../../components/learn/WhatsThis";
@@ -34,7 +34,7 @@ import {
 } from "./lexicon";
 import {
   EDGE_LABEL_THRESHOLD, MAX_RENDERED_EDGES, MAX_RENDERED_NODES,
-  degrees, layoutNodes, neighborhood, nodeRadius, type Point,
+  degrees, labelFractions, layoutNodes, neighborhood, nodeRadius, type Point,
 } from "./layout";
 import {
   fetchAnchors, fetchGraph, fetchTypes, nodeLabel,
@@ -55,6 +55,33 @@ const DRAG_SLOP = 4;
 const WIDTH = 1000;
 const HEIGHT = 620;
 
+// ── Zoom ─────────────────────────────────────────────────────────────────────
+//
+// Done by moving the svg's viewBox rather than by scaling the drawing, and the
+// difference matters: a CSS transform would scale the stroke widths and the
+// label text with everything else, so zooming out to see the shape of a big
+// world would shrink the names into illegibility at exactly the moment you
+// need them. Moving the viewBox changes only WHICH PART of the coordinate
+// space is on screen; text stays the size it was.
+//
+// It also answers the writer's actual request -- "even if icons move outside
+// the visual box range". Zooming out shows the space BEYOND the 1000x620
+// board, which the frame otherwise clips. Two things live out there:
+//
+//   - NAMES. A label is centred under its dot, and "The Ancient Civilization
+//     and the Original Universal Interface" on a dot near the right edge runs
+//     a long way past it. Today the end of that name is simply cut off.
+//   - Positions saved before layoutNodes started clamping them. A drag and a
+//     spread both keep dots on the board now, so nothing NEW lands outside --
+//     but an older book may still have something out there.
+//
+// getScreenCTM() maps the cursor through whatever viewBox is current, so
+// dragging a dot keeps working at any zoom with no arithmetic of our own. The
+// hand-rolled fallback in pointAt() has to be told, and is.
+const ZOOM_MIN = 0.4;      // the whole board plus half again around it
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 1.25;    // multiplicative, so + and - are exact inverses
+
 interface WeaveMapProps {
   projectPath: string;
   /** Positions the writer has dragged, from per-book UI state. */
@@ -64,10 +91,15 @@ interface WeaveMapProps {
   /** Show the full, accessible list. Offered from inside the map now that the
    *  top-level Map/List toggle is gone. */
   onOpenListView?: () => void;
+  /** Kinds switched off in the legend, by type id. Remembered per book -- see
+   *  weaveHiddenTypes in useProjectUiState. */
+  hiddenTypes?: string[];
+  onHiddenTypes?: (ids: string[]) => void;
 }
 
 export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
-                          onOpenListView }: WeaveMapProps) {
+                          onOpenListView, hiddenTypes,
+                          onHiddenTypes }: WeaveMapProps) {
   const [graph, setGraph] = useState<WeaveGraph | null>(null);
   const [chapters, setChapters] = useState<ChapterAnchor[]>([]);
   const [registry, setRegistry] = useState<TypeRegistry | null>(null);
@@ -92,6 +124,51 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
   // callback because the fetch already lives in an effect and this is the
   // smallest honest way to say "that input changed".
   const [redraw, setRedraw] = useState(0);
+
+  // ── How much of the board is on screen, and which part ─────────────────
+  // 1 is the whole 1000x620 board. Above 1 is closer in; below 1 shows the
+  // space around it. `pan` is the offset of the window's centre from the
+  // board's, in board units, so Reset is one assignment of both.
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
+  const atRest = zoom === 1 && pan.x === 0 && pan.y === 0;
+
+  const viewBox = useMemo(() => {
+    const w = WIDTH / zoom;
+    const h = HEIGHT / zoom;
+    return { x: (WIDTH - w) / 2 + pan.x, y: (HEIGHT - h) / 2 + pan.y, w, h };
+  }, [zoom, pan]);
+
+  /** Zoom about the CENTRE of what is on screen, so the thing the writer is
+   *  looking at stays under their eye instead of sliding off. */
+  const zoomBy = (factor: number) => setZoom(
+    z => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * factor)));
+
+  const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+
+  // ── The legend is a filter ─────────────────────────────────────────────
+  //
+  // Hidden rather than shown, so a kind added later arrives visible. See the
+  // note on weaveHiddenTypes.
+  const hidden = useMemo(() => new Set(hiddenTypes ?? []), [hiddenTypes]);
+
+  const toggleType = (typeId: string) => {
+    const next = new Set(hidden);
+    if (next.has(typeId)) next.delete(typeId); else next.add(typeId);
+    onHiddenTypes?.([...next]);
+  };
+
+  // HOW MANY OF EACH KIND ARE THERE TO SHOW, at this point in the story.
+  // Counted from the graph the backend returned rather than from what is
+  // drawn, or a kind would grey itself out the moment the writer switched it
+  // off and there would be no way to switch it back on.
+  const countByType = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const node of graph?.nodes ?? []) {
+      counts[node.type] = (counts[node.type] ?? 0) + 1;
+    }
+    return counts;
+  }, [graph]);
 
   const at = chapterIndex >= 0 ? chapters[chapterIndex]?.anchor : undefined;
 
@@ -144,6 +221,14 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
     for (const t of registry?.types ?? []) map[t.id] = t.icon;
     return map;
   }, [registry]);
+  // WHAT TO CALL A LINE. The relation's own wording -- "friend of",
+  // "mentored by" -- from the world's registry, so a relation the writer
+  // invented reads in their words rather than as its id.
+  const relationLabels = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const r of registry?.relations ?? []) map[r.id] = r.label;
+    return map;
+  }, [registry]);
 
   // What is actually drawn. Budgets are applied here rather than in the
   // renderer so the counts can be REPORTED -- a map that quietly omits
@@ -174,13 +259,45 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
     }
     if (edges.length > MAX_RENDERED_EDGES) edges = edges.slice(0, MAX_RENDERED_EDGES);
 
+    // MEASURED ON THE WHOLE WORLD, THEN FILTERED. Hiding a kind should take
+    // things off the board, not redraw the board.
+    //
+    // Position is safe either way -- layoutNodes hashes each node's own id,
+    // so a dot lands in the same place whoever else is on screen. SIZE is
+    // not: nodeRadius grows with how many connections a dot has, so counting
+    // degree after the filter would shrink every character the moment their
+    // locations were switched off. The writer switched off locations, not
+    // half of everybody's importance.
     const degree = degrees(edges);
     const positions = layoutNodes(
       nodes.map(n => ({ entity_id: n.entity_id, type: n.type })),
       { width: WIDTH, height: HEIGHT, pinned, typeOrder },
     );
-    return { nodes, edges, positions, degree, overNodes, overEdges };
-  }, [graph, focus, pinned, typeOrder]);
+
+    // An edge goes when either end goes. A line to a hidden dot is a line to
+    // nowhere -- and the writer asked for the connection strings to go with
+    // the icons, which is the same thing said from the other side.
+    const shownNodes = nodes.filter(n => !hidden.has(n.type));
+    const shownIds = new Set(shownNodes.map(n => n.entity_id));
+    const shownEdges = edges.filter(
+      e => shownIds.has(e.src_id) && shownIds.has(e.dst_id));
+
+    return {
+      nodes: shownNodes,
+      edges: shownEdges,
+      // Worked out on the edges as DRAWN, so hiding a kind in the legend can
+      // return a label to the middle of its line once it is alone there.
+      labelAt: labelFractions(shownEdges),
+      positions,
+      degree,
+      overNodes,
+      overEdges,
+      // Said out loud rather than silently missing, the same as every other
+      // thing this map does not draw. See HiddenNotice.
+      filteredNodes: nodes.length - shownNodes.length,
+      filteredEdges: edges.length - shownEdges.length,
+    };
+  }, [graph, focus, pinned, typeOrder, hidden]);
 
   // ── Dragging ───────────────────────────────────────────────────────────
   //
@@ -231,13 +348,33 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
     const box = svg.getBoundingClientRect();
     if (!box.width || !box.height) return null;
     // xMidYMid meet: one uniform scale, centred, with the slack split evenly.
-    const scale = Math.min(box.width / WIDTH, box.height / HEIGHT);
-    const padX = (box.width - WIDTH * scale) / 2;
-    const padY = (box.height - HEIGHT * scale) / 2;
+    // Against the CURRENT viewBox, not the board -- once zoom exists, using
+    // WIDTH/HEIGHT here would put the cursor in the wrong place by exactly the
+    // zoom factor, and only in the environments that take this path.
+    const scale = Math.min(box.width / viewBox.w, box.height / viewBox.h);
+    const padX = (box.width - viewBox.w * scale) / 2;
+    const padY = (box.height - viewBox.h * scale) / 2;
     return {
-      x: (event.clientX - box.left - padX) / scale,
-      y: (event.clientY - box.top - padY) / scale,
+      x: (event.clientX - box.left - padX) / scale + viewBox.x,
+      y: (event.clientY - box.top - padY) / scale + viewBox.y,
     };
+  }
+
+  // ── Panning the board ──────────────────────────────────────────────────
+  //
+  // Zoom without pan is half a control: at 2x you can look at the middle of
+  // your world and nowhere else. Dragging the background moves the window;
+  // dragging a dot still moves the dot, because that drag claims the press
+  // first (`dragging.current` is set in startDrag, which fires on the node).
+  //
+  // Deliberately NOT the mouse wheel. The map lives inside a scrolling page,
+  // and a wheel that sometimes scrolls and sometimes zooms depending on where
+  // the cursor happens to be is worse than one that always scrolls.
+  const panning = useRef<{ x: number; y: number; from: Point } | null>(null);
+
+  function startPan(event: React.MouseEvent) {
+    if (dragging.current) return;          // a dot took this press
+    panning.current = { x: event.clientX, y: event.clientY, from: pan };
   }
 
   function startDrag(event: React.MouseEvent, entityId: string) {
@@ -254,6 +391,22 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
   }
 
   function onMouseMove(event: React.MouseEvent) {
+    const sweep = panning.current;
+    if (sweep && !dragging.current) {
+      // Screen pixels into board units. One scale for both axes, because
+      // preserveAspectRatio keeps the drawing square -- so the board slides
+      // exactly as far as the hand does.
+      const box = svgRef.current?.getBoundingClientRect();
+      const scale = box && box.width
+        ? Math.min(box.width / viewBox.w, box.height / viewBox.h)
+        : 1;
+      setPan({
+        x: sweep.from.x - (event.clientX - sweep.x) / scale,
+        y: sweep.from.y - (event.clientY - sweep.y) / scale,
+      });
+      return;
+    }
+
     const grip = dragging.current;
     if (!grip) return;
 
@@ -286,6 +439,7 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
     // A drag ends with a click event on its way. Remember to ignore it.
     suppressClick.current = dragging.current?.moved === true;
     dragging.current = null;
+    panning.current = null;
   }
 
   function onNodeClick(node: GraphNode) {
@@ -413,15 +567,69 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
 
       {/* ── The map ─────────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded border border-border bg-bg-primary">
+        {/* ZOOM, floating over the drawing rather than in the toolbar above.
+            The moment a writer wants it is while they are looking at a clump
+            of dots, and a control they have to look away from to find is one
+            they use once.
+
+            BOTTOM RIGHT, NOT TOP RIGHT. The top right is already taken: focus
+            a dot and the entry toolbar -- Connections, Fix or remove -- opens
+            there, and the zoom sat on top of it. Reported straight away, and
+            the two cannot share the corner because the one underneath is the
+            one you were reaching for. Down here it clears the toolbar, the
+            entry list on the left, and the scrubber above. */}
+        {view && view.nodes.length > 0 && (
+          <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1
+                          rounded border border-border bg-bg-panel/90 px-1 py-1"
+               data-testid="map-zoom">
+            <button
+              type="button"
+              onClick={() => zoomBy(ZOOM_STEP)}
+              disabled={zoom >= ZOOM_MAX}
+              aria-label="Zoom in"
+              title="Zoom in"
+              className="rounded p-1 text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary disabled:opacity-40"
+            >
+              <ZoomIn size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => zoomBy(1 / ZOOM_STEP)}
+              disabled={zoom <= ZOOM_MIN}
+              aria-label="Zoom out"
+              title="Zoom out -- shows the space beyond the edges of the board"
+              className="rounded p-1 text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary disabled:opacity-40"
+            >
+              <ZoomOut size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={resetView}
+              disabled={atRest}
+              aria-label="Reset the view"
+              title="Back to the whole board, centred"
+              className="rounded px-1.5 py-1 text-micro text-text-muted transition-colors hover:bg-bg-raised hover:text-text-primary disabled:opacity-40"
+            >
+              <Maximize size={13} />
+            </button>
+            {/* WHERE YOU ARE, said out loud. Without it, "why is Reset greyed
+                out" has no answer on screen. */}
+            <span className="px-1 text-micro tabular-nums text-faint"
+                  data-testid="map-zoom-level">
+              {Math.round(zoom * 100)}%
+            </span>
+          </div>
+        )}
         {view && view.nodes.length === 0 ? (
           <EmptyMap hasWorld={(graph?.hidden_nodes ?? 0) > 0} atLabel={label} />
         ) : (
           <svg
             ref={svgRef}
-            viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+            viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
             className="h-[60vh] w-full"
             role="img"
             aria-label="Map of your world"
+            onMouseDown={startPan}
             onMouseMove={onMouseMove}
             onMouseUp={endDrag}
             onMouseLeave={endDrag}
@@ -430,6 +638,12 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
               const a = view.positions[edge.src_id];
               const b = view.positions[edge.dst_id];
               if (!a || !b) return null;
+              const relLabel = relationLabels[edge.rel]
+                            || edge.rel.replace(/_/g, " ");
+              // WHERE ALONG THE LINE. The midpoint only when this pair has one
+              // connection; when both ends have written their own, each label
+              // sits nearer the end that wrote it. See labelFractions.
+              const t = view.labelAt[i] ?? 0.5;
               return (
                 <g key={`${edge.src_id}-${edge.rel}-${edge.dst_id}-${i}`}>
                   <line
@@ -448,16 +662,39 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
                     opacity={(edge.expired ? 0.35 : 1)
                              * (edge.present === false ? 0.3 : 1)}
                   />
+                  {/* THE WHOLE SENTENCE, ON HOVER. `reason` is the writer's
+                      own line and the one required field on a connection, so
+                      it must stay reachable -- it just cannot be painted on
+                      the map forty times over. See the note on the label.
+
+                      Only when there IS a reason: a title repeating the label
+                      already drawn beside it adds nothing, and it would make
+                      the same words appear twice to anything reading the
+                      page, a screen reader included. */}
+                  {edge.reason && (
+                    <title>{`${relLabel} -- ${edge.reason}`}</title>
+                  )}
                   {view.edges.length <= EDGE_LABEL_THRESHOLD && (
                     <text
-                      x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 3}
+                      x={a.x + (b.x - a.x) * t}
+                      y={a.y + (b.y - a.y) * t - 3}
                       textAnchor="middle"
                       className="fill-text-muted text-2xs"
                     >
-                      {/* The writer's own line where they wrote one -- that
-                          is what the backend sends `reason` FOR. The relation
-                          id is the fallback, not the label. */}
-                      {edge.reason || edge.rel.replace(/_/g, " ")}
+                      {/* WHAT KIND OF CONNECTION, not why. This used to paint
+                          `reason` -- the writer's whole sentence -- along
+                          every line, and on a real world it is unreadable:
+                          forty sentences of thirty words each, overlapping,
+                          with the dots lost underneath them. The reason is
+                          still here, on hover and in the entry itself; what a
+                          line needs at a glance is what it IS.
+
+                          The label comes from the world's own relation
+                          vocabulary, so "mentored_by" reads "mentored by" and
+                          a relation the writer invented reads as they wrote
+                          it. The id with its underscores knocked out is the
+                          fallback, for a relation the registry has lost. */}
+                      {relLabel}
                     </text>
                   )}
                 </g>
@@ -662,19 +899,86 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
       {/* ── What is not on screen. Never silent. ────────────────────────── */}
       <HiddenNotice graph={graph} view={view} hideSpoilers={hideSpoilers} />
 
-      {/* ── Legend, rendered from the Lexicon ───────────────────────────── */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 rounded border border-border bg-bg-primary px-3 py-2">
+      {/* ── The legend, which is also the filter ────────────────────────── */}
+      {/*
+          It named the symbols and did nothing, which on a crowded map is the
+          wrong half of the job: the writer can already see there are dots of
+          six kinds, and what they want is fewer of them.
+
+              "have the icons and legend at the botom act as a filter to turn
+               on/off the icons ... clicking [icon] Lore > turns off all lore
+               icons, clicking again reveals them and their connection string"
+
+          Three states per kind, and each says something different:
+            has entries, on    -- ordinary, and clickable
+            has entries, off   -- struck through, dimmed, still clickable
+            no entries at all  -- faded and NOT clickable, because switching
+                                  off nothing would do nothing and a control
+                                  that does nothing is a control that is broken
+          Every kind still appears, in every state. A legend that dropped the
+          empty kinds would answer "what am I looking at" and stop answering
+          "what could I have". */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-border bg-bg-primary px-3 py-2"
+           data-testid="weave-legend">
         {(registry?.types ?? []).map(type => {
           const entry = threadTypeEntry(type.id, type.label, type.icon);
           const Icon = entry.Icon;
+          const count = countByType[type.id] ?? 0;
+          const off = hidden.has(type.id);
+          const empty = count === 0;
           return (
-            <span key={type.id} className="inline-flex items-center gap-1 text-mini"
-                  title={entry.short}>
-              <Icon size={11} className={TONE_CLASSES[entry.tone as Tone].text} />
-              <span className="text-text-muted">{entry.term}</span>
-            </span>
+            <button
+              key={type.id}
+              type="button"
+              disabled={empty || !onHiddenTypes}
+              aria-pressed={!off}
+              data-testid={`legend-${type.id}`}
+              data-state={empty ? "empty" : off ? "off" : "on"}
+              onClick={() => toggleType(type.id)}
+              // WHAT IT IS, THEN WHAT CLICKING DOES. The legend's original job
+              // was teaching the symbols and it keeps it -- a control that
+              // only says "Hide Lore" has stopped answering "what is Lore".
+              title={empty
+                ? `${entry.short} Nothing of this kind in your world yet.`
+                : off
+                ? `${entry.short} Click to show ${entry.term} again (${count}).`
+                : `${entry.short} Click to hide ${entry.term} and their `
+                  + `connections (${count}).`}
+              className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-mini transition-colors ${
+                empty
+                  // `disabled:` rather than a bare opacity, which the ink
+                  // contract refuses -- and rightly: fading measured text a
+                  // second time puts its real contrast beyond anything that
+                  // check can see. On a control you cannot press, low
+                  // contrast is the correct rendering, and the variant is how
+                  // the class says which of those two this is.
+                  ? "cursor-default border-transparent disabled:opacity-40"
+                  : off
+                  ? "border-transparent text-faint hover:border-border hover:text-text-muted"
+                  : "border-border-strong/60 text-text-muted hover:border-weave-fill hover:text-text-primary"
+              }`}
+            >
+              <Icon size={11}
+                    className={off || empty
+                      ? "text-faint"
+                      : TONE_CLASSES[entry.tone as Tone].text} />
+              <span className={off ? "line-through" : undefined}>{entry.term}</span>
+              {/* THE COUNT IS WHAT MAKES THE FADING LEGIBLE. Without it, a
+                  greyed-out kind reads as broken rather than as empty. */}
+              <span className="tabular-nums text-micro text-faint">{count}</span>
+            </button>
           );
         })}
+        {hidden.size > 0 && onHiddenTypes && (
+          <button
+            type="button"
+            onClick={() => onHiddenTypes([])}
+            data-testid="legend-show-all"
+            className="ml-auto inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-mini text-text-muted transition-colors hover:border-weave-fill hover:text-text-primary"
+          >
+            <RotateCcw size={10} /> Show every kind
+          </button>
+        )}
       </div>
     </div>
   );
@@ -683,7 +987,8 @@ export function WeaveMap({ projectPath, pinned, onPin, onOpenThread,
 
 function HiddenNotice({ graph, view, hideSpoilers }: {
   graph: WeaveGraph | null;
-  view: { overNodes: number; overEdges: number } | null;
+  view: { overNodes: number; overEdges: number;
+          filteredNodes: number; filteredEdges: number } | null;
   hideSpoilers: boolean;
 }) {
   if (!graph) return null;
@@ -700,6 +1005,19 @@ function HiddenNotice({ graph, view, hideSpoilers }: {
   }
   if (view && view.overEdges > 0) {
     parts.push(`${view.overEdges} more connections not drawn`);
+  }
+  // THE WRITER'S OWN FILTER, counted like everything else. They chose it, so
+  // this is a reminder rather than a warning -- but a map quietly showing
+  // two thirds of a world is the one thing this notice exists to prevent, and
+  // "I switched Lore off last Tuesday" is exactly the kind of thing a person
+  // forgets between sessions. The setting is remembered per book, which is
+  // what makes forgetting possible.
+  if (view && view.filteredNodes > 0) {
+    parts.push(`${view.filteredNodes} `
+      + `${view.filteredNodes === 1 ? "entry" : "entries"} switched off in the legend`
+      + (view.filteredEdges > 0
+        ? `, with ${view.filteredEdges} connection${view.filteredEdges === 1 ? "" : "s"}`
+        : ""));
   }
   if (parts.length === 0) return null;
 

@@ -193,7 +193,9 @@ export interface ChapterAnchor {
 
 export interface WeaveHealth {
   schema_version: number;
-  migration_state: "none" | "incomplete" | "done";
+  /** "native" means the project was CREATED in the Weave -- no legacy
+   *  world behind it and nothing to convert. See migrate.py. */
+  migration_state: "none" | "incomplete" | "done" | "native";
   index_dirty: boolean;
   registry_ok: boolean;
   registry_error: string;

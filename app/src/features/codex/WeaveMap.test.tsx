@@ -42,7 +42,13 @@ const TYPES = {
     { id: "character", label: "Character", folder: "characters", icon: "User", sections: [] },
     { id: "location", label: "Location", folder: "locations", icon: "MapPin", sections: [] },
   ],
-  relations: [],
+  // One relation with a label the id could NOT have been prettified into, so
+  // a test asserting the registry is read cannot pass by accident.
+  relations: [
+    { id: "companion_of", label: "travels with", inverse: null,
+      symmetric: true, source_types: ["character"], target_types: ["character"],
+      cardinality: "many", exclusive_group: null },
+  ],
 };
 
 function graph(overrides: Record<string, unknown> = {}) {
@@ -471,22 +477,121 @@ describe("a bare dot, and what a click means", () => {
 });
 
 
+// ── WHAT A LINE SAYS, AND WHY IT STOPPED SAYING THE OTHER THING ─────────────
+//
+// This used to paint `reason` -- the writer's whole sentence about the
+// connection -- along every line, and these tests pinned that as the desired
+// behaviour. On a real world it is unreadable. Reported with a screenshot of
+// forty-two entries: forty sentences of twenty or thirty words each, laid over
+// one another and over the dots, with nothing legible anywhere on the map.
+//
+//     "change current words to relationship type: example: friend of or
+//      companion of"
+//
+// So a line says WHAT IT IS. The reason is not lost -- it is on the line's
+// hover title, and it is on the entry itself, where a sentence has room to be
+// read. What a line needs at a glance is its kind.
 describe("what a line between two dots says", () => {
-  it("uses the writer's reason where they wrote one", async () => {
-    // The backend sends `reason` precisely "so the map can label the line
-    // with something worth reading instead of a relation id" -- and the map
-    // dropped it on arrival for two releases.
+  it("says what kind of connection it is, in the world's own wording", async () => {
     mockApi(graph({ edges: [
       { src_id: "e-elara", dst_id: "e-garrick", rel: "mentored_by",
         reason: "taught her everything, then vanished",
         active: true, expired: false },
     ] }));
     await renderMap();
-    expect(screen.getByText("taught her everything, then vanished")).toBeTruthy();
-    expect(screen.queryByText("mentored by")).toBeNull();
+    expect(screen.getByText("mentored by")).toBeTruthy();
   });
 
-  it("falls back to the relation when no reason was written", async () => {
+  it("does not paint the writer's whole sentence across the map", async () => {
+    // THE BUG, as an assertion. One sentence is fine; forty is the screenshot.
+    mockApi(graph({ edges: [
+      { src_id: "e-elara", dst_id: "e-garrick", rel: "mentored_by",
+        reason: "taught her everything, then vanished",
+        active: true, expired: false },
+    ] }));
+    await renderMap();
+    expect(screen.queryByText("taught her everything, then vanished")).toBeNull();
+  });
+
+  it("keeps the reason reachable on the line itself", async () => {
+    // Not lost, just not painted. `reason` is the one REQUIRED field on a
+    // connection -- the writer was made to write it -- so the map must not
+    // behave as though it were never there.
+    mockApi(graph({ edges: [
+      { src_id: "e-elara", dst_id: "e-garrick", rel: "mentored_by",
+        reason: "taught her everything, then vanished",
+        active: true, expired: false },
+    ] }));
+    await renderMap();
+    // Read off the DOM rather than with getByTitle, which looks for the title
+    // ATTRIBUTE -- an SVG <title> is a child element. Same idiom the bare-dot
+    // hover test above uses.
+    const titles = [...document.querySelectorAll("svg title")]
+      .map(t => t.textContent);
+    expect(titles).toContain("mentored by -- taught her everything, then vanished");
+  });
+
+  it("uses the label the writer's own registry gives the relation", async () => {
+    // "friend_of" is an id; "friend of" is a phrase; and a writer who renamed
+    // the relation to "ride or die" gets that. The registry is the one place
+    // that knows, so the map reads it rather than prettifying the id.
+    mockApi(graph({ edges: [
+      { src_id: "e-elara", dst_id: "e-garrick", rel: "companion_of",
+        active: true, expired: false },
+    ] }));
+    await renderMap();
+    expect(screen.getByText("travels with")).toBeTruthy();
+  });
+
+  it("does not print both readings of a pair in the same place", async () => {
+    // The reported overlap: Kipling is "mentored by" Milton and Milton
+    // "mentors" Kipling, both drawn on the one line between them, both landing
+    // on its midpoint. The screenshot read "mentoredsby".
+    mockApi(graph({ edges: [
+      { src_id: "e-elara", dst_id: "e-garrick", rel: "mentored_by",
+        active: true, expired: false },
+      { src_id: "e-garrick", dst_id: "e-elara", rel: "mentors",
+        active: true, expired: false },
+    ] }));
+    await renderMap();
+
+    const where = (text: string) => {
+      const label = [...document.querySelectorAll("svg text")]
+        .find(t => t.textContent === text)!;
+      return { x: Number(label.getAttribute("x")),
+               y: Number(label.getAttribute("y")) };
+    };
+    const one = where("mentored by");
+    const other = where("mentors");
+    expect(Math.hypot(one.x - other.x, one.y - other.y)).toBeGreaterThan(20);
+  });
+
+  it("still centres a connection that is alone on its line", async () => {
+    mockApi(graph({ edges: [
+      { src_id: "e-elara", dst_id: "e-garrick", rel: "mentored_by",
+        active: true, expired: false },
+    ] }));
+    await renderMap();
+
+    const at = (id: string) => {
+      const node = [...document.querySelectorAll("[data-testid='map-node']")]
+        .find(n => n.getAttribute("transform")
+          && n.querySelector("text")?.textContent
+             === (id === "e-elara" ? "Elara Voss" : "Garrick Vale"))!;
+      const [x, y] = /translate\(([-\d.]+) ([-\d.]+)\)/
+        .exec(node.getAttribute("transform")!)!.slice(1).map(Number);
+      return { x, y };
+    };
+    const a = at("e-elara");
+    const b = at("e-garrick");
+    const label = [...document.querySelectorAll("svg text")]
+      .find(t => t.textContent === "mentored by")!;
+    expect(Number(label.getAttribute("x"))).toBeCloseTo((a.x + b.x) / 2, 1);
+  });
+
+  it("prettifies the id when the registry has lost the relation", async () => {
+    // An older project whose types.json predates a relation the entry uses.
+    // Readable beats blank, and blank is what a bare lookup would give.
     mockApi(graph());
     await renderMap();
     expect(screen.getByText("mentored by")).toBeTruthy();
@@ -755,5 +860,280 @@ describe("spreading the dots out", () => {
     // silently does nothing is worse than no button.
     await renderMap();
     expect(screen.queryByTestId("map-spread")).toBeNull();
+  });
+});
+
+
+// ── THE LEGEND IS A FILTER ───────────────────────────────────────────────────
+//
+// Reported with a screenshot of a forty-two entry world in which nothing was
+// readable: dots, names, and forty overlapping sentences all in one space.
+// Three things were asked for and this is the second.
+//
+//     "have the icons and legend at the botom act as a filter to turn on/off
+//      the icons. example: clicking [icon] Lore > turns off all lore icons,
+//      clicking again reveals them and their connection string. icons without
+//      any entries are faded/greyed out. sections with entries are default
+//      turned on, clicking off has a memory feature that remains off for that
+//      book only."
+//
+// Each clause is a test below. The memory is per BOOK, which is why it goes
+// through the same per-project UI state the dragged positions use rather than
+// living in the component: a filter that forgets itself on reload is one the
+// writer has to re-apply every session.
+
+describe("the legend as a filter", () => {
+  const drawn = () => [...document.querySelectorAll("[data-testid='map-node']")]
+    .map(n => n.querySelector("text")?.textContent);
+
+  it("is on for every kind that has entries", async () => {
+    await renderMap();
+    expect(screen.getByTestId("legend-character").getAttribute("data-state"))
+      .toBe("on");
+    expect(screen.getByTestId("legend-location").getAttribute("data-state"))
+      .toBe("on");
+  });
+
+  it("takes a kind off the map when clicked", async () => {
+    const onHiddenTypes = vi.fn();
+    await renderMap({ onHiddenTypes });
+    await userEvent.click(screen.getByTestId("legend-location"));
+    expect(onHiddenTypes).toHaveBeenCalledWith(["location"]);
+  });
+
+  it("draws neither the icons nor their connections", async () => {
+    // "turns off all lore icons" and "reveals them AND THEIR CONNECTION
+    // STRING" are one clause, so hiding a kind takes its lines with it. A line
+    // to a dot that is not there is a line to nowhere.
+    mockApi(graph({ edges: [
+      { src_id: "e-elara", dst_id: "e-garrick", rel: "mentored_by",
+        active: true, expired: false },
+      { src_id: "e-elara", dst_id: "e-moor", rel: "lives_in",
+        active: true, expired: false },
+    ] }));
+    await renderMap({ hiddenTypes: ["location"] });
+
+    expect(drawn()).not.toContain("Ravensmoor");
+    expect(drawn()).toContain("Elara Voss");
+    expect(screen.queryByText("lives in")).toBeNull();
+    expect(screen.getByText("mentored by")).toBeTruthy();
+  });
+
+  it("brings them back when clicked again", async () => {
+    const onHiddenTypes = vi.fn();
+    await renderMap({ hiddenTypes: ["location"], onHiddenTypes });
+    expect(screen.getByTestId("legend-location").getAttribute("data-state"))
+      .toBe("off");
+    await userEvent.click(screen.getByTestId("legend-location"));
+    expect(onHiddenTypes).toHaveBeenCalledWith([]);
+  });
+
+  it("leaves every other dot the same size and in the same place", async () => {
+    // Hiding takes things off the board; it does not redraw the board.
+    //
+    // Position holds on its own -- layoutNodes hashes each node's own id, so
+    // a dot lands in the same place whoever else is on screen. SIZE does not:
+    // nodeRadius grows with a dot's connections, so counting degree after the
+    // filter shrinks every character the moment their locations go. Elara has
+    // two connections here and must still look like she has two.
+    const elara = () =>
+      [...document.querySelectorAll("[data-testid='map-node']")]
+        .find(n => n.querySelector("text")?.textContent === "Elara Voss")!;
+    const shape = () => ({
+      at: elara().getAttribute("transform"),
+      r: elara().querySelector("circle")!.getAttribute("r"),
+    });
+    const TWO_EDGES = { edges: [
+      { src_id: "e-elara", dst_id: "e-garrick", rel: "mentored_by",
+        active: true, expired: false },
+      { src_id: "e-elara", dst_id: "e-moor", rel: "lives_in",
+        active: true, expired: false },
+    ] };
+
+    mockApi(graph(TWO_EDGES));
+    await renderMap();
+    const before = shape();
+    cleanup();
+    mockApi(graph(TWO_EDGES));
+    await renderMap({ hiddenTypes: ["location"] });
+    expect(shape()).toEqual(before);
+  });
+
+  it("fades a kind with nothing in it, and refuses the click", async () => {
+    // Switching off nothing would do nothing, and a control that does nothing
+    // is a control the writer decides is broken.
+    mockApi(graph({ nodes: [
+      { entity_id: "e-elara", type: "character", name: "Elara Voss",
+        display_name: "", aliases: [], placeholder: false },
+    ] }));
+    const onHiddenTypes = vi.fn();
+    await renderMap({ onHiddenTypes });
+
+    const empty = screen.getByTestId("legend-location");
+    expect(empty.getAttribute("data-state")).toBe("empty");
+    expect((empty as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(empty);
+    expect(onHiddenTypes).not.toHaveBeenCalled();
+  });
+
+  it("still names every kind, including the empty ones", async () => {
+    // A legend that dropped the empty kinds would answer "what am I looking
+    // at" and stop answering "what could I have". It also keeps teaching what
+    // each kind IS -- a control that only says "Hide Lore" has stopped
+    // answering "what is Lore".
+    mockApi(graph({ nodes: [
+      { entity_id: "e-elara", type: "character", name: "Elara Voss",
+        display_name: "", aliases: [], placeholder: false },
+    ] }));
+    await renderMap();
+    expect(screen.getByTestId("legend-location")).toBeTruthy();
+    expect(screen.getAllByTitle(/The people in your story/).length)
+      .toBeGreaterThan(0);
+  });
+
+  it("says how much it is holding back, like everything else", async () => {
+    // The writer chose this, so it is a reminder rather than a warning -- but
+    // the choice is remembered between sessions, which is exactly what makes
+    // "why is half my world missing" possible a fortnight later.
+    await renderMap({ hiddenTypes: ["location"] });
+    expect(screen.getByTestId("weave-hidden-notice").textContent)
+      .toMatch(/1 entry switched off in the legend/);
+  });
+
+  it("offers one way back when anything is off", async () => {
+    const onHiddenTypes = vi.fn();
+    await renderMap({ hiddenTypes: ["location", "character"], onHiddenTypes });
+    await userEvent.click(screen.getByTestId("legend-show-all"));
+    expect(onHiddenTypes).toHaveBeenCalledWith([]);
+  });
+
+  it("does not offer a way back when nothing is off", async () => {
+    await renderMap();
+    expect(screen.queryByTestId("legend-show-all")).toBeNull();
+  });
+
+  it("cannot be toggled where the choice cannot be saved", async () => {
+    // Same rule as Spread: with nowhere to put the answer, a control that
+    // silently forgets is worse than no control.
+    await renderMap();
+    expect((screen.getByTestId("legend-character") as HTMLButtonElement).disabled)
+      .toBe(true);
+  });
+});
+
+
+// ── ZOOM ─────────────────────────────────────────────────────────────────────
+//
+//     "research into a zoom in and out feature even if icons move outside the
+//      visual box range. If you find a viable solution, make sure it has a
+//      zoom +, zoom -, default (resetting view back to center."
+//
+// Done by moving the viewBox rather than scaling the drawing, and the
+// difference is the point: a CSS transform would shrink the names along with
+// everything else, and the names are the reason to zoom out. Moving the
+// viewBox changes only which part of the coordinate space is on screen, so the
+// text stays the size it was -- and it is what makes the space BEYOND the
+// board reachable, which is the "outside the visual box range" half.
+
+describe("zoom", () => {
+  const box = () => document.querySelector("svg[aria-label='Map of your world']")!
+    .getAttribute("viewBox")!.split(" ").map(Number);
+
+  it("opens showing the whole board", async () => {
+    await renderMap();
+    expect(box()).toEqual([0, 0, 1000, 620]);
+    expect(screen.getByTestId("map-zoom-level").textContent).toBe("100%");
+  });
+
+  it("shows less of the board, from the middle, on zoom in", async () => {
+    await renderMap();
+    await userEvent.click(screen.getByLabelText("Zoom in"));
+    const [x, y, w, h] = box();
+    expect(w).toBeLessThan(1000);
+    expect(h).toBeLessThan(620);
+    // Still centred on the middle of the board, so what the writer was looking
+    // at stays under their eye instead of sliding off.
+    expect(x + w / 2).toBeCloseTo(500);
+    expect(y + h / 2).toBeCloseTo(310);
+  });
+
+  it("reaches PAST the edges of the board on zoom out", async () => {
+    // The half a plain scale would not give. A dot dragged or spread beyond
+    // the board is otherwise clipped away for good.
+    await renderMap();
+    await userEvent.click(screen.getByLabelText("Zoom out"));
+    const [x, y, w, h] = box();
+    expect(w).toBeGreaterThan(1000);
+    expect(h).toBeGreaterThan(620);
+    expect(x).toBeLessThan(0);
+    expect(y).toBeLessThan(0);
+  });
+
+  it("says where it is", async () => {
+    await renderMap();
+    await userEvent.click(screen.getByLabelText("Zoom in"));
+    expect(screen.getByTestId("map-zoom-level").textContent).toBe("125%");
+  });
+
+  it("goes back to the whole board, centred", async () => {
+    await renderMap();
+    await userEvent.click(screen.getByLabelText("Zoom in"));
+    await userEvent.click(screen.getByLabelText("Zoom in"));
+    await userEvent.click(screen.getByLabelText("Reset the view"));
+    expect(box()).toEqual([0, 0, 1000, 620]);
+  });
+
+  it("offers nothing to reset until something has moved", async () => {
+    await renderMap();
+    expect((screen.getByLabelText("Reset the view") as HTMLButtonElement).disabled)
+      .toBe(true);
+    await userEvent.click(screen.getByLabelText("Zoom in"));
+    expect((screen.getByLabelText("Reset the view") as HTMLButtonElement).disabled)
+      .toBe(false);
+  });
+
+  it("stops rather than running away in either direction", async () => {
+    await renderMap();
+    for (let i = 0; i < 20; i += 1) {
+      await userEvent.click(screen.getByLabelText("Zoom in"));
+    }
+    expect((screen.getByLabelText("Zoom in") as HTMLButtonElement).disabled)
+      .toBe(true);
+    const level = Number(
+      screen.getByTestId("map-zoom-level").textContent!.replace("%", ""));
+    expect(level).toBeLessThanOrEqual(400);
+  });
+
+  it("still puts a dragged dot under the cursor when zoomed", async () => {
+    // getScreenCTM maps the cursor through whatever viewBox is current, so
+    // this works for free in a browser -- but jsdom has no CTM and takes the
+    // hand-rolled path in pointAt, which had the board's size written into it.
+    // Zoomed, that path was wrong by exactly the zoom factor.
+    const onPin = vi.fn();
+    await renderMap({ onPin });
+    await userEvent.click(screen.getByLabelText("Zoom in"));
+
+    const svg = document.querySelector("svg[aria-label='Map of your world']")!;
+    svg.getBoundingClientRect = () => ({
+      left: 0, top: 0, width: 800, height: 496, right: 800, bottom: 496,
+      x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+
+    const dot = [...document.querySelectorAll("[data-testid='map-node']")]
+      .find(n => n.querySelector("text")?.textContent === "Elara Voss")!;
+    const start = Number(/translate\(([-\d.]+) /.exec(
+      dot.getAttribute("transform")!)![1]);
+
+    fireEvent.mouseDown(dot, { clientX: 400, clientY: 248 });
+    fireEvent.mouseMove(svg, { clientX: 480, clientY: 248 });
+
+    const calls = onPin.mock.calls;
+    const moved = calls[calls.length - 1][0] as Record<string, { x: number }>;
+    // The window is 800 screen pixels wide over an 800-unit viewBox at 125%,
+    // so the scale is 1 and 80 pixels of hand is 80 units of board. The grab
+    // offset means the dot keeps its grip, so it moves BY the travel rather
+    // than jumping to the cursor. Reading the board size instead of the
+    // viewBox gives 100 here -- a fifth too far, and only in this path.
+    expect(moved["e-elara"].x - start).toBeCloseTo(80, 0);
   });
 });

@@ -121,6 +121,7 @@ def test_cascade_flags_true_when_nothing_to_move(client: TestClient, tmp_path: P
     data = res.json()
     assert data["summary_moved"] is True
     assert data["scenes_moved"] is True
+    assert data["outline_moved"] is True
     assert data["structure_updated"] is True   # no manifest = nothing to update
     assert data["progress_migrated"] is True
 

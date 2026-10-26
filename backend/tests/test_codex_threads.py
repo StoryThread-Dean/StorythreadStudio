@@ -992,3 +992,134 @@ name: X
 """
     rendered = render_thread(parse_thread(source, REGISTRY), REGISTRY)
     assert "rel:" not in rendered
+
+
+# ── A section name means different things in different kinds ─────────────────
+#
+# THE BUG, reported as "Creatures > Appearance doesn't appear after saved and
+# coming back":
+#
+# The alias map that heals a Location's old "Appearance" heading into its
+# current "Physical Description" was keyed by SECTION ID ALONE, with no notion
+# of which kind it applied to. So it fired on every kind that happens to have a
+# section by the same name -- and three do:
+#
+#     creature   Appearance                    (current and correct)
+#     object     Appearance, Significance      (both current and correct)
+#     concept    Details                       (current and correct)
+#
+# A Creature's Appearance was therefore filed under `physical_description`, an
+# id the creature registry does not have. The editor asked for `appearance`,
+# got nothing, and drew an empty box over prose that was sitting safely on
+# disk under the wrong name -- and the heal-on-save then rewrote the file to
+# match, making it permanent.
+
+def _entry(kind: str, heading: str, body: str = "Scaled, four-winged.") -> str:
+    return f"""---
+type: {kind}
+entity_id: e-x
+name: X
+---
+
+# {heading}
+{body}
+"""
+
+
+def test_a_creature_keeps_its_own_appearance():
+    thread = parse_thread(_entry("creature", "Appearance"), REGISTRY)
+    assert "appearance" in thread["sections"]
+    assert "physical_description" not in thread["sections"]
+    assert thread["sections"]["appearance"]["content"].strip() == "Scaled, four-winged."
+
+
+def test_an_objects_appearance_and_significance_are_its_own():
+    for section in ("Appearance", "Significance"):
+        thread = parse_thread(_entry("object", section), REGISTRY)
+        assert _section_key(section) in thread["sections"], section
+
+
+def test_a_concept_keeps_its_own_details():
+    thread = parse_thread(_entry("concept", "Details"), REGISTRY)
+    assert "details" in thread["sections"]
+    assert "rule_or_concept" not in thread["sections"]
+
+
+def test_a_location_is_still_healed():
+    # The aliases exist for a real reason and must keep working: the Weave
+    # once shipped a shorter set of sections than the Profile Builder, so
+    # older Locations really do carry "Appearance" meaning Physical
+    # Description. Scoping them by kind must not switch that off.
+    thread = parse_thread(_entry("location", "Appearance"), REGISTRY)
+    assert "physical_description" in thread["sections"]
+    assert "appearance" not in thread["sections"]
+
+
+def test_a_lore_entry_is_still_healed():
+    thread = parse_thread(_entry("lore", "Details"), REGISTRY)
+    assert "rule_or_concept" in thread["sections"]
+
+
+def test_a_characters_hidden_traits_heading_is_still_healed():
+    thread = parse_thread(
+        _entry("character", "Hidden and Foreshadowing"), REGISTRY)
+    assert "hidden_and_foreshadowing_traits" in thread["sections"]
+
+
+def test_a_creatures_appearance_survives_a_round_trip():
+    # THE ONE THE WRITER ACTUALLY HIT. Save, reopen, and it is still there --
+    # under its own name, with its own heading.
+    source = _entry("creature", "Appearance")
+    once = render_thread(parse_thread(source, REGISTRY), REGISTRY)
+    twice = parse_thread(once, REGISTRY)
+    assert twice["sections"]["appearance"]["content"].strip() == "Scaled, four-winged."
+    assert "# Appearance" in once
+    assert "Physical Description" not in once
+
+
+def _section_key(heading: str) -> str:
+    return heading.strip().lower().replace(" ", "_")
+
+
+# ── Recovering the entries the bug already damaged ───────────────────────────
+#
+# Scoping the aliases stops new files being mislabelled; it does nothing for
+# the ones already saved. A Creature whose Appearance was renamed to "Physical
+# Description" and then written back to disk still says that, and the editor
+# still asks for `appearance` and still finds nothing. Without a mapping back,
+# the fix leaves the writer's existing prose exactly as invisible as before.
+
+def test_a_damaged_creature_gets_its_appearance_back():
+    thread = parse_thread(_entry("creature", "Physical Description"), REGISTRY)
+    assert thread["sections"]["appearance"]["content"].strip() == "Scaled, four-winged."
+
+
+def test_a_damaged_object_gets_both_sections_back():
+    for damaged, restored in (("Physical Description", "appearance"),
+                              ("Historical Significance", "significance")):
+        thread = parse_thread(_entry("object", damaged), REGISTRY)
+        assert restored in thread["sections"], damaged
+
+
+def test_a_damaged_concept_gets_its_details_back():
+    thread = parse_thread(_entry("concept", "Rule or Concept"), REGISTRY)
+    assert "details" in thread["sections"]
+
+
+def test_the_recovery_heals_the_file_on_the_next_save():
+    # Read-time repair, written back the next time the writer presses Save --
+    # the same approach the aliases already use, and for the same reason: a
+    # bulk rewrite has to be right first time across worlds nobody has seen.
+    rendered = render_thread(
+        parse_thread(_entry("creature", "Physical Description"), REGISTRY),
+        REGISTRY)
+    assert "# Appearance" in rendered
+    assert "Physical Description" not in rendered
+
+
+def test_a_location_is_not_dragged_back_the_other_way():
+    # The recovery must not fight the original alias. A Location's Physical
+    # Description is its real, current section and stays exactly where it is.
+    thread = parse_thread(_entry("location", "Physical Description"), REGISTRY)
+    assert "physical_description" in thread["sections"]
+    assert "appearance" not in thread["sections"]

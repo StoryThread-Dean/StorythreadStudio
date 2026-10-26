@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   spreadOut,
+  labelFractions,
   type Point,
   degrees,
   hashUnit,
@@ -334,5 +335,116 @@ describe("spreadOut", () => {
 
   it("handles an empty map without complaint", () => {
     expect(spreadOut({}, bounds)).toEqual({});
+  });
+});
+
+
+// ── WHERE A LINE'S LABEL SITS ────────────────────────────────────────────────
+//
+// Reported with a screenshot: "there is an overlapping text problem ... this is
+// a result if the connection goes both ways with different connection types."
+// Kipling is "mentored by" Milton and Milton "mentors" Kipling -- two true
+// readings of one pair, drawn on one line, both landing on its midpoint. The
+// screenshot showed "mentoredsby" and three phrases printed through each other.
+//
+// Not a corner case: on the writer's own book, 26 of 45 connected pairs are
+// written from both ends. More than half the map was stacking two labels.
+//
+//     "If there is just one connection, keep it centered, if the connection
+//      goes both ways, the one presenting closer to the character should be
+//      positioned at 40% and the other at the 60% mark"
+//
+//     ProfileA ------------connection1---connection2------------ProfileB
+
+describe("where a line's label sits", () => {
+  const edge = (src_id: string, dst_id: string) => ({ src_id, dst_id });
+
+  it("centres a connection that is alone on its line", () => {
+    expect(labelFractions([edge("a", "b")])).toEqual([0.5]);
+  });
+
+  it("centres every one of them when no pair repeats", () => {
+    expect(labelFractions([edge("a", "b"), edge("b", "c"), edge("c", "a")]))
+      .toEqual([0.5, 0.5, 0.5]);
+  });
+
+  it("puts each end's reading nearer the end that wrote it", () => {
+    // THE REPORTED CASE. a->b lands 40% along its own line; b->a lands 40%
+    // along ITS own line, which is the 60% mark of the first. Exactly the
+    // writer's diagram, and it falls out of one rule rather than two.
+    const [ab, ba] = labelFractions([edge("a", "b"), edge("b", "a")]);
+    expect(ab).toBeCloseTo(0.4);
+    expect(ba).toBeCloseTo(0.4);
+  });
+
+  it("separates them on the line, wherever they are drawn from", () => {
+    // The fraction is measured from each edge's OWN source, so read them both
+    // in one direction to see they are actually apart: 40% and 60% from a.
+    const [ab, ba] = labelFractions([edge("a", "b"), edge("b", "a")]);
+    const fromA = [ab, 1 - ba];
+    expect(fromA[0]).toBeCloseTo(0.4);
+    expect(fromA[1]).toBeCloseTo(0.6);
+  });
+
+  it("does not depend on which end was listed first", () => {
+    // The graph route emits edges in whatever order it walks the entries.
+    // Reverse them and the two labels must land in the same two places, or a
+    // reindex would swap the pair's labels over for no reason a writer could
+    // see.
+    const forward = labelFractions([edge("a", "b"), edge("b", "a")]);
+    const reversed = labelFractions([edge("b", "a"), edge("a", "b")]);
+    expect(reversed).toEqual([forward[1], forward[0]]);
+  });
+
+  it("keeps a pair's own labels apart from every other pair's", () => {
+    // Two reciprocal pairs sharing a node, plus a single. Only the pairs that
+    // repeat move; the single stays centred.
+    expect(labelFractions([
+      edge("a", "b"), edge("b", "a"),
+      edge("b", "c"),
+      edge("c", "a"), edge("a", "c"),
+    ])).toEqual([0.4, 0.4, 0.5, 0.4, 0.4]);
+  });
+
+  it("spreads three rather than stacking two of them", () => {
+    // A pair carries a third record once frames are used: the objective truth
+    // plus one character's view of it. Three on the midpoint would be the
+    // reported bug again with a different cause, so they space out instead.
+    const three = labelFractions([
+      edge("a", "b"), edge("a", "b"), edge("b", "a"),
+    ]);
+    const fromA = [three[0], three[1], 1 - three[2]];
+    expect(new Set(fromA).size).toBe(3);
+    expect(Math.min(...fromA)).toBeCloseTo(0.3);
+    expect(Math.max(...fromA)).toBeCloseTo(0.7);
+  });
+
+  it("separates two written from the SAME end", () => {
+    // They share a source, so they cannot both sit nearer it. Neighbouring
+    // slots is the honest answer -- the point here is only that they do not
+    // land on top of each other.
+    const [first, second] = labelFractions([edge("a", "b"), edge("a", "b")]);
+    expect(first).not.toBeCloseTo(second);
+  });
+
+  it("stays on the line, never past either dot", () => {
+    // A fraction outside 0..1 would print a label beyond the node it belongs
+    // to, which reads as belonging to whatever is out there instead.
+    const many = labelFractions([
+      edge("a", "b"), edge("a", "b"), edge("b", "a"), edge("a", "b"),
+      edge("b", "a"),
+    ]);
+    for (const t of many) {
+      expect(t).toBeGreaterThan(0);
+      expect(t).toBeLessThan(1);
+    }
+  });
+
+  it("gives one fraction per edge, in the order they came in", () => {
+    // The caller zips this against the edge list by index. A length that
+    // disagreed would silently label the wrong lines.
+    const edges = [edge("a", "b"), edge("b", "a"), edge("c", "d")];
+    expect(labelFractions(edges)).toHaveLength(edges.length);
+    expect(labelFractions([])).toEqual([]);
   });
 });

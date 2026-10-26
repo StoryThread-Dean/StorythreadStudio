@@ -77,7 +77,15 @@ def test_every_call_site_names_a_real_role():
     allowed = {f'"{role}"' for role in ROLES} | {"'" + r + "'" for r in ROLES}
     # editor-chat picks its role per request; _editor_chat_role is itself
     # covered by test_editor_chat_role_covers_every_category below.
+    #
+    # TWO SPELLINGS, ONE FUNCTION. The Weave's context endpoint calls it
+    # too, to work out whose window the brief is being budgeted against,
+    # and its request model is named `body` rather than `request`. Listed
+    # rather than matched loosely: the point of this test is that a call
+    # site states its job in terms something else can check, and a regex
+    # for "any nested call" would accept anything at all.
     allowed.add("_editor_chat_role(request.category)")
+    allowed.add("_editor_chat_role(body.category)")
 
     for arg in sites:
         assert arg in allowed, (

@@ -272,6 +272,88 @@ export function degrees(edges: GraphEdge[]): Record<string, number> {
   return counts;
 }
 
+// ── Where a line's label sits along it ──────────────────────────────────────
+//
+// A relationship is written from EACH end, and the two ends are allowed to
+// disagree -- that asymmetry is the whole reason a connection is recorded on
+// the character rather than shared between two. Kipling is "mentored by"
+// Milton; Milton "mentors" Kipling. Both true, both drawn, and both landing on
+// the midpoint of the same line, one on top of the other:
+//
+//     "there is an overlapping text problem ... this is a result if the
+//      connection goes both ways with different connection types"
+//
+// It is not a rare case. On the writer's own book, 26 of 45 connected pairs
+// are written from both ends -- more than half the map was printing two
+// labels in one place.
+//
+// The rule, in the writer's words and their diagram:
+//
+//     "If there is just one connection, keep it centered, if the connection
+//      goes both ways, the one presenting closer to the character should be
+//      positioned at 40% and the other at the 60% mark"
+//
+//     ProfileA ------------connection1---connection2------------ProfileB
+//
+// Which falls out of one sentence: EACH LABEL SITS 40% OF THE WAY FROM THE END
+// THAT WROTE IT. A's reading of the pair sits nearer A, B's nearer B, and a
+// writer can tell whose statement is whose without reading either.
+const LABEL_SPREAD = 0.2;
+
+/**
+ * A fraction along each edge, in the same order the edges came in: 0.5 is the
+ * midpoint, 0 is the source end, 1 is the target end.
+ *
+ * Pairs are counted UNORDERED, because A->B and B->A are drawn on one line.
+ *
+ * More than two is handled rather than specified: a pair can carry a third
+ * record once frames are used (the objective truth plus one character's view
+ * of it), and three labels stacked would be the reported bug again with a
+ * different cause. They spread evenly instead. Two records in the SAME
+ * direction cannot both sit nearer their source -- they share one -- so they
+ * simply take neighbouring slots.
+ */
+export function labelFractions(
+  edges: { src_id: string; dst_id: string }[],
+): number[] {
+  // The group carries its own low end rather than encoding it in the key and
+  // parsing it back out: an entity id is app-minted, but a key that has to be
+  // taken apart again is a separator waiting to turn up inside an id.
+  const byPair = new Map<string, { low: string; indices: number[] }>();
+  edges.forEach((edge, i) => {
+    const [low, high] = edge.src_id < edge.dst_id
+      ? [edge.src_id, edge.dst_id] : [edge.dst_id, edge.src_id];
+    const key = JSON.stringify([low, high]);
+    const group = byPair.get(key) ?? { low, indices: [] };
+    group.indices.push(i);
+    byPair.set(key, group);
+  });
+
+  const fractions = edges.map(() => 0.5);
+  for (const { low, indices } of byPair.values()) {
+    if (indices.length === 1) continue;         // alone on its line: centred
+
+    // Written-from-the-low-end first, so slot order runs along the line from
+    // low to high and each label lands nearest the end that wrote it. The
+    // index tiebreak keeps it stable: the same world must draw the same way
+    // twice, or the labels swap places on every redraw.
+    const ordered = [...indices].sort((a, b) =>
+      (edges[a].src_id === low ? 0 : 1) - (edges[b].src_id === low ? 0 : 1)
+      || a - b);
+
+    ordered.forEach((edgeIndex, slot) => {
+      // Measured from the LOW end, then flipped for an edge that runs the
+      // other way -- the caller draws from each edge's own source, so the
+      // fraction has to be in that edge's own direction.
+      const fromLow = 0.5 + (slot - (ordered.length - 1) / 2) * LABEL_SPREAD;
+      fractions[edgeIndex] = edges[edgeIndex].src_id === low
+        ? fromLow : 1 - fromLow;
+    });
+  }
+  return fractions;
+}
+
+
 // ── Pushing a cluster apart ─────────────────────────────────────────────────
 //
 // Asked for after the map got busy: "a feature that has [spread out dots]
